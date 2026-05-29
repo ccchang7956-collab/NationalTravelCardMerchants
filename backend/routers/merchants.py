@@ -75,8 +75,8 @@ def get_merchants(
 
 @router.get("/merchants/nearby", response_model=List[MerchantWithCoords])
 def get_nearby_merchants(
-    lat: float = Query(..., description="Latitude of center point"),
-    lon: float = Query(..., description="Longitude of center point"),
+    lat: float = Query(..., ge=-89.0, le=89.0, description="Latitude of center point"),
+    lon: float = Query(..., ge=-180.0, le=180.0, description="Longitude of center point"),
     radius_km: float = Query(2.0, ge=0.1, le=50.0, description="Search radius in km"),
     limit: int = Query(100, ge=1, le=500, description="Max number of results"),
     db: sqlite3.Connection = Depends(get_db)
@@ -110,10 +110,10 @@ def get_nearby_merchants(
     return results[:limit]
 
 
-@router.get("/merchants/{tax_id}", response_model=MerchantWithCoords)
-def get_merchant(tax_id: str, db: sqlite3.Connection = Depends(get_db)):
+@router.get("/merchants/{merchant_id_or_tax_id}", response_model=MerchantWithCoords)
+def get_merchant(merchant_id_or_tax_id: str, db: sqlite3.Connection = Depends(get_db)):
     cursor = db.cursor()
-    cursor.execute("SELECT * FROM merchants WHERE tax_id = ?", (tax_id,))
+    cursor.execute("SELECT * FROM merchants WHERE tax_id = ? OR id = ?", (merchant_id_or_tax_id, merchant_id_or_tax_id))
     row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Merchant not found")

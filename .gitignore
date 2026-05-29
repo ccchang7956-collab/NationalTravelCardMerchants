@@ -22,3 +22,6 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+
+scripts/geocode_cache.json
+scripts/geocode_run.log

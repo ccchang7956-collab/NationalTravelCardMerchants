@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { MapPin, Locate, ArrowLeft, List, ChevronRight, Globe, Building, SlidersHorizontal } from "lucide-react";
+import { MapPinIcon, PaperAirplaneIcon, ArrowLeftIcon, ListBulletIcon, ChevronRightIcon, GlobeAltIcon, BuildingStorefrontIcon, AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
 
 // Dynamically import the map to avoid SSR issues (Leaflet needs window)
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -33,6 +33,8 @@ interface Merchant {
 // Default center: Taipei 101 area
 const DEFAULT_CENTER: [number, number] = [25.0339, 121.5645];
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+
 export default function MapPage() {
   const [center, setCenter] = useState<[number, number]>(DEFAULT_CENTER);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -47,7 +49,7 @@ export default function MapPage() {
     setLoading(true);
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${r}&limit=200`
+        `${API_URL}/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${r}&limit=200`
       );
       if (res.ok) {
         const data: Merchant[] = await res.json();
@@ -81,7 +83,7 @@ export default function MapPage() {
         setGeoError("定位失敗：" + err.message);
         setLocationStatus("定位失敗，請手動點擊地圖選擇位置");
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 5000 }
     );
   }, [fetchNearby, radius]);
 
@@ -103,7 +105,7 @@ export default function MapPage() {
       {/* Header Row */}
       <div className="flex items-center gap-3 flex-wrap px-2">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors">
-          <ArrowLeft className="w-4 h-4" /> 返回列表
+          <ArrowLeftIcon className="w-4 h-4" /> 返回列表
         </Link>
         <span className="text-border">|</span>
         <h1 className="text-lg font-medium text-foreground">地圖模式</h1>
@@ -117,14 +119,14 @@ export default function MapPage() {
         {/* Locate button */}
         <button
           onClick={handleLocate}
-          className="inline-flex items-center gap-2 bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium shrink-0"
+          className="inline-flex items-center gap-2 bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium shrink-0 cursor-pointer"
         >
-          <Locate className="w-4 h-4" /> 定位我的位置
+          <PaperAirplaneIcon className="w-4 h-4 -rotate-45" /> 定位我的位置
         </button>
 
         {/* Radius control */}
         <div className="flex items-center gap-3 flex-1">
-          <SlidersHorizontal className="w-4 h-4 text-muted shrink-0" />
+          <AdjustmentsHorizontalIcon className="w-4 h-4 text-muted shrink-0" />
           <span className="text-sm text-muted shrink-0">搜尋半徑</span>
           <input
             type="range"
@@ -175,7 +177,7 @@ export default function MapPage() {
         <div className="lg:w-80 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "520px" }}>
           {merchants.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-muted bg-card rounded-xl border border-border/50">
-              <MapPin className="w-10 h-10 mb-3 opacity-30" />
+              <MapPinIcon className="w-10 h-10 mb-3 opacity-30" />
               <p className="text-sm">請定位或點擊地圖<br />以搜尋附近商店</p>
             </div>
           ) : (
@@ -197,16 +199,16 @@ export default function MapPage() {
                       {m.distance_km !== undefined && (
                         <span className="text-xs text-accent font-medium">{m.distance_km.toFixed(2)} km</span>
                       )}
-                      {m.website && <Globe className="w-3 h-3 text-muted opacity-70" />}
+                      {m.website && <GlobeAltIcon className="w-3 h-3 text-muted opacity-70" />}
                     </div>
                   </div>
                   <Link
-                    href={`/merchant/${m.tax_id}`}
+                    href={`/merchant/${m.tax_id || m.id}`}
                     target="_blank"
                     onClick={(e) => e.stopPropagation()}
                     className="shrink-0 p-1 hover:text-accent transition-colors text-muted"
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRightIcon className="w-4 h-4" />
                   </Link>
                 </div>
               </div>

@@ -150,7 +150,7 @@ export default function MapView({
           <div style="font-size:11px;color:#888">統編：${m.tax_id || ""}</div>
           ${websiteLink}
           ${distText ? `<div style="margin-top:4px;font-size:11px">${distText} 外</div>` : ""}
-          <a href="/merchant/${m.tax_id}" target="_blank" style="display:block;margin-top:8px;text-align:center;background:#C25E40;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none">查看詳情</a>
+          <a href="/merchant/${m.tax_id || m.id}" target="_blank" style="display:block;margin-top:8px;text-align:center;background:#C25E40;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none">查看詳情</a>
         </div>`,
         { maxWidth: 260 }
       );

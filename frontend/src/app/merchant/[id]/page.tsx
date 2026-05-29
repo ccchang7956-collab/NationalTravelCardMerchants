@@ -1,10 +1,12 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, MapPin, Building, Globe, ExternalLink } from "lucide-react";
+import { ArrowLeftIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, ArrowTopRightOnSquareIcon } from "@heroicons/react/24/outline";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 // Fetch merchant data
 async function getMerchant(id: string) {
-  const res = await fetch(`http://127.0.0.1:8000/api/merchants/${id}`, { cache: 'no-store' });
+  const res = await fetch(`${API_URL}/api/merchants/${id}`, { cache: 'no-store' });
   if (!res.ok) return null;
   return res.json();
 }
@@ -35,7 +37,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
       <div className="text-center py-20 bg-card rounded-2xl border border-border/60">
         <h3 className="text-xl font-medium text-foreground mb-4">找不到此商店資訊</h3>
         <Link href="/" className="text-accent hover:underline flex items-center justify-center gap-2">
-          <ArrowLeft className="w-4 h-4" /> 返回搜尋首頁
+          <ArrowLeftIcon className="w-4 h-4" /> 返回搜尋首頁
         </Link>
       </div>
     );
@@ -44,7 +46,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
   return (
     <div className="animate-in fade-in duration-500 max-w-3xl mx-auto">
       <Link href="/" className="inline-flex items-center gap-2 text-muted hover:text-foreground transition-colors mb-8">
-        <ArrowLeft className="w-4 h-4" /> 返回列表
+        <ArrowLeftIcon className="w-4 h-4" /> 返回列表
       </Link>
       
       <div className="bg-card rounded-2xl p-8 md:p-10 shadow-sm border border-border/60">
@@ -60,7 +62,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
         
         <div className="space-y-6 text-base text-foreground/80">
           <div className="flex items-start gap-3">
-            <MapPin className="w-5 h-5 mt-0.5 text-muted" />
+            <MapPinIcon className="w-5 h-5 mt-0.5 text-muted" />
             <div>
               <p className="font-medium text-foreground">商店地址</p>
               <p className="mt-1 text-muted">{merchant.zip_code} {merchant.address}</p>
@@ -70,13 +72,13 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 mt-2 text-sm text-accent hover:underline"
               >
-                在 Google 地圖上查看 <ExternalLink className="w-3 h-3" />
+                在 Google 地圖上查看 <ArrowTopRightOnSquareIcon className="w-3 h-3" />
               </a>
             </div>
           </div>
           
           <div className="flex items-start gap-3">
-            <Building className="w-5 h-5 mt-0.5 text-muted" />
+            <BuildingStorefrontIcon className="w-5 h-5 mt-0.5 text-muted" />
             <div>
               <p className="font-medium text-foreground">統一編號</p>
               <p className="mt-1 text-muted">{merchant.tax_id}</p>
@@ -85,7 +87,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
           
           {merchant.website && (
             <div className="flex items-start gap-3">
-              <Globe className="w-5 h-5 mt-0.5 text-muted" />
+              <GlobeAltIcon className="w-5 h-5 mt-0.5 text-muted" />
               <div>
                 <p className="font-medium text-foreground">官方網站</p>
                 <a 
