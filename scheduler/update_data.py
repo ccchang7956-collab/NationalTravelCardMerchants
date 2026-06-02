@@ -244,15 +244,18 @@ TAIWAN_ZIPCODES: dict[str, tuple[float, float, float]] = {
 # ── 工具函式 ─────────────────────────────────────────────────────────────────
 
 def normalize_text(text: str) -> str:
-    return unicodedata.normalize("NFKC", text.strip())
+    text = unicodedata.normalize("NFKC", text.strip())
+    return text.replace("臺", "台")
 
 def is_website(text: str) -> bool:
     text = text.lower()
+    if "@" in text:
+        return False
     if text.startswith("http") or text.startswith("www."):
         return True
     if ".com" in text or ".tw" in text or ".net" in text or ".org" in text:
         return True
-    if not re.search(r'[\u4e00-\u9fff]', text) and '.' in text and ' ' not in text:
+    if not re.search(r'[\u4e00-\u9fff]', text) and ' ' not in text and re.search(r'\.[a-z]{2,6}(?:/|$)', text):
         return True
     return False
 
@@ -448,14 +451,14 @@ def migrate_coords(old_db: str, new_db: str) -> int:
     new_conn = sqlite3.connect(new_db)
     try:
         rows = old_conn.execute(
-            "SELECT tax_id, lat, lon FROM merchants WHERE lat IS NOT NULL AND tax_id IS NOT NULL"
+            "SELECT tax_id, address, lat, lon FROM merchants WHERE lat IS NOT NULL AND tax_id IS NOT NULL"
         ).fetchall()
         if not rows:
             log.info("   舊 DB 無座標資料")
             return 0
         new_conn.executemany(
-            "UPDATE merchants SET lat=?, lon=? WHERE tax_id=?",
-            [(lat, lon, tid) for tid, lat, lon in rows]
+            "UPDATE merchants SET lat=?, lon=? WHERE tax_id=? AND address=?",
+            [(lat, lon, tid, addr) for tid, addr, lat, lon in rows]
         )
         new_conn.commit()
         migrated = new_conn.execute("SELECT COUNT(*) FROM merchants WHERE lat IS NOT NULL").fetchone()[0]
@@ -528,12 +531,13 @@ def main():
 
         log.info("🆕 偵測到新版 PDF，開始更新...")
 
-        # 讀取舊的商家數（用於統計）
-        old_count = 0
+        # 讀取舊的商家集合（用於統計）
+        old_tax_ids = set()
         if os.path.exists(DB_PATH):
             try:
                 old_conn = sqlite3.connect(DB_PATH)
-                old_count = old_conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
+                for row in old_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
+                    old_tax_ids.add(row[0])
                 old_conn.close()
             except Exception:
                 pass
@@ -543,6 +547,19 @@ def main():
         if new_count < 0:
             log.error("❌ 更新中止（PDF 解析失敗）")
             sys.exit(1)
+
+        # 讀取新的商家集合（用於統計）
+        new_tax_ids = set()
+        try:
+            tmp_conn = sqlite3.connect(new_db)
+            for row in tmp_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
+                new_tax_ids.add(row[0])
+            tmp_conn.close()
+        except Exception:
+            pass
+            
+        added_count = len(new_tax_ids - old_tax_ids) if old_tax_ids else new_count
+        removed_count = len(old_tax_ids - new_tax_ids) if old_tax_ids else 0
 
         # 5. 遷移座標
         migrate_coords(DB_PATH, new_db)
@@ -564,13 +581,12 @@ def main():
 
     # 9. 寫入 metadata
     end_time = datetime.now(TZ_TAIPEI)
-    diff = new_count - old_count
     meta = {
         "last_updated": end_time.isoformat(),
         "pdf_hash": new_hash,
         "total_merchants": new_count,
-        "new_merchants": max(0, diff),
-        "removed_merchants": max(0, -diff),
+        "new_merchants": added_count,
+        "removed_merchants": removed_count,
         "duration_seconds": round((end_time - start_time).total_seconds(), 1),
     }
     with open(META_FILE, "w", encoding="utf-8") as f:
@@ -578,7 +594,7 @@ def main():
 
     log.info("=" * 60)
     log.info(f"🎉 更新完成！耗時 {meta['duration_seconds']} 秒")
-    log.info(f"   商家總數：{new_count:,}（較上次 {'+' if diff >= 0 else ''}{diff:,}）")
+    log.info(f"   商家總數：{new_count:,}（新增 {added_count:,} 筆，移除 {removed_count:,} 筆）")
     log.info("=" * 60)
 
 

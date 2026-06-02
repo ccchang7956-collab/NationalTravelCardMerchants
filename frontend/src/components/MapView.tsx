@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 
 // Static CSS imports — must be at top level (Turbopack requirement)
 import "leaflet/dist/leaflet.css";
@@ -42,6 +43,7 @@ export default function MapView({
   const userMarkerRef = useRef<any>(null);
   const centerMarkerRef = useRef<any>(null);
   const LRef = useRef<any>(null);
+  const router = useRouter();
 
   // Initialize map once on mount
   useEffect(() => {
@@ -150,10 +152,24 @@ export default function MapView({
           <div style="font-size:11px;color:#888">統編：${m.tax_id || ""}</div>
           ${websiteLink}
           ${distText ? `<div style="margin-top:4px;font-size:11px">${distText} 外</div>` : ""}
-          <a href="/merchant/${m.tax_id || m.id}" target="_blank" style="display:block;margin-top:8px;text-align:center;background:#C25E40;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none">查看詳情</a>
+          <a href="/merchant/${m.tax_id || m.id}" class="merchant-detail-link" data-href="/merchant/${m.tax_id || m.id}" style="display:block;margin-top:8px;text-align:center;background:#C25E40;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer">查看詳情</a>
         </div>`,
         { maxWidth: 260 }
       );
+
+      // 攔截原生 <a> 點擊，改用 Next.js router 進行無刷新切換
+      marker.on("popupopen", (e: any) => {
+        const linkElement = e.popup.getElement()?.querySelector(".merchant-detail-link");
+        if (linkElement) {
+          linkElement.addEventListener("click", (ev: Event) => {
+            ev.preventDefault();
+            const href = (ev.currentTarget as HTMLElement).getAttribute("data-href");
+            if (href) {
+              router.push(href);
+            }
+          });
+        }
+      });
 
       marker.on("click", () => onSelectMerchant(m));
       markersLayerRef.current.addLayer(marker);

@@ -87,7 +87,7 @@ def get_nearby_merchants(
     """
     # Approx degrees per km: 1 deg lat ≈ 111km
     lat_delta = radius_km / 111.0
-    lon_delta = radius_km / (111.0 * math.cos(math.radians(lat)))
+    lon_delta = min(radius_km / (111.0 * math.cos(math.radians(lat))), 180.0)
 
     cursor = db.cursor()
     cursor.execute("""
