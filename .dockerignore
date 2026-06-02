@@ -1,0 +1,31 @@
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# Python
+.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# DB files (mounted via volume)
+backend/merchants.db
+backend/merchants.db.bak
+data/
+
+# Logs & cache
+scripts/geocode_cache.json
+scripts/geocode_run.log
+scripts/geocode_run*.log
+
+# Git
+.git/
+.gitignore
+
+# Secrets
+.env
+
+# Docs (large PDF)
+docs/QualifiedRetailerList.pdf

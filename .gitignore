@@ -10,6 +10,8 @@ frontend/.env*.local
 
 # Backend
 backend/merchants.db
+backend/merchants.db-shm
+backend/merchants.db-wal
 .venv/
 env/
 venv/
@@ -25,3 +27,8 @@ __pycache__/
 
 scripts/geocode_cache.json
 scripts/geocode_run.log
+
+# Docker
+.env
+data/
+*.bak

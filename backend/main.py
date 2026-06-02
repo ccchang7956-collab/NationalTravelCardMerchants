@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import json
+import sqlite3
 
 from backend.routers import merchants
 from backend.database import DB_PATH
@@ -11,10 +13,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS configuration for local development
+# CORS 設定：從環境變數讀取允許的來源，支援多個（逗號分隔）
+_cors_origins_env = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
+CORS_ORIGINS = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], # Next.js default port
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,7 +36,38 @@ def root():
         "docs_url": "/docs"
     }
 
+@app.get("/api/data-info")
+def data_info():
+    """回傳資料最後更新時間、商家總數、PDF hash 等元資訊"""
+    # 讀取 scheduler 寫入的 metadata 檔案
+    meta_path = os.path.join(os.path.dirname(DB_PATH), "update_meta.json")
+    meta = {}
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+        except Exception:
+            meta = {}
+
+    # 從 DB 直接讀取最新商家數量（當作 fallback）
+    total_merchants = 0
+    if os.path.exists(DB_PATH):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            total_merchants = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
+            conn.close()
+        except Exception:
+            total_merchants = 0
+
+    return {
+        "database_ready": os.path.exists(DB_PATH),
+        "total_merchants": meta.get("total_merchants", total_merchants),
+        "last_updated": meta.get("last_updated"),
+        "pdf_hash": meta.get("pdf_hash"),
+        "new_merchants": meta.get("new_merchants"),
+        "removed_merchants": meta.get("removed_merchants"),
+    }
+
 if __name__ == "__main__":
     import uvicorn
-    # Make sure to run from project root: python -m backend.main
     uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)

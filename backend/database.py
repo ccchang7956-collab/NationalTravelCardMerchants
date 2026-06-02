@@ -2,7 +2,10 @@ import sqlite3
 from typing import Generator
 import os
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "merchants.db")
+# Docker 環境中由 DB_PATH 環境變數指定（預設 /data/merchants.db）
+# 本地開發時 fallback 到同目錄的 merchants.db
+_default_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "merchants.db")
+DB_PATH = os.environ.get("DB_PATH", _default_db)
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)

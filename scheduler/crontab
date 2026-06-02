@@ -1,0 +1,2 @@
+# 每天台灣時間 03:00 執行（UTC 19:00）
+0 19 * * * python /app/update_data.py >> /data/update.log 2>&1
