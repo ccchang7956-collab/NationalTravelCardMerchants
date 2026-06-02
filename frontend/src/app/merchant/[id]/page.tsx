@@ -5,8 +5,10 @@ import { ArrowLeftIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, ArrowT
 const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 // Fetch merchant data
+// Next.js App Router 在同一 render 週期內會自動 memoize 相同 URL 的 fetch，
+// 因此 generateMetadata 和頁面元件共用同一份請求結果（不加 cache:'no-store'）
 async function getMerchant(id: string) {
-  const res = await fetch(`${API_URL}/api/merchants/${id}`, { cache: 'no-store' });
+  const res = await fetch(`${API_URL}/api/merchants/${id}`, { next: { revalidate: 3600 } });
   if (!res.ok) return null;
   return res.json();
 }
@@ -67,7 +69,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
               <p className="font-medium text-foreground">商店地址</p>
               <p className="mt-1 text-muted">{merchant.zip_code} {merchant.address}</p>
               <a 
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(merchant.name + ' ' + merchant.address)}`}
+                href={merchant.lat && merchant.lon ? `https://www.google.com/maps/dir/?api=1&destination=${merchant.lat},${merchant.lon}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(merchant.name + ' ' + merchant.address)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 mt-2 text-sm text-accent hover:underline"

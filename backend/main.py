@@ -53,9 +53,8 @@ def data_info():
     total_merchants = 0
     if os.path.exists(DB_PATH):
         try:
-            conn = sqlite3.connect(DB_PATH)
-            total_merchants = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
-            conn.close()
+            with sqlite3.connect(DB_PATH) as conn:
+                total_merchants = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
         except Exception:
             total_merchants = 0
 

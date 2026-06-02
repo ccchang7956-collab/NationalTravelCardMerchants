@@ -14,9 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 複製程式碼（保留目錄結構，uvicorn 執行 backend.main:app 需要）
 COPY backend/ ./backend/
 
-# 建立非 root 使用者
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-USER appuser
+# 建立非 root 使用者 (統一 UID/GID 1000 以避免 Volume 權限衝突)
+RUN groupadd -g 1000 ntcuser && useradd -u 1000 -g ntcuser -s /bin/sh ntcuser
+USER ntcuser
 
 EXPOSE 8000
 

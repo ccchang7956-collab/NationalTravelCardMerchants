@@ -43,7 +43,11 @@ export default function MapView({
   const userMarkerRef = useRef<any>(null);
   const centerMarkerRef = useRef<any>(null);
   const LRef = useRef<any>(null);
+  const onMapClickRef = useRef(onMapClick);
   const router = useRouter();
+
+  // 保持 onMapClickRef 永遠指向最新的 callback，避免地圖 click 的 stale closure
+  useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
 
   // Initialize map once on mount
   useEffect(() => {
@@ -84,7 +88,7 @@ export default function MapView({
       }).addTo(map);
 
       map.on("click", (e: any) => {
-        onMapClick(e.latlng.lat, e.latlng.lng);
+        onMapClickRef.current(e.latlng.lat, e.latlng.lng);
       });
 
       const clusterGroup = (L as any).markerClusterGroup({
@@ -161,13 +165,13 @@ export default function MapView({
       marker.on("popupopen", (e: any) => {
         const linkElement = e.popup.getElement()?.querySelector(".merchant-detail-link");
         if (linkElement) {
-          linkElement.addEventListener("click", (ev: Event) => {
+          linkElement.onclick = (ev: Event) => {
             ev.preventDefault();
             const href = (ev.currentTarget as HTMLElement).getAttribute("data-href");
             if (href) {
               router.push(href);
             }
-          });
+          };
         }
       });
 

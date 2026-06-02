@@ -31,14 +31,16 @@ def get_merchants(
     params = []
 
     if q:
-        query += " AND (name LIKE ? OR address LIKE ?)"
-        count_query += " AND (name LIKE ? OR address LIKE ?)"
-        params.extend([f"%{q}%", f"%{q}%"])
+        safe_q = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query += " AND (name LIKE ? ESCAPE '\\' OR address LIKE ? ESCAPE '\\')"
+        count_query += " AND (name LIKE ? ESCAPE '\\' OR address LIKE ? ESCAPE '\\')"
+        params.extend([f"%{safe_q}%", f"%{safe_q}%"])
 
     if city:
-        query += " AND address LIKE ?"
-        count_query += " AND address LIKE ?"
-        params.append(f"{city}%")
+        safe_city = city.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query += " AND address LIKE ? ESCAPE '\\'"
+        count_query += " AND address LIKE ? ESCAPE '\\'"
+        params.append(f"{safe_city}%")
 
     if zip_code:
         query += " AND zip_code = ?"
@@ -78,6 +80,7 @@ def get_nearby_merchants(
     lat: float = Query(..., ge=-89.0, le=89.0, description="Latitude of center point"),
     lon: float = Query(..., ge=-180.0, le=180.0, description="Longitude of center point"),
     radius_km: float = Query(2.0, ge=0.1, le=50.0, description="Search radius in km"),
+    q: Optional[str] = Query(None, description="Search keyword for name or address"),
     limit: int = Query(100, ge=1, le=500, description="Max number of results"),
     db: sqlite3.Connection = Depends(get_db)
 ):
@@ -89,13 +92,21 @@ def get_nearby_merchants(
     lat_delta = radius_km / 111.0
     lon_delta = min(radius_km / (111.0 * math.cos(math.radians(lat))), 180.0)
 
-    cursor = db.cursor()
-    cursor.execute("""
+    query = """
         SELECT * FROM merchants
         WHERE lat IS NOT NULL
           AND lat BETWEEN ? AND ?
           AND lon BETWEEN ? AND ?
-    """, (lat - lat_delta, lat + lat_delta, lon - lon_delta, lon + lon_delta))
+    """
+    params = [lat - lat_delta, lat + lat_delta, lon - lon_delta, lon + lon_delta]
+    
+    if q:
+        safe_q = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query += " AND (name LIKE ? ESCAPE '\\' OR address LIKE ? ESCAPE '\\')"
+        params.extend([f"%{safe_q}%", f"%{safe_q}%"])
+
+    cursor = db.cursor()
+    cursor.execute(query, params)
 
     rows = cursor.fetchall()
     results = []

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { MapPinIcon, PaperAirplaneIcon, ArrowLeftIcon, ListBulletIcon, ChevronRightIcon, GlobeAltIcon, BuildingStorefrontIcon, AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
+import { useRouter, useSearchParams } from "next/navigation";
+import { MapPinIcon, PaperAirplaneIcon, ArrowLeftIcon, ChevronRightIcon, GlobeAltIcon, AdjustmentsHorizontalIcon, MagnifyingGlassIcon, MapIcon } from "@heroicons/react/24/outline";
+import AddressSearch from "@/components/AddressSearch";
 
 // Dynamically import the map to avoid SSR issues (Leaflet needs window)
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -30,26 +32,74 @@ interface Merchant {
   distance_km?: number;
 }
 
-// Default center: Taipei 101 area
 const DEFAULT_CENTER: [number, number] = [25.0339, 121.5645];
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
-export default function MapPage() {
+function MapContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [center, setCenter] = useState<[number, number]>(DEFAULT_CENTER);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(false);
   const [radius, setRadius] = useState(2);
+  const [keyword, setKeyword] = useState("");
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
-  const [locationStatus, setLocationStatus] = useState<string>("點擊地圖或使用「定位」按鈕搜尋附近商店");
+  const [locationStatus, setLocationStatus] = useState<string>("請輸入地址、定位，或點擊地圖搜尋");
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  const fetchNearby = useCallback(async (lat: number, lon: number, r: number) => {
+  const [isInit, setIsInit] = useState(true);
+
+  // Parse URL on mount
+  useEffect(() => {
+    const lat = searchParams.get("lat");
+    const lon = searchParams.get("lon");
+    const r = searchParams.get("radius");
+    const q = searchParams.get("q");
+
+    let initialCenter = DEFAULT_CENTER;
+    let initialRadius = 2;
+    let initialKeyword = "";
+
+    if (lat && lon) {
+      initialCenter = [parseFloat(lat), parseFloat(lon)];
+      setCenter(initialCenter);
+    }
+    if (r) {
+      initialRadius = parseFloat(r);
+      setRadius(initialRadius);
+    }
+    if (q) {
+      initialKeyword = q;
+      setKeyword(initialKeyword);
+    }
+    
+    // Fetch initial data
+    if (lat && lon) {
+      fetchNearby(initialCenter[0], initialCenter[1], initialRadius, initialKeyword);
+    }
+    setIsInit(false);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync state to URL
+  const updateURL = useCallback((lat: number, lon: number, r: number, q: string) => {
+    if (isInit) return;
+    const params = new URLSearchParams();
+    params.set("lat", lat.toFixed(5));
+    params.set("lon", lon.toFixed(5));
+    params.set("radius", r.toString());
+    if (q) params.set("q", q);
+    router.replace(`/map?${params.toString()}`, { scroll: false });
+  }, [router, isInit]);
+
+  const fetchNearby = useCallback(async (lat: number, lon: number, r: number, q: string) => {
     setLoading(true);
+    updateURL(lat, lon, r, q);
     try {
+      const qParam = q ? `&q=${encodeURIComponent(q)}` : "";
       const res = await fetch(
-        `${API_URL}/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${r}&limit=200`
+        `${API_URL}/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${r}&limit=200${qParam}`
       );
       if (res.ok) {
         const data: Merchant[] = await res.json();
@@ -63,7 +113,7 @@ export default function MapPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [updateURL]);
 
   const handleLocate = useCallback(() => {
     if (!navigator.geolocation) {
@@ -77,7 +127,7 @@ export default function MapPage() {
         const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
         setUserLocation(loc);
         setCenter(loc);
-        fetchNearby(loc[0], loc[1], radius);
+        fetchNearby(loc[0], loc[1], radius, keyword);
       },
       (err) => {
         setGeoError("定位失敗：" + err.message);
@@ -85,23 +135,33 @@ export default function MapPage() {
       },
       { enableHighAccuracy: false, timeout: 5000 }
     );
-  }, [fetchNearby, radius]);
+  }, [fetchNearby, radius, keyword]);
 
   const handleMapClick = useCallback((lat: number, lon: number) => {
     setUserLocation(null);
     setCenter([lat, lon]);
-    fetchNearby(lat, lon, radius);
+    fetchNearby(lat, lon, radius, keyword);
     setLocationStatus(`已選擇地點：${lat.toFixed(4)}, ${lon.toFixed(4)}`);
-  }, [fetchNearby, radius]);
+  }, [fetchNearby, radius, keyword]);
+
+  const handleAddressSelect = useCallback((lat: number, lon: number) => {
+    setUserLocation(null);
+    setCenter([lat, lon]);
+    fetchNearby(lat, lon, radius, keyword);
+    setLocationStatus(`已切換至搜尋地址`);
+  }, [fetchNearby, radius, keyword]);
 
   const handleRadiusChange = useCallback((newRadius: number) => {
     setRadius(newRadius);
-    fetchNearby(center[0], center[1], newRadius);
-  }, [center, fetchNearby]);
+    fetchNearby(center[0], center[1], newRadius, keyword);
+  }, [center, keyword, fetchNearby]);
+
+  const handleKeywordSearch = useCallback(() => {
+    fetchNearby(center[0], center[1], radius, keyword);
+  }, [center, radius, keyword, fetchNearby]);
 
   return (
     <div className="flex flex-col gap-4 h-full -mx-2">
-
       {/* Header Row */}
       <div className="flex items-center gap-3 flex-wrap px-2">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors">
@@ -115,29 +175,50 @@ export default function MapPage() {
       </div>
 
       {/* Controls */}
-      <div className="bg-card border border-border/60 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 shadow-sm mx-2">
-        {/* Locate button */}
-        <button
-          onClick={handleLocate}
-          className="inline-flex items-center gap-2 bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium shrink-0 cursor-pointer"
-        >
-          <PaperAirplaneIcon className="w-4 h-4 -rotate-45" /> 定位我的位置
-        </button>
+      <div className="bg-card border border-border/60 rounded-xl p-4 flex flex-col gap-4 shadow-sm mx-2">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full">
+          <AddressSearch onSelect={handleAddressSelect} />
+          
+          <button
+            onClick={handleLocate}
+            className="inline-flex items-center gap-2 bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium shrink-0 cursor-pointer"
+          >
+            <PaperAirplaneIcon className="w-4 h-4 -rotate-45" /> 定位我的位置
+          </button>
+        </div>
 
-        {/* Radius control */}
-        <div className="flex items-center gap-3 flex-1">
-          <AdjustmentsHorizontalIcon className="w-4 h-4 text-muted shrink-0" />
-          <span className="text-sm text-muted shrink-0">搜尋半徑</span>
-          <input
-            type="range"
-            min={0.5}
-            max={10}
-            step={0.5}
-            value={radius}
-            onChange={(e) => handleRadiusChange(parseFloat(e.target.value))}
-            className="flex-1 accent-accent"
-          />
-          <span className="text-sm font-medium text-foreground w-16 text-right shrink-0">{radius} km</span>
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full">
+          {/* Keyword filter */}
+          <div className="flex items-center gap-2 flex-1 relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+            <input
+              type="text"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleKeywordSearch()}
+              placeholder="在附近搜尋關鍵字 (例如: 咖啡)"
+              className="w-full pl-9 pr-4 py-2 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all text-sm"
+            />
+            <button onClick={handleKeywordSearch} className="shrink-0 bg-accent px-4 py-2 rounded-lg text-sm text-white font-medium hover:bg-accent-hover transition-colors">
+              篩選
+            </button>
+          </div>
+
+          {/* Radius control */}
+          <div className="flex items-center gap-3 flex-1">
+            <AdjustmentsHorizontalIcon className="w-4 h-4 text-muted shrink-0" />
+            <span className="text-sm text-muted shrink-0">半徑</span>
+            <input
+              type="range"
+              min={0.5}
+              max={10}
+              step={0.5}
+              value={radius}
+              onChange={(e) => handleRadiusChange(parseFloat(e.target.value))}
+              className="flex-1 accent-accent"
+            />
+            <span className="text-sm font-medium text-foreground w-16 text-right shrink-0">{radius} km</span>
+          </div>
         </div>
 
         {/* Status */}
@@ -153,14 +234,8 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* Hint */}
-      <p className="text-xs text-muted px-2">
-        💡 提示：點擊地圖上任意位置，即可搜尋該地點附近的特約商店。
-      </p>
-
       {/* Map + Sidebar */}
       <div className="flex gap-4 flex-col lg:flex-row px-2" style={{ minHeight: "520px" }}>
-
         {/* Map */}
         <div className="flex-1 relative rounded-xl overflow-hidden border border-border/50 shadow-sm" style={{ minHeight: "480px" }}>
           <MapView
@@ -178,7 +253,7 @@ export default function MapPage() {
           {merchants.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-muted bg-card rounded-xl border border-border/50">
               <MapPinIcon className="w-10 h-10 mb-3 opacity-30" />
-              <p className="text-sm">請定位或點擊地圖<br />以搜尋附近商店</p>
+              <p className="text-sm">尚未搜尋到商店</p>
             </div>
           ) : (
             merchants.map((m) => (
@@ -197,19 +272,33 @@ export default function MapPage() {
                     <p className="text-xs text-muted mt-1 truncate">{m.address}</p>
                     <div className="flex items-center gap-3 mt-2">
                       {m.distance_km !== undefined && (
-                        <span className="text-xs text-accent font-medium">{m.distance_km.toFixed(2)} km</span>
+                         <span className="text-xs text-accent font-medium">{m.distance_km.toFixed(2)} km</span>
                       )}
-                      {m.website && <GlobeAltIcon className="w-3 h-3 text-muted opacity-70" />}
+                      {m.website && <GlobeAltIcon className="w-3 h-3 text-muted opacity-70" title="有專屬網站" />}
                     </div>
                   </div>
-                  <Link
-                    href={`/merchant/${m.tax_id || m.id}`}
-                    target="_blank"
-                    onClick={(e) => e.stopPropagation()}
-                    className="shrink-0 p-1 hover:text-accent transition-colors text-muted"
-                  >
-                    <ChevronRightIcon className="w-4 h-4" />
-                  </Link>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <Link
+                      href={`/merchant/${m.tax_id || m.id}`}
+                      target="_blank"
+                      onClick={(e) => e.stopPropagation()}
+                      title="查看商店詳情"
+                      className="p-1.5 bg-muted-bg rounded-lg hover:bg-accent/10 hover:text-accent transition-colors text-muted flex items-center justify-center"
+                    >
+                      <ChevronRightIcon className="w-4 h-4" />
+                    </Link>
+                    {m.lat && m.lon && (
+                      <Link
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lon}`}
+                        target="_blank"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Google 地圖導航"
+                        className="p-1.5 bg-muted-bg rounded-lg hover:bg-blue-500/10 hover:text-blue-500 transition-colors text-muted flex items-center justify-center"
+                      >
+                        <MapIcon className="w-4 h-4" />
+                      </Link>
+                    )}
+                  </div>
                 </div>
               </div>
             ))
@@ -217,5 +306,13 @@ export default function MapPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function MapPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-muted animate-pulse">正在載入地圖元件...</div>}>
+      <MapContent />
+    </Suspense>
   );
 }

@@ -241,7 +241,8 @@ TAIWAN_ZIPCODES: dict[str, tuple[float, float, float]] = {
 }
 
 
-# ── 工具函式 ─────────────────────────────────────────────────────────────────
+# ── 模組級 RNG（固定 seed 確保可重現，不污染全域 random state）─────────────────
+_rng = random.Random(42)
 
 def normalize_text(text: str) -> str:
     text = unicodedata.normalize("NFKC", text.strip())
@@ -273,8 +274,8 @@ def sha256_file(path: str) -> str:
     return h.hexdigest()
 
 def random_jitter(clat: float, clon: float, radius_km: float) -> Tuple[float, float]:
-    r_km = random.uniform(0, radius_km * 0.8)
-    angle = random.uniform(0, 2 * math.pi)
+    r_km = _rng.uniform(0, radius_km * 0.8)
+    angle = _rng.uniform(0, 2 * math.pi)
     dlat = (r_km / 111.0) * math.cos(angle)
     dlon = (r_km / (111.0 * math.cos(math.radians(clat)))) * math.sin(angle)
     return clat + dlat, clon + dlon
@@ -364,7 +365,7 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
     headers = {"特店名稱", "特店地址", "郵遞區號", "統一編號", "特店網頁位址"}
     lines = []
     total_pages = len(doc)
-    for page_num in range(1, total_pages):
+    for page_num in range(1, total_pages):  # 跳過第 0 頁（封面 / 目錄頁，不含商家資料）
         page = doc[page_num]
         text = page.get_text("text")
         for line in text.split("\n"):
@@ -451,14 +452,14 @@ def migrate_coords(old_db: str, new_db: str) -> int:
     new_conn = sqlite3.connect(new_db)
     try:
         rows = old_conn.execute(
-            "SELECT tax_id, address, lat, lon FROM merchants WHERE lat IS NOT NULL AND tax_id IS NOT NULL"
+            "SELECT tax_id, lat, lon FROM merchants WHERE lat IS NOT NULL AND tax_id IS NOT NULL"
         ).fetchall()
         if not rows:
             log.info("   舊 DB 無座標資料")
             return 0
         new_conn.executemany(
-            "UPDATE merchants SET lat=?, lon=? WHERE tax_id=? AND address=?",
-            [(lat, lon, tid, addr) for tid, addr, lat, lon in rows]
+            "UPDATE merchants SET lat=?, lon=? WHERE tax_id=?",
+            [(lat, lon, tid) for tid, lat, lon in rows]
         )
         new_conn.commit()
         migrated = new_conn.execute("SELECT COUNT(*) FROM merchants WHERE lat IS NOT NULL").fetchone()[0]
@@ -471,7 +472,6 @@ def migrate_coords(old_db: str, new_db: str) -> int:
 def fill_missing_coords(db_path: str) -> int:
     """對沒有座標的商家用郵遞區號 fallback 填補，回傳填補筆數。"""
     log.info("📍 用郵遞區號填補缺失座標...")
-    random.seed(42)
     conn = sqlite3.connect(db_path)
     rows = conn.execute(
         "SELECT id, zip_code FROM merchants WHERE lat IS NULL AND zip_code IS NOT NULL"
@@ -572,7 +572,28 @@ def main():
         if os.path.exists(DB_PATH):
             shutil.copy2(DB_PATH, backup_path)
             log.info(f"💾 已備份舊 DB → {backup_path}")
-        shutil.move(new_db, DB_PATH)
+            
+            log.info("🔄 使用 Transaction 原子性替換資料表...")
+            prod_conn = sqlite3.connect(DB_PATH)
+            try:
+                prod_conn.execute("ATTACH DATABASE ? AS new_db", (new_db,))
+                prod_conn.execute("BEGIN TRANSACTION")
+                prod_conn.execute("DELETE FROM main.merchants")
+                prod_conn.execute("INSERT INTO main.merchants SELECT * FROM new_db.merchants")
+                prod_conn.execute("COMMIT")
+                prod_conn.execute("DETACH DATABASE new_db")
+            except Exception as e:
+                log.error(f"❌ DB 原子性替換失敗，已回滾：{e}")
+                try:
+                    prod_conn.execute("ROLLBACK")
+                except Exception:
+                    pass
+                prod_conn.close()
+                raise
+            prod_conn.close()
+            os.remove(new_db)
+        else:
+            shutil.move(new_db, DB_PATH)
         log.info(f"✅ DB 已更新：{DB_PATH}")
 
     # 8. 記錄 hash

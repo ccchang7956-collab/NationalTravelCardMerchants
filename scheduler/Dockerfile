@@ -26,12 +26,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY update_data.py .
 COPY crontab /etc/supercronic/crontab
 
-# 建立非 root 使用者並給予 /data 權限
-RUN groupadd -r scheduler && useradd -r -g scheduler scheduler \
-    && mkdir -p /data && chown scheduler:scheduler /data \
-    && chown scheduler:scheduler /etc/supercronic/crontab
+# 建立非 root 使用者並給予 /data 權限 (統一 UID/GID 1000 以避免 Volume 權限衝突)
+RUN groupadd -g 1000 ntcuser && useradd -u 1000 -g ntcuser -s /bin/sh ntcuser \
+    && mkdir -p /data && chown ntcuser:ntcuser /data \
+    && chown ntcuser:ntcuser /etc/supercronic/crontab
 
-USER scheduler
+USER ntcuser
 
 # 預設以 supercronic 排程模式運行
 # 手動測試請執行：docker compose exec scheduler python /app/update_data.py

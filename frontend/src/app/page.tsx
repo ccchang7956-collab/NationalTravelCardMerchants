@@ -1,6 +1,13 @@
 import Link from "next/link";
 import Form from "next/form";
+import { redirect } from "next/navigation";
 import { MagnifyingGlassIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon } from "@heroicons/react/24/outline";
+
+const TAIWAN_CITIES = [
+  "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
+  "台中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "台南市",
+  "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"
+];
 
 export default async function Home({
   searchParams,
@@ -37,6 +44,23 @@ export default async function Home({
   const totalPages = data?.total_pages || 1;
   const total = data?.total || 0;
 
+  if (page > totalPages && totalPages > 0) {
+    const redirectQuery = new URLSearchParams();
+    if (q) redirectQuery.append("q", q);
+    if (city) redirectQuery.append("city", city);
+    redirectQuery.append("page", totalPages.toString());
+    redirect(`/?${redirectQuery.toString()}`);
+  }
+
+  let sortedCities = stats?.cities || [];
+  if (sortedCities.length > 0) {
+    sortedCities = [...sortedCities].sort((a: any, b: any) => {
+      const idxA = TAIWAN_CITIES.indexOf(a.city);
+      const idxB = TAIWAN_CITIES.indexOf(b.city);
+      return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+    });
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       
@@ -72,7 +96,7 @@ export default async function Home({
               className="w-full pl-10 pr-4 py-2.5 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all appearance-none"
             >
               <option value="">所有縣市</option>
-              {stats?.cities?.map((c: any) => (
+              {sortedCities.map((c: any) => (
                 <option key={c.city} value={c.city}>{c.city} ({c.count})</option>
               ))}
             </select>
