@@ -1,8 +1,10 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ArrowLeftIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, ArrowTopRightOnSquareIcon } from "@heroicons/react/24/outline";
 
 const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 // Fetch merchant data
 // Next.js App Router 在同一 render 週期內會自動 memoize 相同 URL 的 fetch，
@@ -20,13 +22,35 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   
   if (!merchant) {
     return {
-      title: "找不到商店 - 國民旅遊卡特約商店檢索系統",
+      title: "找不到商店",
+      robots: { index: false },
     };
   }
 
+  const cityName = merchant.address ? merchant.address.substring(0, 3) : "";
+  const title = `${merchant.name}｜${cityName}國旅卡特約商店`;
+  const description = `${merchant.name}（${merchant.zip_code ? merchant.zip_code + " " : ""}${merchant.address}）是國民旅遊卡特約商店，統一編號 ${merchant.tax_id}。${merchant.website ? `官方網站：${merchant.website}` : ""}`;
+  const pageUrl = `${SITE_URL}/merchant/${merchant.tax_id || resolvedParams.id}`;
+
   return {
-    title: `${merchant.name} - ${merchant.zip_code || ''} ${merchant.address || ''} | 國民旅遊卡特約商店`,
-    description: `國民旅遊卡特約商店：${merchant.name}。地址：${merchant.address}。統一編號：${merchant.tax_id}。${merchant.website ? `官方網站：${merchant.website}` : ''}`,
+    title,
+    description,
+    alternates: {
+      canonical: pageUrl,
+    },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url: pageUrl,
+      locale: "zh_TW",
+      siteName: "國民旅遊卡特約商店查詢",
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
   };
 }
 
@@ -35,15 +59,51 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
   const merchant = await getMerchant(resolvedParams.id);
 
   if (!merchant) {
-    return (
-      <div className="text-center py-20 bg-card rounded-2xl border border-border/60">
-        <h3 className="text-xl font-medium text-foreground mb-4">找不到此商店資訊</h3>
-        <Link href="/" className="text-accent hover:underline flex items-center justify-center gap-2">
-          <ArrowLeftIcon className="w-4 h-4" /> 返回搜尋首頁
-        </Link>
-      </div>
-    );
+    notFound();
   }
+
+  const pageUrl = `${SITE_URL}/merchant/${merchant.tax_id || resolvedParams.id}`;
+
+  // 完整的 LocalBusiness 結構化資料
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "@id": pageUrl,
+    name: merchant.name,
+    url: merchant.website
+      ? (merchant.website.startsWith("http") ? merchant.website : `http://${merchant.website}`)
+      : pageUrl,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: merchant.address,
+      postalCode: merchant.zip_code,
+      addressRegion: merchant.address ? merchant.address.substring(0, 3) : undefined,
+      addressCountry: "TW",
+    },
+    ...(merchant.lat && merchant.lon && {
+      geo: {
+        "@type": "GeoCoordinates",
+        latitude: merchant.lat,
+        longitude: merchant.lon,
+      },
+      hasMap: `https://www.google.com/maps?q=${merchant.lat},${merchant.lon}`,
+    }),
+    taxID: merchant.tax_id,
+    identifier: {
+      "@type": "PropertyValue",
+      name: "統一編號",
+      value: merchant.tax_id,
+    },
+    description: `國民旅遊卡特約商店：${merchant.name}，位於${merchant.address}。`,
+    isPartOf: {
+      "@type": "GovernmentService",
+      name: "國民旅遊卡特約商店計畫",
+      provider: {
+        "@type": "GovernmentOrganization",
+        name: "行政院人事行政總處",
+      },
+    },
+  };
 
   return (
     <div className="animate-in fade-in duration-500 max-w-3xl mx-auto">
@@ -105,24 +165,11 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
           )}
         </div>
       </div>
-      
-      {/* SEO hidden schema markup */}
+
+      {/* LocalBusiness 結構化資料 */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "LocalBusiness",
-            "name": merchant.name,
-            "address": {
-              "@type": "PostalAddress",
-              "streetAddress": merchant.address,
-              "addressCountry": "TW"
-            },
-            "taxID": merchant.tax_id,
-            "url": merchant.website || undefined
-          })
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
     </div>
   );

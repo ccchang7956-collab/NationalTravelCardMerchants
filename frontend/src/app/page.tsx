@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Form from "next/form";
 import { redirect } from "next/navigation";
@@ -9,10 +10,39 @@ const TAIWAN_CITIES = [
   "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"
 ];
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
+// 動態 metadata：有篩選條件時不索引（避免重複內容），並設定 canonical
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}): Promise<Metadata> {
+  const resolved = await searchParams;
+  const q = typeof resolved.q === "string" ? resolved.q : "";
+  const city = typeof resolved.city === "string" ? resolved.city : "";
+
+  // 有搜尋條件或翻頁時不索引，避免搜尋結果頁稀釋首頁
+  const hasFilters = !!(q || city);
+
+  return {
+    alternates: {
+      canonical: SITE_URL + "/",
+    },
+    ...(hasFilters && {
+      robots: { index: false, follow: false },
+    }),
+    ...(q && {
+      title: `搜尋「${q}」的特約商店結果`,
+      description: `在${city || "全台"}搜尋「${q}」的國民旅遊卡特約商店查詢結果。`,
+    }),
+  };
+}
+
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const resolvedParams = await searchParams;
   const q = typeof resolvedParams.q === "string" ? resolvedParams.q : "";
@@ -31,7 +61,7 @@ export default async function Home({
   let data = null;
   let stats = null;
   try {
-    const res = await fetch(`${API_URL}/api/merchants?${query.toString()}`, { cache: 'no-store' });
+    const res = await fetch(`${API_URL}/api/merchants?${query.toString()}`, { next: { revalidate: 300 } });
     if (res.ok) data = await res.json();
     
     const statsRes = await fetch(`${API_URL}/api/stats`, { next: { revalidate: 3600 } });
@@ -66,10 +96,12 @@ export default async function Home({
       
       {/* Stats header */}
       <div className="flex flex-col sm:flex-row items-baseline gap-2 mb-8">
-        <h1 className="text-3xl font-medium tracking-tight text-foreground">特約商店檢索</h1>
+        <h1 className="text-3xl font-medium tracking-tight text-foreground">
+          國民旅遊卡特約商店查詢
+        </h1>
         {stats && (
           <span className="text-muted text-sm">
-            共收錄 {stats.total_merchants.toLocaleString()} 間商店
+            收錄 {stats.total_merchants.toLocaleString()} 間全台特約商店
           </span>
         )}
       </div>
@@ -119,9 +151,9 @@ export default async function Home({
           {merchants.map((m: any) => (
             <Link href={`/merchant/${m.tax_id || m.id}`} key={m.id} className="block group">
               <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm hover:shadow-md hover:border-accent/40 transition-all duration-200 h-full flex flex-col">
-                <h3 className="text-lg font-medium text-foreground group-hover:text-accent transition-colors">
+                <h2 className="text-lg font-medium text-foreground group-hover:text-accent transition-colors">
                   {m.name}
-                </h3>
+                </h2>
                 <div className="mt-3 space-y-2 text-sm text-muted flex-1">
                   <div className="flex items-start gap-2">
                     <MapPinIcon className="w-4 h-4 mt-0.5 shrink-0 opacity-70" />
@@ -145,7 +177,7 @@ export default async function Home({
       ) : (
         <div className="text-center py-20 bg-card rounded-2xl border border-border/60">
           <MagnifyingGlassIcon className="w-12 h-12 text-muted/30 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-foreground mb-1">找不到符合的商店</h3>
+          <h2 className="text-lg font-medium text-foreground mb-1">找不到符合的商店</h2>
           <p className="text-muted">請嘗試使用其他關鍵字或變更縣市篩選條件。</p>
         </div>
       )}
@@ -176,7 +208,26 @@ export default async function Home({
           )}
         </div>
       )}
-      
+
+      {/* SEO 靜態說明區塊：幫助 Google 理解頁面主題 */}
+      {!q && !city && page === 1 && (
+        <section
+          aria-label="關於國民旅遊卡特約商店"
+          className="mt-12 pt-8 border-t border-border/40 text-sm text-muted space-y-3 leading-relaxed"
+        >
+          <h2 className="text-base font-medium text-foreground/70">關於國民旅遊卡特約商店查詢</h2>
+          <p>
+            國民旅遊卡（National Travel Card）為行政院人事行政總處推動之國內旅遊補助方案，
+            公務人員及其眷屬可持國旅卡於全台特約商店消費，涵蓋住宿、餐飲、休閒遊樂、
+            交通運輸等各類別。
+          </p>
+          <p>
+            本系統收錄最新政府開放資料，提供全台特約商店即時查詢服務，
+            支援店名搜尋、縣市篩選，以及地圖定位查看附近商店。
+          </p>
+        </section>
+      )}
+
     </div>
   );
 }
