@@ -64,15 +64,10 @@ def get_merchants(
             where_clauses.append("f.merchants_fts MATCH ?")
             params.append(fts_query)
             
-            for term in like_terms:
-                safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-                where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
-                params.extend([f"%{safe_term}%", f"%{safe_term}%"])
-        else:
-            for term in like_terms:
-                safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-                where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
-                params.extend([f"%{safe_term}%", f"%{safe_term}%"])
+        for term in like_terms:
+            safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
+            params.extend([f"%{safe_term}%", f"%{safe_term}%"])
 
     if city:
         safe_city = city.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -153,15 +148,10 @@ def get_nearby_merchants(
             where_clauses.append("f.merchants_fts MATCH ?")
             params.append(fts_query)
             
-            for term in like_terms:
-                safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-                where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
-                params.extend([f"%{safe_term}%", f"%{safe_term}%"])
-        else:
-            for term in like_terms:
-                safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-                where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
-                params.extend([f"%{safe_term}%", f"%{safe_term}%"])
+        for term in like_terms:
+            safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
+            params.extend([f"%{safe_term}%", f"%{safe_term}%"])
 
     if joins:
         query += " " + " ".join(joins)
