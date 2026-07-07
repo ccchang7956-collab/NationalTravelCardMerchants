@@ -48,6 +48,8 @@ def migrate_database():
                 tokenize='trigram'
             );
         """)
+        print("🛠️  建立經緯度聯合索引...")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_lat_lon ON merchants(lat, lon);")
         print("⚡ 重建 FTS5 索引...")
         cursor.execute("INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild');")
         conn.commit()

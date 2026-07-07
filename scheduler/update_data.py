@@ -364,6 +364,7 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
         cursor.execute("CREATE INDEX idx_name ON merchants(name)")
         cursor.execute("CREATE INDEX idx_zip_code ON merchants(zip_code)")
         cursor.execute("CREATE INDEX idx_tax_id ON merchants(tax_id)")
+        cursor.execute("CREATE INDEX idx_lat_lon ON merchants(lat, lon)")
         
         # 同步建立 FTS 虛擬表
         cursor.execute("""
