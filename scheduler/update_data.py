@@ -359,6 +359,17 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
     cursor.execute("CREATE INDEX idx_name ON merchants(name)")
     cursor.execute("CREATE INDEX idx_zip_code ON merchants(zip_code)")
     cursor.execute("CREATE INDEX idx_tax_id ON merchants(tax_id)")
+    
+    # 同步建立 FTS 虛擬表
+    cursor.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS merchants_fts USING fts5(
+            name,
+            address,
+            content='merchants',
+            content_rowid='id',
+            tokenize='trigram'
+        );
+    """)
     conn.commit()
 
     # 讀取文字
@@ -566,6 +577,18 @@ def main():
 
         # 6. 填補缺失座標
         fill_missing_coords(new_db)
+        
+        # 6.5. 在原子性替換生產 DB 之前，重建 FTS5 索引
+        log.info("⚡ 在新資料庫中重建 FTS5 索引...")
+        try:
+            new_conn = sqlite3.connect(new_db)
+            new_conn.execute("INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')")
+            new_conn.commit()
+            new_conn.close()
+            log.info("✅ FTS5 索引重建完成")
+        except Exception as e:
+            log.error(f"❌ 重建 FTS5 索引失敗: {e}")
+            sys.exit(1)
 
         # 7. 原子性替換生產 DB
         backup_path = DB_PATH + ".bak"
@@ -578,8 +601,20 @@ def main():
             try:
                 prod_conn.execute("ATTACH DATABASE ? AS new_db", (new_db,))
                 prod_conn.execute("BEGIN TRANSACTION")
+                # 確保生產 DB 也含有 merchants_fts 虛擬表 (若從舊版升級)
+                prod_conn.execute("""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS main.merchants_fts USING fts5(
+                        name,
+                        address,
+                        content='merchants',
+                        content_rowid='id',
+                        tokenize='trigram'
+                    )
+                """)
                 prod_conn.execute("DELETE FROM main.merchants")
                 prod_conn.execute("INSERT INTO main.merchants SELECT * FROM new_db.merchants")
+                # 重建生產 DB 的 FTS5 索引以保持同步
+                prod_conn.execute("INSERT INTO main.merchants_fts(merchants_fts) VALUES('rebuild')")
                 prod_conn.execute("COMMIT")
                 prod_conn.execute("DETACH DATABASE new_db")
             except Exception as e:
