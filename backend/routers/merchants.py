@@ -1,9 +1,33 @@
 import sqlite3
 import math
 from fastapi import APIRouter, Depends, Query, HTTPException
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from backend.database import get_db
 from backend.models import Merchant, MerchantWithCoords, PaginatedMerchants, Stats, CityStat
+
+def parse_search_query(q: Optional[str]) -> Tuple[Optional[str], List[str]]:
+    """
+    解析搜尋字串 q。
+    回傳:
+      - fts_query: 適用於 FTS5 MATCH 的字串 (長度 >= 3 的詞以 AND 連接，並用雙引號包覆)
+      - like_terms: 適用於 LIKE 的剩餘短詞 (長度 < 3)
+    """
+    if not q:
+        return None, []
+    
+    terms = [t.strip() for t in q.split() if t.strip()]
+    fts_parts = []
+    like_terms = []
+    
+    for term in terms:
+        if len(term) >= 3:
+            escaped = term.replace('"', '""')
+            fts_parts.append(f'"{escaped}"')
+        else:
+            like_terms.append(term)
+            
+    fts_query = " AND ".join(fts_parts) if fts_parts else None
+    return fts_query, like_terms
 
 router = APIRouter()
 
