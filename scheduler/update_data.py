@@ -373,18 +373,18 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
     conn.commit()
 
     # 讀取文字
-    headers = {"特店名稱", "特店地址", "郵遞區號", "統一編號", "特店網頁位址"}
+    headers = {"特店名稱", "特店地址", "郵遞區號", "統一編號", "特店網頁位址", "國民旅遊卡特約商店清冊"}
     lines = []
     total_pages = len(doc)
-    for page_num in range(1, total_pages):  # 跳過第 0 頁（封面 / 目錄頁，不含商家資料）
+    for page_num in range(0, total_pages):  # 從第 0 頁（包含封面）開始解析
         page = doc[page_num]
         text = page.get_text("text")
         for line in text.split("\n"):
             line = normalize_text(line)
-            if line and line not in headers:
+            if line and line not in headers and not line.startswith("檔案日期"):
                 lines.append(line)
 
-    log.info(f"   讀取 {total_pages-1} 頁，共 {len(lines)} 行文字")
+    log.info(f"   讀取 {total_pages} 頁，共 {len(lines)} 行文字")
 
     # 以統一編號（8位數）定位每筆記錄
     tax_id_pattern = re.compile(r"^\d{8}$")

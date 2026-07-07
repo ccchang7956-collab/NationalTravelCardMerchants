@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import tempfile
+from scheduler.update_data import normalize_text
 
 # 我們使用一小段仿造的 PDF 做測試過於複雜，這裡直接測試資料庫建立流程
 def test_scheduler_db_creation():
@@ -53,3 +54,31 @@ def test_scheduler_db_creation():
         assert res[0] == "測試特約大飯店"
         
         conn.close()
+
+def test_scheduler_page_0_filtering_logic():
+    headers = {"特店名稱", "特店地址", "郵遞區號", "統一編號", "特店網頁位址", "國民旅遊卡特約商店清冊"}
+    
+    # 模擬第 0 頁可能包含的標題、日期以及商家內容
+    page_0_lines = [
+        "國民旅遊卡特約商店清冊",
+        "檔案日期：2026/05/26",
+        "特店名稱",
+        "特店地址",
+        "羅斯福路特店",
+        "台北市中正區羅斯福路1段",
+        "100",
+        "12345678"
+    ]
+    
+    parsed_lines = []
+    for line in page_0_lines:
+        line = normalize_text(line)
+        if line and line not in headers and not line.startswith("檔案日期"):
+            parsed_lines.append(line)
+            
+    # 驗證標題與日期被過濾掉，但資料有被保留
+    assert "國民旅遊卡特約商店清冊" not in parsed_lines
+    assert "檔案日期：2026/05/26" not in parsed_lines
+    assert "特店名稱" not in parsed_lines
+    assert "羅斯福路特店" in parsed_lines
+    assert "12345678" in parsed_lines
