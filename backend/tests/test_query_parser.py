@@ -19,3 +19,8 @@ def test_parse_search_query_mixed_terms():
 def test_parse_search_query_escape_quotes():
     # 逸出雙引號防注入/報錯
     assert parse_search_query('路易"莎 咖啡') == ('"路易""莎"', ["咖啡"])
+
+def test_parse_search_query_deduplication():
+    # 測試重複詞彙去重
+    assert parse_search_query("台北 咖啡店 台北 咖啡店") == ('"咖啡店"', ["台北"])
+

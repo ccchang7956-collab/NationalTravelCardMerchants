@@ -620,7 +620,21 @@ def main():
             os.remove(new_db)
         else:
             shutil.move(new_db, DB_PATH)
-            os.chmod(DB_PATH, 0o644)
+            try:
+                os.chmod(DB_PATH, 0o644)
+            except Exception:
+                pass
+            
+            # Rebuild FTS index for first-time database initialization
+            try:
+                prod_conn = sqlite3.connect(DB_PATH)
+                prod_conn.execute("INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')")
+                prod_conn.commit()
+                log.info("✅ 首次初始化 DB 重建 FTS 索引完成")
+            except Exception as e:
+                log.error(f"❌ 首次初始化 DB 重建 FTS 索引失敗：{e}")
+            finally:
+                prod_conn.close()
         log.info(f"✅ DB 已更新：{DB_PATH}")
 
     # 8. 記錄 hash
