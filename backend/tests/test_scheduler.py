@@ -1,7 +1,6 @@
 import os
 import sqlite3
 import tempfile
-from scheduler.update_data import parse_pdf_to_db, fill_missing_coords
 
 # 我們使用一小段仿造的 PDF 做測試過於複雜，這裡直接測試資料庫建立流程
 def test_scheduler_db_creation():

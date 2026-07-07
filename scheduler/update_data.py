@@ -580,15 +580,16 @@ def main():
         
         # 6.5. 在原子性替換生產 DB 之前，重建 FTS5 索引
         log.info("⚡ 在新資料庫中重建 FTS5 索引...")
+        new_conn = sqlite3.connect(new_db)
         try:
-            new_conn = sqlite3.connect(new_db)
             new_conn.execute("INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')")
             new_conn.commit()
-            new_conn.close()
             log.info("✅ FTS5 索引重建完成")
         except Exception as e:
             log.error(f"❌ 重建 FTS5 索引失敗: {e}")
             sys.exit(1)
+        finally:
+            new_conn.close()
 
         # 7. 原子性替換生產 DB
         backup_path = DB_PATH + ".bak"
@@ -601,7 +602,6 @@ def main():
             try:
                 prod_conn.execute("ATTACH DATABASE ? AS new_db", (new_db,))
                 prod_conn.execute("BEGIN TRANSACTION")
-                # 確保生產 DB 也含有 merchants_fts 虛擬表 (若從舊版升級)
                 prod_conn.execute("""
                     CREATE VIRTUAL TABLE IF NOT EXISTS main.merchants_fts USING fts5(
                         name,
@@ -613,7 +613,6 @@ def main():
                 """)
                 prod_conn.execute("DELETE FROM main.merchants")
                 prod_conn.execute("INSERT INTO main.merchants SELECT * FROM new_db.merchants")
-                # 重建生產 DB 的 FTS5 索引以保持同步
                 prod_conn.execute("INSERT INTO main.merchants_fts(merchants_fts) VALUES('rebuild')")
                 prod_conn.execute("COMMIT")
                 prod_conn.execute("DETACH DATABASE new_db")
@@ -623,9 +622,9 @@ def main():
                     prod_conn.execute("ROLLBACK")
                 except Exception:
                     pass
-                prod_conn.close()
                 raise
-            prod_conn.close()
+            finally:
+                prod_conn.close()
             os.remove(new_db)
         else:
             shutil.move(new_db, DB_PATH)
