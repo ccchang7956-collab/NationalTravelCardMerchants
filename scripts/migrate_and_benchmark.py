@@ -31,8 +31,9 @@ def migrate_database():
         print("❌ 找不到資料庫檔案，請確認路徑或先執行排程腳本生成資料庫。")
         sys.exit(1)
         
-    conn = sqlite3.connect(DB_PATH)
+    conn = None
     try:
+        conn = sqlite3.connect(DB_PATH)
         conn.execute("PRAGMA busy_timeout = 5000;")
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
@@ -52,15 +53,18 @@ def migrate_database():
         conn.commit()
         print("✅ 資料庫遷移與索引重建成功！")
     except Exception as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         print(f"❌ 遷移失敗: {e}")
         sys.exit(1)
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def benchmark_queries():
-    conn = sqlite3.connect(DB_PATH)
+    conn = None
     try:
+        conn = sqlite3.connect(DB_PATH)
         conn.execute("PRAGMA busy_timeout = 5000;")
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
@@ -143,7 +147,8 @@ def benchmark_queries():
             col_type = pad_string(qtype, 15)
             print(f"{col_q} | {col_type} | {t_like:12.3f} ms | {t_fts:12.3f} ms | {ratio:6.1f}x")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
     migrate_database()
