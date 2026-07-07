@@ -64,7 +64,8 @@ def benchmark_queries():
         ("7-11", "4字英文/數字"),
         ("台北", "2字短詞"),
         ("台中", "2字短詞"),
-        ("台北 大飯店", "混合字詞")
+        ("台北 大飯店", "混合字詞"),
+        ("", "空關鍵字")
     ]
     
     print("\n⏱️  開始搜尋效能基準測試 (每個關鍵字執行 50 次取平均時間)...")
@@ -82,7 +83,10 @@ def benchmark_queries():
             like_where.append("(name LIKE ? ESCAPE '\\' OR address LIKE ? ESCAPE '\\')")
             like_params.extend([f"%{safe_t}%", f"%{safe_t}%"])
         
-        like_sql = f"SELECT COUNT(*) FROM merchants WHERE {' AND '.join(like_where)}"
+        if like_where:
+            like_sql = f"SELECT COUNT(*) FROM merchants WHERE {' AND '.join(like_where)}"
+        else:
+            like_sql = "SELECT COUNT(*) FROM merchants WHERE 1=1"
         
         t0 = time.time()
         for _ in range(50):
@@ -115,7 +119,10 @@ def benchmark_queries():
             if fts_where:
                 fts_sql += f" AND {' AND '.join(fts_where)}"
         else:
-            fts_sql = f"SELECT COUNT(*) FROM merchants WHERE {' AND '.join(like_where)}"
+            if like_where:
+                fts_sql = f"SELECT COUNT(*) FROM merchants WHERE {' AND '.join(like_where)}"
+            else:
+                fts_sql = "SELECT COUNT(*) FROM merchants WHERE 1=1"
             fts_params = like_params
 
         t0 = time.time()
