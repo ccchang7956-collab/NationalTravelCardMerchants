@@ -342,119 +342,121 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
     # 初始化 DB
     os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA busy_timeout = 5000;")
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous = NORMAL;")
-    cursor = conn.cursor()
-    cursor.execute("DROP TABLE IF EXISTS merchants")
-    cursor.execute("""
-        CREATE TABLE merchants (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            address TEXT,
-            zip_code TEXT,
-            tax_id TEXT UNIQUE,
-            website TEXT,
-            lat REAL,
-            lon REAL
-        )
-    """)
-    cursor.execute("CREATE INDEX idx_name ON merchants(name)")
-    cursor.execute("CREATE INDEX idx_zip_code ON merchants(zip_code)")
-    cursor.execute("CREATE INDEX idx_tax_id ON merchants(tax_id)")
-    
-    # 同步建立 FTS 虛擬表
-    cursor.execute("""
-        CREATE VIRTUAL TABLE IF NOT EXISTS merchants_fts USING fts5(
-            name,
-            address,
-            content='merchants',
-            content_rowid='id',
-            tokenize='trigram'
-        );
-    """)
-    conn.commit()
+    try:
+        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous = NORMAL;")
+        cursor = conn.cursor()
+        cursor.execute("DROP TABLE IF EXISTS merchants")
+        cursor.execute("""
+            CREATE TABLE merchants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                address TEXT,
+                zip_code TEXT,
+                tax_id TEXT UNIQUE,
+                website TEXT,
+                lat REAL,
+                lon REAL
+            )
+        """)
+        cursor.execute("CREATE INDEX idx_name ON merchants(name)")
+        cursor.execute("CREATE INDEX idx_zip_code ON merchants(zip_code)")
+        cursor.execute("CREATE INDEX idx_tax_id ON merchants(tax_id)")
+        
+        # 同步建立 FTS 虛擬表
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS merchants_fts USING fts5(
+                name,
+                address,
+                content='merchants',
+                content_rowid='id',
+                tokenize='trigram'
+            );
+        """)
+        conn.commit()
 
-    # 讀取文字
-    headers = {"特店名稱", "特店地址", "郵遞區號", "統一編號", "特店網頁位址", "國民旅遊卡特約商店清冊"}
-    lines = []
-    total_pages = len(doc)
-    for page_num in range(0, total_pages):  # 從第 0 頁（包含封面）開始解析
-        page = doc[page_num]
-        text = page.get_text("text")
-        for line in text.split("\n"):
-            line = normalize_text(line)
-            if line and line not in headers and not line.startswith("檔案日期"):
-                lines.append(line)
+        # 讀取文字
+        headers = {"特店名稱", "特店地址", "郵遞區號", "統一編號", "特店網頁位址", "國民旅遊卡特約商店清冊"}
+        lines = []
+        total_pages = len(doc)
+        for page_num in range(0, total_pages):  # 從第 0 頁（包含封面）開始解析
+            page = doc[page_num]
+            text = page.get_text("text")
+            for line in text.split("\n"):
+                line = normalize_text(line)
+                if line and line not in headers and not line.startswith("檔案日期"):
+                    lines.append(line)
 
-    log.info(f"   讀取 {total_pages} 頁，共 {len(lines)} 行文字")
+        log.info(f"   讀取 {total_pages} 頁，共 {len(lines)} 行文字")
 
-    # 以統一編號（8位數）定位每筆記錄
-    tax_id_pattern = re.compile(r"^\d{8}$")
-    tax_indices = [i for i, l in enumerate(lines) if tax_id_pattern.match(l)]
-    log.info(f"   找到 {len(tax_indices)} 筆統一編號")
+        # 以統一編號（8位數）定位每筆記錄
+        tax_id_pattern = re.compile(r"^\d{8}$")
+        tax_indices = [i for i, l in enumerate(lines) if tax_id_pattern.match(l)]
+        log.info(f"   找到 {len(tax_indices)} 筆統一編號")
 
-    records = []
-    for k in range(len(tax_indices)):
-        current_tax_idx = tax_indices[k]
-        current_tax_id  = lines[current_tax_idx]
-        current_zip     = lines[current_tax_idx - 1]
-        prev_tax_idx    = tax_indices[k-1] if k > 0 else -1
-        items = lines[prev_tax_idx + 1 : current_tax_idx - 1]
+        records = []
+        for k in range(len(tax_indices)):
+            current_tax_idx = tax_indices[k]
+            current_tax_id  = lines[current_tax_idx]
+            current_zip     = lines[current_tax_idx - 1]
+            prev_tax_idx    = tax_indices[k-1] if k > 0 else -1
+            items = lines[prev_tax_idx + 1 : current_tax_idx - 1]
 
-        name = address = ""
-        prev_website = None
+            name = address = ""
+            prev_website = None
 
-        if len(items) == 3:
-            prev_website = items[0]
-            name = items[1]
-            address = items[2]
-        elif len(items) == 2:
-            if is_website(items[0]):
-                prev_website = items[0]
-                name, address = split_merged(items[1])
-            else:
-                name = items[0]
-                address = items[1]
-        elif len(items) == 1:
-            name, address = split_merged(items[0])
-        elif len(items) == 0:
-            continue
-        else:
-            if is_website(items[0]):
+            if len(items) == 3:
                 prev_website = items[0]
                 name = items[1]
-                address = "".join(items[2:])
+                address = items[2]
+            elif len(items) == 2:
+                if is_website(items[0]):
+                    prev_website = items[0]
+                    name, address = split_merged(items[1])
+                else:
+                    name = items[0]
+                    address = items[1]
+            elif len(items) == 1:
+                name, address = split_merged(items[0])
+            elif len(items) == 0:
+                continue
             else:
-                name = items[0]
-                address = "".join(items[1:])
+                if is_website(items[0]):
+                    prev_website = items[0]
+                    name = items[1]
+                    address = "".join(items[2:])
+                else:
+                    name = items[0]
+                    address = "".join(items[1:])
 
-        if prev_website and k > 0:
-            records[-1]["website"] = prev_website
+            if prev_website and k > 0:
+                records[-1]["website"] = prev_website
 
-        records.append({
-            "name": name, "address": address,
-            "zip_code": current_zip, "tax_id": current_tax_id,
-            "website": None
-        })
+            records.append({
+                "name": name, "address": address,
+                "zip_code": current_zip, "tax_id": current_tax_id,
+                "website": None
+            })
 
-    # 處理最後一筆的網址
-    if tax_indices:
-        last_items = lines[tax_indices[-1] + 1:]
-        if last_items and is_website(last_items[0]):
-            records[-1]["website"] = last_items[0]
+        # 處理最後一筆的網址
+        if tax_indices:
+            last_items = lines[tax_indices[-1] + 1:]
+            if last_items and is_website(last_items[0]):
+                records[-1]["website"] = last_items[0]
 
-    insert_data = [(r["name"], r["address"], r["zip_code"], r["tax_id"], r["website"]) for r in records]
-    cursor.executemany(
-        "INSERT OR IGNORE INTO merchants (name, address, zip_code, tax_id, website) VALUES (?, ?, ?, ?, ?)",
-        insert_data
-    )
-    conn.commit()
-    count = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
-    conn.close()
-    doc.close()
-    log.info(f"✅ 解析完成，寫入 {count} 筆")
-    return count
+        insert_data = [(r["name"], r["address"], r["zip_code"], r["tax_id"], r["website"]) for r in records]
+        cursor.executemany(
+            "INSERT OR IGNORE INTO merchants (name, address, zip_code, tax_id, website) VALUES (?, ?, ?, ?, ?)",
+            insert_data
+        )
+        conn.commit()
+        count = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
+        doc.close()
+        log.info(f"✅ 解析完成，寫入 {count} 筆")
+        return count
+    finally:
+        conn.close()
 
 def migrate_coords(old_db: str, new_db: str) -> int:
     """從舊 DB 遷移 lat/lon 到新 DB（以 tax_id 對應），回傳遷移筆數。"""
@@ -489,26 +491,28 @@ def fill_missing_coords(db_path: str) -> int:
     """對沒有座標的商家用郵遞區號 fallback 填補，回傳填補筆數。"""
     log.info("📍 用郵遞區號填補缺失座標...")
     conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA busy_timeout = 5000;")
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous = NORMAL;")
-    rows = conn.execute(
-        "SELECT id, zip_code FROM merchants WHERE lat IS NULL AND zip_code IS NOT NULL"
-    ).fetchall()
-    batch = []
-    skipped = 0
-    for mid, zip_code in rows:
-        coords = zipcode_coords(zip_code)
-        if coords:
-            batch.append((coords[0], coords[1], mid))
-        else:
-            skipped += 1
-    if batch:
-        conn.executemany("UPDATE merchants SET lat=?, lon=? WHERE id=?", batch)
-        conn.commit()
-    conn.close()
-    log.info(f"✅ 填補 {len(batch)} 筆（{skipped} 筆無對應郵遞區號）")
-    return len(batch)
+    try:
+        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous = NORMAL;")
+        rows = conn.execute(
+            "SELECT id, zip_code FROM merchants WHERE lat IS NULL AND zip_code IS NOT NULL"
+        ).fetchall()
+        batch = []
+        skipped = 0
+        for mid, zip_code in rows:
+            coords = zipcode_coords(zip_code)
+            if coords:
+                batch.append((coords[0], coords[1], mid))
+            else:
+                skipped += 1
+        if batch:
+            conn.executemany("UPDATE merchants SET lat=?, lon=? WHERE id=?", batch)
+            conn.commit()
+        log.info(f"✅ 填補 {len(batch)} 筆（{skipped} 筆無對應郵遞區號）")
+        return len(batch)
+    finally:
+        conn.close()
 
 
 # ── 主流程 ───────────────────────────────────────────────────────────────────
@@ -555,10 +559,12 @@ def main():
         if os.path.exists(DB_PATH):
             try:
                 old_conn = sqlite3.connect(DB_PATH)
-                old_conn.execute("PRAGMA busy_timeout = 5000;")
-                for row in old_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
-                    old_tax_ids.add(row[0])
-                old_conn.close()
+                try:
+                    old_conn.execute("PRAGMA busy_timeout = 5000;")
+                    for row in old_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
+                        old_tax_ids.add(row[0])
+                finally:
+                    old_conn.close()
             except Exception:
                 pass
 
@@ -572,10 +578,12 @@ def main():
         new_tax_ids = set()
         try:
             tmp_conn = sqlite3.connect(new_db)
-            tmp_conn.execute("PRAGMA busy_timeout = 5000;")
-            for row in tmp_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
-                new_tax_ids.add(row[0])
-            tmp_conn.close()
+            try:
+                tmp_conn.execute("PRAGMA busy_timeout = 5000;")
+                for row in tmp_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
+                    new_tax_ids.add(row[0])
+            finally:
+                tmp_conn.close()
         except Exception:
             pass
             
