@@ -5,7 +5,7 @@ import json
 import sqlite3
 
 from backend.routers import merchants
-from backend.database import DB_PATH
+from backend.database import DB_PATH, get_db_connection
 
 app = FastAPI(
     title="National Travel Card Merchants API",
@@ -52,11 +52,15 @@ def data_info():
     # 從 DB 直接讀取最新商家數量（當作 fallback）
     total_merchants = 0
     if os.path.exists(DB_PATH):
+        conn = None
         try:
-            with sqlite3.connect(DB_PATH) as conn:
-                total_merchants = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
+            conn = get_db_connection()
+            total_merchants = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
         except Exception:
             total_merchants = 0
+        finally:
+            if conn:
+                conn.close()
 
     return {
         "database_ready": os.path.exists(DB_PATH),
