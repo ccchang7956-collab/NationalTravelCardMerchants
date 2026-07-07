@@ -342,6 +342,9 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
     # 初始化 DB
     os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
     cursor = conn.cursor()
     cursor.execute("DROP TABLE IF EXISTS merchants")
     cursor.execute("""
@@ -460,7 +463,9 @@ def migrate_coords(old_db: str, new_db: str) -> int:
         return 0
     log.info("🗺️  從舊 DB 遷移座標...")
     old_conn = sqlite3.connect(old_db)
+    old_conn.execute("PRAGMA busy_timeout = 5000;")
     new_conn = sqlite3.connect(new_db)
+    new_conn.execute("PRAGMA busy_timeout = 5000;")
     try:
         rows = old_conn.execute(
             "SELECT tax_id, lat, lon FROM merchants WHERE lat IS NOT NULL AND tax_id IS NOT NULL"
@@ -484,6 +489,9 @@ def fill_missing_coords(db_path: str) -> int:
     """對沒有座標的商家用郵遞區號 fallback 填補，回傳填補筆數。"""
     log.info("📍 用郵遞區號填補缺失座標...")
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
     rows = conn.execute(
         "SELECT id, zip_code FROM merchants WHERE lat IS NULL AND zip_code IS NOT NULL"
     ).fetchall()
@@ -547,6 +555,7 @@ def main():
         if os.path.exists(DB_PATH):
             try:
                 old_conn = sqlite3.connect(DB_PATH)
+                old_conn.execute("PRAGMA busy_timeout = 5000;")
                 for row in old_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
                     old_tax_ids.add(row[0])
                 old_conn.close()
@@ -563,6 +572,7 @@ def main():
         new_tax_ids = set()
         try:
             tmp_conn = sqlite3.connect(new_db)
+            tmp_conn.execute("PRAGMA busy_timeout = 5000;")
             for row in tmp_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
                 new_tax_ids.add(row[0])
             tmp_conn.close()
@@ -586,6 +596,9 @@ def main():
             
             log.info("🔄 使用 Transaction 原子性替換資料表...")
             prod_conn = sqlite3.connect(DB_PATH)
+            prod_conn.execute("PRAGMA busy_timeout = 5000;")
+            prod_conn.execute("PRAGMA journal_mode=WAL;")
+            prod_conn.execute("PRAGMA synchronous = NORMAL;")
             try:
                 # Run DDL outside transaction
                 prod_conn.execute("""
@@ -628,6 +641,9 @@ def main():
             # Rebuild FTS index for first-time database initialization
             try:
                 prod_conn = sqlite3.connect(DB_PATH)
+                prod_conn.execute("PRAGMA busy_timeout = 5000;")
+                prod_conn.execute("PRAGMA journal_mode=WAL;")
+                prod_conn.execute("PRAGMA synchronous = NORMAL;")
                 prod_conn.execute("INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')")
                 prod_conn.commit()
                 log.info("✅ 首次初始化 DB 重建 FTS 索引完成")

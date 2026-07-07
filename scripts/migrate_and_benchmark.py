@@ -32,6 +32,9 @@ def migrate_database():
         sys.exit(1)
         
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
     cursor = conn.cursor()
     try:
         print("🛠️  建立 FTS5 虛擬表...")
@@ -57,6 +60,9 @@ def migrate_database():
 
 def benchmark_queries():
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
     # 測試詞彙
     test_cases = [
         ("大飯店", "3字長詞"),

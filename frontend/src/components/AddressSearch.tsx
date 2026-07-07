@@ -48,6 +48,7 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
           {
             headers: {
               "Accept-Language": "zh-TW,zh;q=0.9",
+              "User-Agent": "NationalTravelCardQuerySystem/1.0 (contact: admin@example.com)"
             },
             signal: controller.signal,
           }
