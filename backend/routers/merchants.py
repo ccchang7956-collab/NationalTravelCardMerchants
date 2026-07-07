@@ -50,33 +50,55 @@ def get_merchants(
     per_page: int = Query(20, ge=1, le=100, description="Items per page"),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    query = "SELECT * FROM merchants WHERE 1=1"
-    count_query = "SELECT COUNT(*) FROM merchants WHERE 1=1"
+    query = "SELECT m.* FROM merchants m"
+    count_query = "SELECT COUNT(*) FROM merchants m"
+    joins = []
+    where_clauses = []
     params = []
 
+    # 解析搜尋關鍵字
     if q:
-        safe_q = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        query += " AND (name LIKE ? ESCAPE '\\' OR address LIKE ? ESCAPE '\\')"
-        count_query += " AND (name LIKE ? ESCAPE '\\' OR address LIKE ? ESCAPE '\\')"
-        params.extend([f"%{safe_q}%", f"%{safe_q}%"])
+        fts_query, like_terms = parse_search_query(q)
+        if fts_query:
+            joins.append("JOIN merchants_fts f ON m.id = f.rowid")
+            where_clauses.append("f.merchants_fts MATCH ?")
+            params.append(fts_query)
+            
+            for term in like_terms:
+                safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
+                params.extend([f"%{safe_term}%", f"%{safe_term}%"])
+        else:
+            for term in like_terms:
+                safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
+                params.extend([f"%{safe_term}%", f"%{safe_term}%"])
 
     if city:
         safe_city = city.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        query += " AND address LIKE ? ESCAPE '\\'"
-        count_query += " AND address LIKE ? ESCAPE '\\'"
+        where_clauses.append("m.address LIKE ? ESCAPE '\\'")
         params.append(f"{safe_city}%")
 
     if zip_code:
-        query += " AND zip_code = ?"
-        count_query += " AND zip_code = ?"
+        where_clauses.append("m.zip_code = ?")
         params.append(zip_code)
 
     if has_website is True:
-        query += " AND website IS NOT NULL AND website != ''"
-        count_query += " AND website IS NOT NULL AND website != ''"
+        where_clauses.append("m.website IS NOT NULL AND m.website != ''")
     elif has_website is False:
-        query += " AND (website IS NULL OR website = '')"
-        count_query += " AND (website IS NULL OR website = '')"
+        where_clauses.append("(m.website IS NULL OR m.website = '')")
+
+    # 拼接 JOIN
+    if joins:
+        join_str = " " + " ".join(joins)
+        query += join_str
+        count_query += join_str
+
+    # 拼接 WHERE
+    if where_clauses:
+        where_str = " WHERE " + " AND ".join(where_clauses)
+        query += where_str
+        count_query += where_str
 
     cursor = db.cursor()
     cursor.execute(count_query, params)
@@ -85,8 +107,11 @@ def get_merchants(
     offset = (page - 1) * per_page
 
     query += " LIMIT ? OFFSET ?"
-    params.extend([per_page, offset])
-    cursor.execute(query, params)
+    # 為了不影響 params 陣列，另外拷貝分頁參數
+    query_params = list(params)
+    query_params.extend([per_page, offset])
+    
+    cursor.execute(query, query_params)
     rows = cursor.fetchall()
     items = [dict(row) for row in rows]
 
@@ -108,31 +133,45 @@ def get_nearby_merchants(
     limit: int = Query(100, ge=1, le=500, description="Max number of results"),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """
-    Return merchants within a given radius (km) of the specified lat/lon.
-    Uses Haversine approximation via bounding box pre-filter + Python distance calc.
-    """
-    # Approx degrees per km: 1 deg lat ≈ 111km
+    # Approx degrees per km
     lat_delta = radius_km / 111.0
     lon_delta = min(radius_km / (111.0 * math.cos(math.radians(lat))), 180.0)
 
-    query = """
-        SELECT * FROM merchants
-        WHERE lat IS NOT NULL
-          AND lat BETWEEN ? AND ?
-          AND lon BETWEEN ? AND ?
-    """
+    query = "SELECT m.* FROM merchants m"
+    joins = []
+    where_clauses = [
+        "m.lat IS NOT NULL",
+        "m.lat BETWEEN ? AND ?",
+        "m.lon BETWEEN ? AND ?"
+    ]
     params = [lat - lat_delta, lat + lat_delta, lon - lon_delta, lon + lon_delta]
-    
+
     if q:
-        safe_q = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        query += " AND (name LIKE ? ESCAPE '\\' OR address LIKE ? ESCAPE '\\')"
-        params.extend([f"%{safe_q}%", f"%{safe_q}%"])
+        fts_query, like_terms = parse_search_query(q)
+        if fts_query:
+            joins.append("JOIN merchants_fts f ON m.id = f.rowid")
+            where_clauses.append("f.merchants_fts MATCH ?")
+            params.append(fts_query)
+            
+            for term in like_terms:
+                safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
+                params.extend([f"%{safe_term}%", f"%{safe_term}%"])
+        else:
+            for term in like_terms:
+                safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
+                params.extend([f"%{safe_term}%", f"%{safe_term}%"])
+
+    if joins:
+        query += " " + " ".join(joins)
+    if where_clauses:
+        query += " WHERE " + " AND ".join(where_clauses)
 
     cursor = db.cursor()
     cursor.execute(query, params)
-
     rows = cursor.fetchall()
+    
     results = []
     for row in rows:
         m = dict(row)
