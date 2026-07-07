@@ -15,7 +15,14 @@ def parse_search_query(q: Optional[str]) -> Tuple[Optional[str], List[str]]:
     if not q:
         return None, []
     
-    terms = [t.strip() for t in q.split() if t.strip()]
+    terms = []
+    seen = set()
+    for t in q.split():
+        t_clean = t.strip()
+        if t_clean and t_clean not in seen:
+            seen.add(t_clean)
+            terms.append(t_clean)
+            
     fts_parts = []
     like_terms = []
     

@@ -47,15 +47,15 @@ def fixture_db_conn():
     yield conn
     conn.close()
 
-def test_get_merchants_hybrid_search(db_conn):
-    # 覆寫 FastAPI 的 DB 依賴為測試記憶體連線
+@pytest.fixture(autouse=True)
+def override_db(db_conn):
     def override_get_db():
-        try:
-            yield db_conn
-        finally:
-            pass
-    
+        yield db_conn
     app.dependency_overrides[get_db] = override_get_db
+    yield
+    app.dependency_overrides.clear()
+
+def test_get_merchants_hybrid_search():
     client = TestClient(app)
     
     # 1. 測試長關鍵字 (使用 FTS)
@@ -79,18 +79,7 @@ def test_get_merchants_hybrid_search(db_conn):
     assert data["total"] == 1
     assert data["items"][0]["name"] == "彰化大飯店"
 
-    # 清理依賴覆寫
-    app.dependency_overrides.clear()
-
-def test_get_nearby_merchants_hybrid_search(db_conn):
-    # 覆寫 FastAPI 的 DB 依賴為測試記憶體連線
-    def override_get_db():
-        try:
-            yield db_conn
-        finally:
-            pass
-    
-    app.dependency_overrides[get_db] = override_get_db
+def test_get_nearby_merchants_hybrid_search():
     client = TestClient(app)
     
     # 1. 測試長關鍵字 (使用 FTS)
@@ -113,6 +102,3 @@ def test_get_nearby_merchants_hybrid_search(db_conn):
     data = response.json()
     assert len(data) == 1
     assert data[0]["name"] == "彰化大飯店"
-
-    # 清理依賴覆寫
-    app.dependency_overrides.clear()
