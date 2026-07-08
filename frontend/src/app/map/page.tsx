@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense, useRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -38,6 +38,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 function MapContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const [center, setCenter] = useState<[number, number]>(DEFAULT_CENTER);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -76,12 +77,19 @@ function MapContent() {
   }, [router, searchParams]);
 
   const fetchNearby = useCallback(async (lat: number, lon: number, r: number, q: string) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     updateURL(lat, lon, r, q);
     try {
       const qParam = q ? `&q=${encodeURIComponent(q)}` : "";
       const res = await fetch(
-        `${API_URL}/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${r}&limit=200${qParam}`
+        `${API_URL}/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${r}&limit=200${qParam}`,
+        { signal: controller.signal }
       );
       if (res.ok) {
         const data: Merchant[] = await res.json();
@@ -90,10 +98,13 @@ function MapContent() {
       } else {
         setLocationStatus("查詢失敗，請稍後再試");
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e.name === 'AbortError') return;
       setLocationStatus("無法連線後端 API");
     } finally {
-      setLoading(false);
+      if (abortControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
   }, [updateURL]);
 
@@ -118,6 +129,17 @@ function MapContent() {
       fetchNearby(currentLat, currentLon, currentRadius, currentKeyword);
     }
   }, [searchParams, fetchNearby]); // 監聽 searchParams 的變化以支援雙向綁定與歷史導航
+
+  useEffect(() => {
+    if (tempRadius === radius) return;
+    
+    const timer = setTimeout(() => {
+      setRadius(tempRadius);
+      fetchNearby(center[0], center[1], tempRadius, keyword);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [tempRadius, radius, center, keyword, fetchNearby]);
 
 
   const handleLocate = useCallback(() => {
@@ -155,12 +177,6 @@ function MapContent() {
     fetchNearby(lat, lon, radius, keyword);
     setLocationStatus(`已切換至搜尋地址`);
   }, [fetchNearby, radius, keyword]);
-
-  const handleRadiusChange = useCallback((newRadius: number) => {
-    setRadius(newRadius);
-    setTempRadius(newRadius);
-    fetchNearby(center[0], center[1], newRadius, keyword);
-  }, [center, keyword, fetchNearby]);
 
   const handleKeywordSearch = useCallback(() => {
     fetchNearby(center[0], center[1], radius, keyword);
@@ -221,13 +237,6 @@ function MapContent() {
               step={0.5}
               value={tempRadius}
               onChange={(e) => setTempRadius(parseFloat(e.target.value))}
-              onMouseUp={() => handleRadiusChange(tempRadius)}
-              onTouchEnd={() => handleRadiusChange(tempRadius)}
-              onKeyUp={(e) => {
-                if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
-                  handleRadiusChange(tempRadius);
-                }
-              }}
               className="flex-1 accent-accent"
             />
             <span className="text-sm font-medium text-foreground w-16 text-right shrink-0">{tempRadius} km</span>
