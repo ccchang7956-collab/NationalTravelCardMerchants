@@ -49,49 +49,30 @@ function MapContent() {
   const [locationStatus, setLocationStatus] = useState<string>("請輸入地址、定位，或點擊地圖搜尋");
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  const [isInit, setIsInit] = useState(true);
-
-  // Parse URL on mount
-  useEffect(() => {
-    const lat = searchParams.get("lat");
-    const lon = searchParams.get("lon");
-    const r = searchParams.get("radius");
-    const q = searchParams.get("q");
-
-    let initialCenter = DEFAULT_CENTER;
-    let initialRadius = 2;
-    let initialKeyword = "";
-
-    if (lat && lon) {
-      initialCenter = [parseFloat(lat), parseFloat(lon)];
-      setCenter(initialCenter);
-    }
-    if (r) {
-      initialRadius = parseFloat(r);
-      setRadius(initialRadius);
-    }
-    if (q) {
-      initialKeyword = q;
-      setKeyword(initialKeyword);
-    }
-    
-    // Fetch initial data
-    if (lat && lon) {
-      fetchNearby(initialCenter[0], initialCenter[1], initialRadius, initialKeyword);
-    }
-    setIsInit(false);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Sync state to URL
   const updateURL = useCallback((lat: number, lon: number, r: number, q: string) => {
-    if (isInit) return;
+    const currentLat = searchParams.get("lat");
+    const currentLon = searchParams.get("lon");
+    const currentR = searchParams.get("radius");
+    const currentQ = searchParams.get("q") || "";
+
+    // Check if URL query params match the new values to avoid infinite routing loop
+    if (
+      currentLat && parseFloat(currentLat).toFixed(5) === lat.toFixed(5) &&
+      currentLon && parseFloat(currentLon).toFixed(5) === lon.toFixed(5) &&
+      currentR && parseFloat(currentR) === r &&
+      currentQ === q
+    ) {
+      return;
+    }
+
     const params = new URLSearchParams();
     params.set("lat", lat.toFixed(5));
     params.set("lon", lon.toFixed(5));
     params.set("radius", r.toString());
     if (q) params.set("q", q);
     router.replace(`/map?${params.toString()}`, { scroll: false });
-  }, [router, isInit]);
+  }, [router, searchParams]);
 
   const fetchNearby = useCallback(async (lat: number, lon: number, r: number, q: string) => {
     setLoading(true);
@@ -114,6 +95,28 @@ function MapContent() {
       setLoading(false);
     }
   }, [updateURL]);
+
+  useEffect(() => {
+    const lat = searchParams.get("lat");
+    const lon = searchParams.get("lon");
+    const r = searchParams.get("radius");
+    const q = searchParams.get("q");
+
+    const currentLat = lat ? parseFloat(lat) : DEFAULT_CENTER[0];
+    const currentLon = lon ? parseFloat(lon) : DEFAULT_CENTER[1];
+    const currentRadius = r ? parseFloat(r) : 2;
+    const currentKeyword = q || "";
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCenter([currentLat, currentLon]);
+    setRadius(currentRadius);
+    setKeyword(currentKeyword);
+
+    if (lat && lon) {
+      fetchNearby(currentLat, currentLon, currentRadius, currentKeyword);
+    }
+  }, [searchParams, fetchNearby]); // 監聽 searchParams 的變化以支援雙向綁定與歷史導航
+
 
   const handleLocate = useCallback(() => {
     if (!navigator.geolocation) {
