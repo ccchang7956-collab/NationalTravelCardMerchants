@@ -1,5 +1,6 @@
 import sqlite3
 import math
+import re
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional, List, Tuple
 from backend.database import get_db
@@ -207,10 +208,14 @@ def get_stats(db: sqlite3.Connection = Depends(get_db)):
         WHERE address IS NOT NULL AND address != ''
         GROUP BY SUBSTR(address, 1, 3)
         ORDER BY count DESC
-        LIMIT 25
     """)
-    cities = [{"city": row["city"], "count": row["count"]} for row in cursor.fetchall()]
-    valid_cities = [c for c in cities if not any(char.isdigit() for char in c["city"])]
+    # 台灣有效縣市清單 (排除雜訊)
+    taiwan_city_pattern = re.compile(r'^[\u4e00-\u9fff]{3}$') # 匹配 3 個中文字 (如 台北市、南投縣)
+    valid_cities = []
+    for row in cursor.fetchall():
+        city_name = row["city"]
+        if city_name and taiwan_city_pattern.match(city_name):
+            valid_cities.append({"city": city_name, "count": row["count"]})
 
     return {
         "total_merchants": total,
