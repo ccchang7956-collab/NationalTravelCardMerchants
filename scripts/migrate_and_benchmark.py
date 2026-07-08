@@ -118,7 +118,7 @@ def benchmark_queries():
             fts_parts = []
             like_terms = []
             for t in terms:
-                if len(t) >= 2:
+                if len(t) >= 3:
                     fts_parts.append(f'"{t.replace(chr(34), chr(34)+chr(34))}"')
                 else:
                     like_terms.append(t)

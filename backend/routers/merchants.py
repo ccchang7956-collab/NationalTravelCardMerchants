@@ -9,8 +9,8 @@ def parse_search_query(q: Optional[str]) -> Tuple[Optional[str], List[str]]:
     """
     解析搜尋字串 q。
     回傳:
-      - fts_query: 適用於 FTS5 MATCH 的字串 (長度 >= 2 的詞以 AND 連接，並用雙引號包覆)
-      - like_terms: 適用於 LIKE 的剩餘短詞 (長度 < 2)
+      - fts_query: 適用於 FTS5 MATCH 的字串 (長度 >= 3 的詞以 AND 連接，並用雙引號包覆)
+      - like_terms: 適用於 LIKE 的剩餘短詞 (長度 < 3)
     """
     if not q:
         return None, []
@@ -27,7 +27,7 @@ def parse_search_query(q: Optional[str]) -> Tuple[Optional[str], List[str]]:
     like_terms = []
     
     for term in terms:
-        if len(term) >= 2:
+        if len(term) >= 3:
             escaped = term.replace('"', '""')
             fts_parts.append(f'"{escaped}"')
         else:
