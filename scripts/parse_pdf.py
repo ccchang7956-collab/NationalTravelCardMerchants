@@ -81,6 +81,24 @@ def main():
             if line and line not in headers and not line.startswith("檔案日期"):
                 lines.append(line)
                 
+    # 預處理折行網址合併
+    merged_lines = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if i + 1 < len(lines) and is_website(line):
+            next_line = lines[i + 1]
+            if (not re.search(r'[\u4e00-\u9fff]', next_line) and 
+                not re.match(r'^\d{8}$', next_line) and 
+                not re.match(r'^\d{3,6}$', next_line) and 
+                ' ' not in next_line and
+                len(next_line) <= 15):
+                line = line + next_line
+                i += 1
+        merged_lines.append(line)
+        i += 1
+    lines = merged_lines
+
     print(f"Total extracted lines: {len(lines)}")
     
     # Find all indices that contain exactly an 8-digit tax ID

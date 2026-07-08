@@ -82,3 +82,39 @@ def test_scheduler_page_0_filtering_logic():
     assert "特店名稱" not in parsed_lines
     assert "羅斯福路特店" in parsed_lines
     assert "12345678" in parsed_lines
+
+def test_scheduler_wrapped_website_merge():
+    from scheduler.update_data import is_website, normalize_text
+    import re
+    
+    lines = [
+        "http://www.test-hotel",
+        ".com.tw",  # 符合合併條件
+        "100",      # 郵遞區號 (不應該被合併)
+        "12345678", # 統編 (不應該被合併)
+        "www.cool-place.org",
+        "/index.html", # 符合合併條件
+        "飯店名稱", # 中文 (不應該被合併)
+    ]
+    
+    merged_lines = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if i + 1 < len(lines) and is_website(line):
+            next_line = lines[i + 1]
+            if (not re.search(r'[\u4e00-\u9fff]', next_line) and 
+                not re.match(r'^\d{8}$', next_line) and 
+                not re.match(r'^\d{3,6}$', next_line) and 
+                ' ' not in next_line and
+                len(next_line) <= 15):
+                line = line + next_line
+                i += 1
+        merged_lines.append(line)
+        i += 1
+        
+    assert merged_lines[0] == "http://www.test-hotel.com.tw"
+    assert merged_lines[1] == "100"
+    assert merged_lines[2] == "12345678"
+    assert merged_lines[3] == "www.cool-place.org/index.html"
+    assert merged_lines[4] == "飯店名稱"
