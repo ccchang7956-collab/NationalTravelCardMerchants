@@ -298,6 +298,7 @@ export default function MapView({
     if (!mapReady || !mapRef.current || !circleRef.current) return;
     const map = mapRef.current;
 
+    circleRef.current.setRadius(radius * 1000);
     map.fitBounds(circleRef.current.getBounds(), {
       padding: [20, 20],
       animate: !isFirstRenderRef.current,

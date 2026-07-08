@@ -129,10 +129,18 @@ function MapContent() {
     const currentKeyword = q || "";
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCenter([currentLat, currentLon]);
-    setRadius(currentRadius);
-    setTempRadius(currentRadius);
-    setKeyword(currentKeyword);
+    if (center[0] !== currentLat || center[1] !== currentLon) {
+      setCenter([currentLat, currentLon]);
+    }
+    if (radius !== currentRadius) {
+      setRadius(currentRadius);
+    }
+    if (tempRadius !== currentRadius) {
+      setTempRadius(currentRadius);
+    }
+    if (keyword !== currentKeyword) {
+      setKeyword(currentKeyword);
+    }
 
     const isStateSynced =
       center[0].toFixed(5) === currentLat.toFixed(5) &&
