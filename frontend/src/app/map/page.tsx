@@ -123,13 +123,17 @@ function MapContent() {
     const r = searchParams.get("radius");
     const q = searchParams.get("q");
 
-    const currentLat = lat ? parseFloat(lat) : DEFAULT_CENTER[0];
-    const currentLon = lon ? parseFloat(lon) : DEFAULT_CENTER[1];
-    const currentRadius = r ? parseFloat(r) : 2;
+    const parsedLat = lat ? parseFloat(lat) : DEFAULT_CENTER[0];
+    const parsedLon = lon ? parseFloat(lon) : DEFAULT_CENTER[1];
+    const parsedRadius = r ? parseFloat(r) : 2;
+
+    const currentLat = isNaN(parsedLat) ? DEFAULT_CENTER[0] : parsedLat;
+    const currentLon = isNaN(parsedLon) ? DEFAULT_CENTER[1] : parsedLon;
+    const currentRadius = isNaN(parsedRadius) || parsedRadius <= 0 ? 2 : parsedRadius;
     const currentKeyword = q || "";
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (center[0] !== currentLat || center[1] !== currentLon) {
+    if (center[0].toFixed(5) !== currentLat.toFixed(5) || center[1].toFixed(5) !== currentLon.toFixed(5)) {
       setCenter([currentLat, currentLon]);
     }
     if (radius !== currentRadius) {
@@ -262,6 +266,7 @@ function MapContent() {
               value={tempRadius}
               onChange={(e) => setTempRadius(parseFloat(e.target.value))}
               className="flex-1 accent-accent"
+              aria-label="搜尋半徑"
             />
             <span className="text-sm font-medium text-foreground w-16 text-right shrink-0">{tempRadius} km</span>
           </div>
