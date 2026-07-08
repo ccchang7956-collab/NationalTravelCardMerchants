@@ -27,6 +27,7 @@ interface MapViewProps {
   onMapClick: (lat: number, lon: number) => void;
   selectedMerchant: Merchant | null;
   onSelectMerchant: (m: Merchant) => void;
+  radius: number;
 }
 
 export default function MapView({
@@ -36,6 +37,7 @@ export default function MapView({
   onMapClick,
   selectedMerchant,
   onSelectMerchant,
+  radius,
 }: MapViewProps) {
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef<any>(null);
@@ -43,6 +45,7 @@ export default function MapView({
   const markersLayerRef = useRef<any>(null);
   const userMarkerRef = useRef<any>(null);
   const centerMarkerRef = useRef<any>(null);
+  const circleRef = useRef<any>(null);
   const LRef = useRef<any>(null);
   const onMapClickRef = useRef(onMapClick);
   const router = useRouter();
@@ -109,6 +112,10 @@ export default function MapView({
     return () => {
       isMounted = false;
       setMapReady(false);
+      if (circleRef.current && mapRef.current) {
+        mapRef.current.removeLayer(circleRef.current);
+        circleRef.current = null;
+      }
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -253,11 +260,43 @@ export default function MapView({
     }
   }, [center, userLocation]);
 
-  // Pan map when center changes
+  // Update radius circle and fit bounds dynamically
   useEffect(() => {
-    if (!mapRef.current) return;
-    mapRef.current.setView(center, mapRef.current.getZoom(), { animate: true });
-  }, [center]);
+    if (!mapReady || !mapRef.current || !LRef.current) return;
+    const L = LRef.current;
+    const map = mapRef.current;
+
+    // 1. 決定中心點位置與其對應的圓圈顏色
+    const circleCenter = userLocation || center;
+    const isUserLoc = !!userLocation;
+    const strokeColor = isUserLoc ? "#3B82F6" : "#10B981"; // 使用者定位用藍色，自選中心用綠色
+
+    // 2. 建立或更新 L.circle 物件
+    if (circleRef.current) {
+      circleRef.current.setLatLng(circleCenter);
+      circleRef.current.setRadius(radius * 1000);
+      circleRef.current.setStyle({
+        color: strokeColor,
+        fillColor: strokeColor,
+      });
+    } else {
+      circleRef.current = L.circle(circleCenter, {
+        radius: radius * 1000,
+        color: strokeColor,
+        fillColor: strokeColor,
+        weight: 1,
+        opacity: 0.6,
+        fillOpacity: 0.06,
+        interactive: false, // 不攔截點擊事件，以便點擊圓圈範圍內的店家 Marker
+      }).addTo(map);
+    }
+
+    // 3. 自動貼合地圖邊界
+    map.fitBounds(circleRef.current.getBounds(), {
+      padding: [20, 20],
+      animate: true,
+    });
+  }, [radius, center, userLocation, mapReady]);
 
   return (
     <div
