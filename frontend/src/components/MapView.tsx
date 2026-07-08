@@ -28,6 +28,7 @@ interface MapViewProps {
   selectedMerchant: Merchant | null;
   onSelectMerchant: (m: Merchant) => void;
   radius: number;
+  tempRadius: number;
 }
 
 export default function MapView({
@@ -38,6 +39,7 @@ export default function MapView({
   selectedMerchant,
   onSelectMerchant,
   radius,
+  tempRadius,
 }: MapViewProps) {
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef<any>(null);
@@ -261,45 +263,48 @@ export default function MapView({
     }
   }, [center, userLocation]);
 
-  // Update radius circle and fit bounds dynamically
+  // Hook 1: Draw/update circle position, radius and styling based on tempRadius
   useEffect(() => {
     if (!mapReady || !mapRef.current || !LRef.current) return;
     const L = LRef.current;
     const map = mapRef.current;
 
-    // 1. 決定中心點位置與其對應的圓圈顏色
     const circleCenter = userLocation || center;
     const isUserLoc = !!userLocation;
-    const strokeColor = isUserLoc ? "#3B82F6" : "#10B981"; // 使用者定位用藍色，自選中心用綠色
+    const strokeColor = isUserLoc ? "#3B82F6" : "#10B981";
 
-    // 2. 建立或更新 L.circle 物件
     if (circleRef.current) {
       circleRef.current.setLatLng(circleCenter);
-      circleRef.current.setRadius(radius * 1000);
+      circleRef.current.setRadius(tempRadius * 1000);
       circleRef.current.setStyle({
         color: strokeColor,
         fillColor: strokeColor,
       });
     } else {
       circleRef.current = L.circle(circleCenter, {
-        radius: radius * 1000,
+        radius: tempRadius * 1000,
         color: strokeColor,
         fillColor: strokeColor,
         weight: 1,
         opacity: 0.6,
         fillOpacity: 0.06,
-        interactive: false, // 不攔截點擊事件，以便點擊圓圈範圍內的店家 Marker
+        interactive: false,
       }).addTo(map);
     }
+  }, [tempRadius, center, userLocation, mapReady]);
 
-    // 3. 自動貼合地圖邊界
+  // Hook 2: Fit bounds when the debounced radius changes
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !circleRef.current) return;
+    const map = mapRef.current;
+
     map.fitBounds(circleRef.current.getBounds(), {
       padding: [20, 20],
       animate: !isFirstRenderRef.current,
     });
 
     isFirstRenderRef.current = false;
-  }, [radius, center, userLocation, mapReady]);
+  }, [radius, mapReady]);
 
   return (
     <div

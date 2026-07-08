@@ -39,6 +39,15 @@ function MapContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isFirstLoadRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const [center, setCenter] = useState<[number, number]>(DEFAULT_CENTER);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -125,10 +134,17 @@ function MapContent() {
     setTempRadius(currentRadius);
     setKeyword(currentKeyword);
 
-    if (lat && lon) {
+    const isStateSynced =
+      center[0].toFixed(5) === currentLat.toFixed(5) &&
+      center[1].toFixed(5) === currentLon.toFixed(5) &&
+      radius === currentRadius &&
+      keyword === currentKeyword;
+
+    if (lat && lon && (isFirstLoadRef.current || !isStateSynced)) {
       fetchNearby(currentLat, currentLon, currentRadius, currentKeyword);
     }
-  }, [searchParams, fetchNearby]); // 監聽 searchParams 的變化以支援雙向綁定與歷史導航
+    isFirstLoadRef.current = false;
+  }, [searchParams, fetchNearby, center, radius, keyword]); // 監聽 searchParams 的變化以支援雙向綁定與歷史導航
 
   useEffect(() => {
     if (tempRadius === radius) return;
@@ -268,6 +284,7 @@ function MapContent() {
             selectedMerchant={selectedMerchant}
             onSelectMerchant={setSelectedMerchant}
             radius={radius}
+            tempRadius={tempRadius}
           />
         </div>
 
