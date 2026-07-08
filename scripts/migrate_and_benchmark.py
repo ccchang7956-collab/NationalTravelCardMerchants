@@ -48,6 +48,13 @@ def migrate_database():
                 tokenize='trigram'
             );
         """)
+        print("🛠️  檢查並建立經緯度欄位...")
+        cursor.execute("PRAGMA table_info(merchants);")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "lat" not in columns:
+            cursor.execute("ALTER TABLE merchants ADD COLUMN lat REAL;")
+        if "lon" not in columns:
+            cursor.execute("ALTER TABLE merchants ADD COLUMN lon REAL;")
         print("🛠️  建立經緯度聯合索引...")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_lat_lon ON merchants(lat, lon);")
         print("⚡ 重建 FTS5 索引...")
@@ -111,7 +118,7 @@ def benchmark_queries():
             fts_parts = []
             like_terms = []
             for t in terms:
-                if len(t) >= 3:
+                if len(t) >= 2:
                     fts_parts.append(f'"{t.replace(chr(34), chr(34)+chr(34))}"')
                 else:
                     like_terms.append(t)

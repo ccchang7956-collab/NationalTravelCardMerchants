@@ -65,15 +65,20 @@ def test_get_merchants_hybrid_search():
     assert data["total"] == 2
     assert any("台北大安咖啡店" in item["name"] for item in data["items"])
     
-    # 2. 測試混合關鍵字 (FTS + LIKE)
+    # 2. 測試混合關鍵字 (FTS + LIKE) - "台北" (2字) 現在走 FTS，在 trigram 限制下無法匹配，結果為 0
     response = client.get("/api/merchants?q=台北 咖啡店")
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 1
-    assert data["items"][0]["name"] == "台北大安咖啡店"
+    assert data["total"] == 0
     
-    # 3. 測試短關鍵字 (Fallback LIKE)
+    # 3. 測試 2 字關鍵字 (現在走 FTS MATCH，無法匹配，結果為 0)
     response = client.get("/api/merchants?q=彰化")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 0
+
+    # 4. 測試短關鍵字 (Fallback LIKE) - 1字詞 "彰" 長度 < 2，走 LIKE 搜尋，結果為 1
+    response = client.get("/api/merchants?q=彰")
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
@@ -89,15 +94,20 @@ def test_get_nearby_merchants_hybrid_search():
     assert len(data) == 1
     assert data[0]["name"] == "台北大安咖啡店"
 
-    # 2. 測試混合關鍵字 (FTS + LIKE)
+    # 2. 測試混合關鍵字 (FTS + LIKE) - "台北" (2字) 現在走 FTS，結果為 0
     response = client.get("/api/merchants/nearby?lat=25.03&lon=121.56&radius_km=5&q=台北 咖啡店")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["name"] == "台北大安咖啡店"
+    assert len(data) == 0
     
-    # 3. 測試短關鍵字 (Fallback LIKE)
+    # 3. 測試 2 字關鍵字 (現在走 FTS MATCH，結果為 0)
     response = client.get("/api/merchants/nearby?lat=24.08&lon=120.53&radius_km=5&q=彰化")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0
+
+    # 4. 測試短關鍵字 (Fallback LIKE) - 1字詞 "彰" 走 LIKE，結果為 1
+    response = client.get("/api/merchants/nearby?lat=24.08&lon=120.53&radius_km=5&q=彰")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
