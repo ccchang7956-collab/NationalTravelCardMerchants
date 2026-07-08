@@ -49,6 +49,7 @@ export default function MapView({
   const LRef = useRef<any>(null);
   const onMapClickRef = useRef(onMapClick);
   const router = useRouter();
+  const isFirstRenderRef = useRef(true);
 
   // 保持 onMapClickRef 永遠指向最新的 callback，避免地圖 click 的 stale closure
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
@@ -294,8 +295,10 @@ export default function MapView({
     // 3. 自動貼合地圖邊界
     map.fitBounds(circleRef.current.getBounds(), {
       padding: [20, 20],
-      animate: true,
+      animate: !isFirstRenderRef.current,
     });
+
+    isFirstRenderRef.current = false;
   }, [radius, center, userLocation, mapReady]);
 
   return (

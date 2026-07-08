@@ -44,6 +44,7 @@ function MapContent() {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(false);
   const [radius, setRadius] = useState(2);
+  const [tempRadius, setTempRadius] = useState(2);
   const [keyword, setKeyword] = useState("");
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
   const [locationStatus, setLocationStatus] = useState<string>("請輸入地址、定位，或點擊地圖搜尋");
@@ -110,6 +111,7 @@ function MapContent() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCenter([currentLat, currentLon]);
     setRadius(currentRadius);
+    setTempRadius(currentRadius);
     setKeyword(currentKeyword);
 
     if (lat && lon) {
@@ -156,6 +158,7 @@ function MapContent() {
 
   const handleRadiusChange = useCallback((newRadius: number) => {
     setRadius(newRadius);
+    setTempRadius(newRadius);
     fetchNearby(center[0], center[1], newRadius, keyword);
   }, [center, keyword, fetchNearby]);
 
@@ -216,11 +219,13 @@ function MapContent() {
               min={0.5}
               max={10}
               step={0.5}
-              value={radius}
-              onChange={(e) => handleRadiusChange(parseFloat(e.target.value))}
+              value={tempRadius}
+              onChange={(e) => setTempRadius(parseFloat(e.target.value))}
+              onMouseUp={(e) => handleRadiusChange(parseFloat((e.target as HTMLInputElement).value))}
+              onTouchEnd={(e) => handleRadiusChange(parseFloat((e.target as HTMLInputElement).value))}
               className="flex-1 accent-accent"
             />
-            <span className="text-sm font-medium text-foreground w-16 text-right shrink-0">{radius} km</span>
+            <span className="text-sm font-medium text-foreground w-16 text-right shrink-0">{tempRadius} km</span>
           </div>
         </div>
 
