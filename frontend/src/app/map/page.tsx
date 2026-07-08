@@ -248,6 +248,7 @@ function MapContent() {
             onMapClick={handleMapClick}
             selectedMerchant={selectedMerchant}
             onSelectMerchant={setSelectedMerchant}
+            radius={radius}
           />
         </div>
 
