@@ -67,18 +67,18 @@ def main():
     cursor = conn.cursor()
     
     total_pages = len(doc)
-    print(f"Total pages to process: {total_pages - 1}")
+    print(f"Total pages to process: {total_pages}")
     
     lines = []
-    headers = {"特店名稱", "特店地址", "郵遞區號", "統一編號", "特店網頁位址"}
+    headers = {"特店名稱", "特店地址", "郵遞區號", "統一編號", "特店網頁位址", "國民旅遊卡特約商店清冊"}
     
     print("Reading text from PDF...")
-    for page_num in range(1, total_pages):
+    for page_num in range(0, total_pages):
         page = doc[page_num]
         text = page.get_text("text")
         for line in text.split('\n'):
             line = normalize_text(line)
-            if line and line not in headers:
+            if line and line not in headers and not line.startswith("檔案日期"):
                 lines.append(line)
                 
     print(f"Total extracted lines: {len(lines)}")
