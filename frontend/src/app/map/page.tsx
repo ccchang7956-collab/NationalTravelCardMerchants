@@ -221,8 +221,13 @@ function MapContent() {
               step={0.5}
               value={tempRadius}
               onChange={(e) => setTempRadius(parseFloat(e.target.value))}
-              onMouseUp={(e) => handleRadiusChange(parseFloat((e.target as HTMLInputElement).value))}
-              onTouchEnd={(e) => handleRadiusChange(parseFloat((e.target as HTMLInputElement).value))}
+              onMouseUp={() => handleRadiusChange(tempRadius)}
+              onTouchEnd={() => handleRadiusChange(tempRadius)}
+              onKeyUp={(e) => {
+                if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+                  handleRadiusChange(tempRadius);
+                }
+              }}
               className="flex-1 accent-accent"
             />
             <span className="text-sm font-medium text-foreground w-16 text-right shrink-0">{tempRadius} km</span>
