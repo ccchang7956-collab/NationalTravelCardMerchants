@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Form from "next/form";
 import { redirect } from "next/navigation";
-import { MagnifyingGlassIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, MapIcon } from "@heroicons/react/24/outline";
 
 const TAIWAN_CITIES = [
   "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
@@ -148,31 +148,46 @@ export default async function Home({
       {/* Merchant List */}
       {merchants.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {merchants.map((m: any) => (
-            <Link href={`/merchant/${m.tax_id || m.id}`} key={m.id} className="block group">
-              <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm hover:shadow-md hover:border-accent/40 transition-all duration-200 h-full flex flex-col">
-                <h2 className="text-lg font-medium text-foreground group-hover:text-accent transition-colors">
-                  {m.name}
-                </h2>
-                <div className="mt-3 space-y-2 text-sm text-muted flex-1">
-                  <div className="flex items-start gap-2">
-                    <MapPinIcon className="w-4 h-4 mt-0.5 shrink-0 opacity-70" />
-                    <span>{m.zip_code} {m.address}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <BuildingStorefrontIcon className="w-4 h-4 shrink-0 opacity-70" />
-                    <span>統編：{m.tax_id}</span>
-                  </div>
-                  {m.website && (
-                    <div className="flex items-center gap-2 text-accent">
-                      <GlobeAltIcon className="w-4 h-4 shrink-0 opacity-70" />
-                      <span className="truncate">有專屬網站</span>
+          {merchants.map((m: any) => {
+            const mapUrl = m.lat && m.lon
+              ? `/map?lat=${m.lat}&lon=${m.lon}&radius=1`
+              : `/map${city ? `?city=${encodeURIComponent(city)}` : ""}`;
+            return (
+              <div key={m.id} className="relative group">
+                <Link href={`/merchant/${m.tax_id || m.id}`} className="block">
+                  <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm hover:shadow-md hover:border-accent/40 transition-all duration-200 h-full flex flex-col">
+                    <h2 className="text-lg font-medium text-foreground group-hover:text-accent transition-colors pr-8">
+                      {m.name}
+                    </h2>
+                    <div className="mt-3 space-y-2 text-sm text-muted flex-1">
+                      <div className="flex items-start gap-2">
+                        <MapPinIcon className="w-4 h-4 mt-0.5 shrink-0 opacity-70" />
+                        <span>{m.zip_code} {m.address}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <BuildingStorefrontIcon className="w-4 h-4 shrink-0 opacity-70" />
+                        <span>統編：{m.tax_id}</span>
+                      </div>
+                      {m.website && (
+                        <div className="flex items-center gap-2 text-accent">
+                          <GlobeAltIcon className="w-4 h-4 shrink-0 opacity-70" />
+                          <span className="truncate">有專屬網站</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                </Link>
+                {/* 在地圖查看按鈕（絕對定位，防止觸發卡片連結） */}
+                <Link
+                  href={mapUrl}
+                  title="在地圖上查看附近商店"
+                  className="absolute top-4 right-4 p-1.5 rounded-lg bg-muted-bg text-muted hover:bg-accent/10 hover:text-accent transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                >
+                  <MapIcon className="w-4 h-4" />
+                </Link>
               </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="text-center py-20 bg-card rounded-2xl border border-border/60">
@@ -184,27 +199,118 @@ export default async function Home({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 pt-6">
-          {page > 1 && (
-            <Link 
-              href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=${page - 1}`}
-              className="px-4 py-2 rounded-lg bg-card border border-border hover:border-accent/50 transition-colors text-sm"
-            >
-              上一頁
-            </Link>
-          )}
-          
-          <div className="text-sm font-medium text-foreground px-4 py-2 bg-muted-bg rounded-lg">
-            {page}
+        <div className="flex flex-col items-center gap-3 pt-6">
+          <div className="flex items-center gap-1.5 flex-wrap justify-center">
+            {/* 上一頁 */}
+            {page > 1 ? (
+              <Link
+                href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=${page - 1}`}
+                className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm"
+              >
+                ←
+              </Link>
+            ) : (
+              <span className="px-3 py-2 rounded-lg text-sm text-muted/40 cursor-not-allowed">←</span>
+            )}
+
+            {/* 第一頁 */}
+            {page > 3 && (
+              <>
+                <Link
+                  href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=1`}
+                  className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm"
+                >
+                  1
+                </Link>
+                {page > 4 && (
+                  <span className="px-1 py-2 text-sm text-muted">…</span>
+                )}
+              </>
+            )}
+
+            {/* 前後各 2 頁的頁碼（排除已在首頁/末頁區塊顯示的頁碼，避免重複） */}
+            {(() => {
+              const windowStart = Math.max(1, page - 2);
+              const windowEnd = Math.min(totalPages, page + 2);
+              const pages: number[] = [];
+              for (let p = windowStart; p <= windowEnd; p++) {
+                // 跳過 page=1（若 page>3 已由首頁區塊顯示）
+                if (p === 1 && page > 3) continue;
+                // 跳過最後一頁（若 page<totalPages-2 已由末頁區塊顯示）
+                if (p === totalPages && page < totalPages - 2) continue;
+                pages.push(p);
+              }
+              return pages.map((p) =>
+                p === page ? (
+                  <span
+                    key={p}
+                    className="px-3 py-2 rounded-lg bg-accent text-white text-sm font-medium min-w-[36px] text-center"
+                  >
+                    {p}
+                  </span>
+                ) : (
+                  <Link
+                    key={p}
+                    href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=${p}`}
+                    className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm min-w-[36px] text-center"
+                  >
+                    {p}
+                  </Link>
+                )
+              );
+            })()}
+
+
+            {/* 最後一頁 */}
+            {page < totalPages - 2 && (
+              <>
+                {page < totalPages - 3 && (
+                  <span className="px-1 py-2 text-sm text-muted">…</span>
+                )}
+                <Link
+                  href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=${totalPages}`}
+                  className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm"
+                >
+                  {totalPages}
+                </Link>
+              </>
+            )}
+
+            {/* 下一頁 */}
+            {page < totalPages ? (
+              <Link
+                href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=${page + 1}`}
+                className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm"
+              >
+                →
+              </Link>
+            ) : (
+              <span className="px-3 py-2 rounded-lg text-sm text-muted/40 cursor-not-allowed">→</span>
+            )}
           </div>
-          
-          {page < totalPages && (
-            <Link 
-              href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=${page + 1}`}
-              className="px-4 py-2 rounded-lg bg-card border border-border hover:border-accent/50 transition-colors text-sm"
-            >
-              下一頁
-            </Link>
+
+          {/* 跳頁輸入框 */}
+          {totalPages > 10 && (
+            <Form action="/" className="flex items-center gap-2 text-sm text-muted">
+              {q && <input type="hidden" name="q" value={q} />}
+              {city && <input type="hidden" name="city" value={city} />}
+              <span>跳至第</span>
+              <input
+                type="number"
+                name="page"
+                min={1}
+                max={totalPages}
+                placeholder={String(page)}
+                className="w-16 px-2 py-1.5 text-center bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all text-foreground"
+              />
+              <span>頁</span>
+              <button
+                type="submit"
+                className="px-3 py-1.5 bg-muted-bg border border-border rounded-lg hover:border-accent/50 hover:text-accent transition-colors"
+              >
+                前往
+              </button>
+            </Form>
           )}
         </div>
       )}

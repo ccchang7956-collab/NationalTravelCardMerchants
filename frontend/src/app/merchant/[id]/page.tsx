@@ -1,7 +1,8 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeftIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, ArrowTopRightOnSquareIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, ArrowTopRightOnSquareIcon, MapIcon } from "@heroicons/react/24/outline";
+import MerchantMapSection from "@/components/MerchantMapSection";
 
 const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -63,6 +64,10 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
   }
 
   const pageUrl = `${SITE_URL}/merchant/${merchant.tax_id || resolvedParams.id}`;
+  const hasCoords = !!(merchant.lat && merchant.lon);
+  const nearbyMapUrl = hasCoords
+    ? `/map?lat=${merchant.lat}&lon=${merchant.lon}&radius=1`
+    : null;
 
   // 完整的 LocalBusiness 結構化資料
   const jsonLd = {
@@ -80,7 +85,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
       addressRegion: merchant.address ? merchant.address.substring(0, 3) : undefined,
       addressCountry: "TW",
     },
-    ...(merchant.lat && merchant.lon && {
+    ...(hasCoords && {
       geo: {
         "@type": "GeoCoordinates",
         latitude: merchant.lat,
@@ -129,7 +134,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
               <p className="font-medium text-foreground">商店地址</p>
               <p className="mt-1 text-muted">{merchant.zip_code} {merchant.address}</p>
               <a 
-                href={merchant.lat && merchant.lon ? `https://www.google.com/maps/dir/?api=1&destination=${merchant.lat},${merchant.lon}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(merchant.name + ' ' + merchant.address)}`}
+                href={hasCoords ? `https://www.google.com/maps/dir/?api=1&destination=${merchant.lat},${merchant.lon}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(merchant.name + ' ' + merchant.address)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 mt-2 text-sm text-accent hover:underline"
@@ -164,6 +169,29 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
             </div>
           )}
         </div>
+
+        {/* 地圖區塊 */}
+        {hasCoords && (
+          <div className="mt-8 pt-8 border-t border-border/40">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-foreground">位置地圖</p>
+              {nearbyMapUrl && (
+                <Link
+                  href={nearbyMapUrl}
+                  className="inline-flex items-center gap-1.5 text-sm text-accent hover:text-accent-hover transition-colors font-medium"
+                >
+                  <MapIcon className="w-4 h-4" />
+                  查看附近商店
+                </Link>
+              )}
+            </div>
+            <MerchantMapSection
+              lat={merchant.lat}
+              lon={merchant.lon}
+              name={merchant.name}
+            />
+          </div>
+        )}
       </div>
 
       {/* LocalBusiness 結構化資料 */}

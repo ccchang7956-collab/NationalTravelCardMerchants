@@ -42,8 +42,11 @@ else
 fi
 
 # 讀取 .env 中的設定 (預設 FRONTEND_PORT=3000)
-FRONTEND_PORT=$(grep -E "^FRONTEND_PORT=" .env | cut -d'=' -f2)
-FRONTEND_PORT=${FRONTEND_PORT:-3000}
+FRONTEND_PORT=$(grep -E "^FRONTEND_PORT[[:space:]]*=" .env | tail -n 1 | cut -d'=' -f2- | tr -d ' \r\t"'\''')
+if ! echo "$FRONTEND_PORT" | grep -qE '^[0-9]+$' || [ "$FRONTEND_PORT" -lt 1 ] || [ "$FRONTEND_PORT" -gt 65535 ]; then
+    log_warning ".env 中的 FRONTEND_PORT 設定無效或非合法連接埠（1-65535），將使用預設值 3000"
+    FRONTEND_PORT=3000
+fi
 
 # 2. 檢查 Docker 是否安裝
 log_info "正在檢查 Docker 是否已安裝..."
@@ -87,6 +90,13 @@ if ! docker info &> /dev/null; then
         elapsed=$((elapsed + 2))
     done
     
+    # 迴圈結束後，若仍未 ready，在宣告失敗前進行最後一次的 docker info 複檢
+    if [ "$docker_ready" = false ]; then
+        if docker info &> /dev/null; then
+            docker_ready=true
+        fi
+    fi
+    
     if [ "$docker_ready" = false ]; then
         echo -ne "\n"
         log_error "Docker 啟動超時！請手動開啟 Docker Desktop 或 OrbStack 應用程式後重新運行此腳本。"
@@ -112,7 +122,7 @@ wait_count=0
 frontend_ready=false
 
 while [ $wait_count -lt $max_wait ]; do
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${FRONTEND_PORT})
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 -m 5 http://localhost:${FRONTEND_PORT})
     if echo "$http_code" | grep -qE "^(200|301|302|307|308)$"; then
         frontend_ready=true
         break
