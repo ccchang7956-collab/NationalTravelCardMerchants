@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 // Static CSS imports — must be at top level (Turbopack requirement)
@@ -37,6 +37,7 @@ export default function MapView({
   selectedMerchant,
   onSelectMerchant,
 }: MapViewProps) {
+  const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef<any>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersLayerRef = useRef<any>(null);
@@ -100,12 +101,14 @@ export default function MapView({
       map.addLayer(clusterGroup);
       mapRef.current = map;
       markersLayerRef.current = clusterGroup;
+      setMapReady(true);
     };
 
     initMap();
 
     return () => {
       isMounted = false;
+      setMapReady(false);
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -116,7 +119,7 @@ export default function MapView({
 
   // Update merchant markers when merchants list changes
   useEffect(() => {
-    if (!mapRef.current || !markersLayerRef.current || !LRef.current) return;
+    if (!mapReady || !mapRef.current || !markersLayerRef.current || !LRef.current) return;
     const L = LRef.current;
 
     markersLayerRef.current.clearLayers();
@@ -178,7 +181,7 @@ export default function MapView({
       marker.on("click", () => onSelectMerchant(m));
       markersLayerRef.current.addLayer(marker);
     });
-  }, [merchants, onSelectMerchant]);
+  }, [merchants, onSelectMerchant, mapReady]);
 
   // Update user location marker
   useEffect(() => {
