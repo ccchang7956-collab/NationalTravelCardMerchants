@@ -428,15 +428,25 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
 
             if len(items) == 3:
                 prev_website = items[0]
-                name = items[1]
-                address = items[2]
+                n_part, a_part = split_merged(items[1])
+                if a_part:
+                    name = n_part
+                    address = a_part + " " + items[2]
+                else:
+                    name = items[1]
+                    address = items[2]
             elif len(items) == 2:
                 if is_website(items[0]):
                     prev_website = items[0]
                     name, address = split_merged(items[1])
                 else:
-                    name = items[0]
-                    address = items[1]
+                    n_part, a_part = split_merged(items[0])
+                    if a_part:
+                        name = n_part
+                        address = a_part + " " + items[1]
+                    else:
+                        name = items[0]
+                        address = items[1]
             elif len(items) == 1:
                 name, address = split_merged(items[0])
             elif len(items) == 0:
@@ -444,11 +454,21 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
             else:
                 if is_website(items[0]):
                     prev_website = items[0]
-                    name = items[1]
-                    address = "".join(items[2:])
+                    n_part, a_part = split_merged(items[1])
+                    if a_part:
+                        name = n_part
+                        address = a_part + " " + "".join(items[2:])
+                    else:
+                        name = items[1]
+                        address = "".join(items[2:])
                 else:
-                    name = items[0]
-                    address = "".join(items[1:])
+                    n_part, a_part = split_merged(items[0])
+                    if a_part:
+                        name = n_part
+                        address = a_part + " " + "".join(items[1:])
+                    else:
+                        name = items[0]
+                        address = "".join(items[1:])
 
             if prev_website and k > 0:
                 records[-1]["website"] = prev_website

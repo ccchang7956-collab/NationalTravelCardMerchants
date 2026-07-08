@@ -124,29 +124,48 @@ def main():
         
         if len(items) == 3:
             prev_website = items[0]
-            current_name = items[1]
-            current_address = items[2]
+            n_part, a_part = split_merged(items[1])
+            if a_part:
+                current_name = n_part
+                current_address = a_part + " " + items[2]
+            else:
+                current_name = items[1]
+                current_address = items[2]
         elif len(items) == 2:
             if is_website(items[0]):
                 prev_website = items[0]
                 current_name, current_address = split_merged(items[1])
             else:
-                current_name = items[0]
-                current_address = items[1]
+                n_part, a_part = split_merged(items[0])
+                if a_part:
+                    current_name = n_part
+                    current_address = a_part + " " + items[1]
+                else:
+                    current_name = items[0]
+                    current_address = items[1]
         elif len(items) == 1:
             current_name, current_address = split_merged(items[0])
         elif len(items) == 0:
             print(f"Warning: Record {k} has no name/address items. Tax ID: {current_tax_id}")
             continue
-        elif len(items) > 3:
-            # Fallback if too many items, try to guess
+        else:
             if is_website(items[0]):
                 prev_website = items[0]
-                current_name = items[1]
-                current_address = "".join(items[2:])
+                n_part, a_part = split_merged(items[1])
+                if a_part:
+                    current_name = n_part
+                    current_address = a_part + " " + "".join(items[2:])
+                else:
+                    current_name = items[1]
+                    current_address = "".join(items[2:])
             else:
-                current_name = items[0]
-                current_address = "".join(items[1:])
+                n_part, a_part = split_merged(items[0])
+                if a_part:
+                    current_name = n_part
+                    current_address = a_part + " " + "".join(items[1:])
+                else:
+                    current_name = items[0]
+                    current_address = "".join(items[1:])
                 
         # Assign previous website to the previous record
         if prev_website and k > 0:
