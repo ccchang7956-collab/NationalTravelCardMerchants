@@ -9,6 +9,7 @@ def import_csv_to_db(csv_path: str, db_path: str):
         return
         
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON;")
     try:
         cursor = conn.cursor()
         
@@ -23,6 +24,7 @@ def import_csv_to_db(csv_path: str, db_path: str):
         for enc in encodings:
             try:
                 deleted_tax_ids = set()
+                to_delete_batch = []
                 with open(csv_path, mode="r", encoding=enc) as f:
                     reader = csv.reader(f)
                     
@@ -37,8 +39,11 @@ def import_csv_to_db(csv_path: str, db_path: str):
                         tax_id = row[0].strip()
                         if tax_id and tax_id in existing_tax_ids:
                             if tax_id not in deleted_tax_ids:
-                                cursor.execute("DELETE FROM merchant_industries WHERE tax_id = ?", (tax_id,))
                                 deleted_tax_ids.add(tax_id)
+                                to_delete_batch.append((tax_id,))
+                                if len(to_delete_batch) >= 1000:
+                                    cursor.executemany("DELETE FROM merchant_industries WHERE tax_id = ?", to_delete_batch)
+                                    to_delete_batch = []
                             # 解析主次行業 (最多四組)
                             # 欄位 index:
                             # 0: tax_id
@@ -62,6 +67,10 @@ def import_csv_to_db(csv_path: str, db_path: str):
                                 count += len(batch)
                                 batch = []
                                 
+                    if to_delete_batch:
+                        cursor.executemany("DELETE FROM merchant_industries WHERE tax_id = ?", to_delete_batch)
+                        to_delete_batch = []
+
                     if batch:
                         cursor.executemany(
                             "INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",

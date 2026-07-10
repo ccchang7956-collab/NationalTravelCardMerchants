@@ -9,6 +9,7 @@ def test_import_industry_logic():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test_import.db")
         conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("""
             CREATE TABLE merchants (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,6 +57,7 @@ def test_import_industry_encoding_and_idempotency():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test_import_idempotency.db")
         conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("""
             CREATE TABLE merchants (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,3 +106,43 @@ def test_import_industry_encoding_and_idempotency():
         # 商店C (33333333) 保留的舊行業
         assert res[2] == ("33333333", "888888", "舊行業C", 1)
 
+
+def test_foreign_key_cascade_delete():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test_fk.db")
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("""
+            CREATE TABLE merchants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                tax_id TEXT UNIQUE
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE merchant_industries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_id TEXT,
+                industry_code TEXT,
+                industry_name TEXT,
+                priority INTEGER,
+                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("INSERT INTO merchants (name, tax_id) VALUES (?, ?)", ("商店A", "11111111"))
+        conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",
+                     ("11111111", "561115", "餐館業", 1))
+        conn.commit()
+        
+        # 驗證插入成功
+        res = conn.execute("SELECT COUNT(*) FROM merchant_industries").fetchone()[0]
+        assert res == 1
+        
+        # 刪除 merchants 內的資料
+        conn.execute("DELETE FROM merchants WHERE tax_id = ?", ("11111111",))
+        conn.commit()
+        
+        # 驗證 ON DELETE CASCADE 發生，merchant_industries 內的資料也被自動刪除
+        res = conn.execute("SELECT COUNT(*) FROM merchant_industries").fetchone()[0]
+        assert res == 0
+        conn.close()

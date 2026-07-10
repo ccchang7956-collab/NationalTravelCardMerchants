@@ -360,6 +360,7 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
     conn = None
     try:
         conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA busy_timeout = 5000;")
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
@@ -539,8 +540,10 @@ def migrate_coords(old_db: str, new_db: str) -> int:
     new_conn = None
     try:
         old_conn = sqlite3.connect(old_db)
+        old_conn.execute("PRAGMA foreign_keys = ON;")
         old_conn.execute("PRAGMA busy_timeout = 5000;")
         new_conn = sqlite3.connect(new_db)
+        new_conn.execute("PRAGMA foreign_keys = ON;")
         new_conn.execute("PRAGMA busy_timeout = 5000;")
         rows = old_conn.execute(
             "SELECT tax_id, lat, lon FROM merchants WHERE lat IS NOT NULL AND tax_id IS NOT NULL"
@@ -572,6 +575,7 @@ def migrate_industries(old_db: str, new_db: str) -> int:
     new_conn = None
     try:
         old_conn = sqlite3.connect(old_db)
+        old_conn.execute("PRAGMA foreign_keys = ON;")
         old_conn.execute("PRAGMA busy_timeout = 5000;")
         
         # 檢查舊表是否存在
@@ -591,6 +595,7 @@ def migrate_industries(old_db: str, new_db: str) -> int:
             return 0
             
         new_conn = sqlite3.connect(new_db)
+        new_conn.execute("PRAGMA foreign_keys = ON;")
         new_conn.execute("PRAGMA busy_timeout = 5000;")
         new_tax_ids = {row[0] for row in new_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL").fetchall()}
         
@@ -618,6 +623,7 @@ def fill_missing_coords(db_path: str) -> int:
     conn = None
     try:
         conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA busy_timeout = 5000;")
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
@@ -687,6 +693,7 @@ def main():
             old_conn = None
             try:
                 old_conn = sqlite3.connect(DB_PATH)
+                old_conn.execute("PRAGMA foreign_keys = ON;")
                 old_conn.execute("PRAGMA busy_timeout = 5000;")
                 for row in old_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
                     old_tax_ids.add(row[0])
@@ -707,6 +714,7 @@ def main():
         tmp_conn = None
         try:
             tmp_conn = sqlite3.connect(new_db)
+            tmp_conn.execute("PRAGMA foreign_keys = ON;")
             tmp_conn.execute("PRAGMA busy_timeout = 5000;")
             for row in tmp_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
                 new_tax_ids.add(row[0])
@@ -736,6 +744,7 @@ def main():
             prod_conn = None
             try:
                 prod_conn = sqlite3.connect(DB_PATH)
+                prod_conn.execute("PRAGMA foreign_keys = ON;")
                 prod_conn.execute("PRAGMA busy_timeout = 5000;")
                 prod_conn.execute("PRAGMA journal_mode=WAL;")
                 prod_conn.execute("PRAGMA synchronous = NORMAL;")
@@ -798,6 +807,7 @@ def main():
             prod_conn = None
             try:
                 prod_conn = sqlite3.connect(DB_PATH)
+                prod_conn.execute("PRAGMA foreign_keys = ON;")
                 prod_conn.execute("PRAGMA busy_timeout = 5000;")
                 prod_conn.execute("PRAGMA journal_mode=WAL;")
                 prod_conn.execute("PRAGMA synchronous = NORMAL;")

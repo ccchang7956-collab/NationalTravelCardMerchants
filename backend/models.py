@@ -12,7 +12,7 @@ class MerchantBase(BaseModel):
     zip_code: Optional[str] = None
     tax_id: Optional[str] = None
     website: Optional[str] = None
-    industries: Optional[List[MerchantIndustry]] = None
+    industries: List[MerchantIndustry] = []
 
 class Merchant(MerchantBase):
     id: int

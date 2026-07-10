@@ -199,13 +199,17 @@ def get_merchant(merchant_id_or_tax_id: str, db: sqlite3.Connection = Depends(ge
     merchant = dict(row)
     
     # 撈取該店家的行業別，依 priority 排序
-    ind_cursor = db.cursor()
-    ind_cursor.execute(
-        "SELECT industry_code, industry_name, priority FROM merchant_industries WHERE tax_id = ? ORDER BY priority ASC",
-        (merchant["tax_id"],)
-    )
-    industries = [dict(r) for r in ind_cursor.fetchall()]
-    merchant["industries"] = industries
+    tax_id = merchant.get("tax_id")
+    if not tax_id:
+        merchant["industries"] = []
+    else:
+        ind_cursor = db.cursor()
+        ind_cursor.execute(
+            "SELECT industry_code, industry_name, priority FROM merchant_industries WHERE tax_id = ? ORDER BY priority ASC",
+            (tax_id,)
+        )
+        industries = [dict(r) for r in ind_cursor.fetchall()]
+        merchant["industries"] = industries
     return merchant
 
 

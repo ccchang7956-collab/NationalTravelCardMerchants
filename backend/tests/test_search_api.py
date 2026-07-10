@@ -8,6 +8,7 @@ from backend.database import get_db
 @pytest.fixture(name="db_conn")
 def fixture_db_conn():
     conn = sqlite3.connect(":memory:", check_same_thread=False)
+    conn.execute("PRAGMA foreign_keys = ON;")
     conn.row_factory = sqlite3.Row
     conn.execute("""
         CREATE TABLE merchants (
@@ -159,4 +160,24 @@ def test_get_merchant_by_id_includes_industries(db_conn):
     assert data["industries"][0]["priority"] == 1
     assert data["industries"][1]["industry_name"] == "飲料店業"
     assert data["industries"][1]["priority"] == 2
+
+
+def test_get_merchant_empty_tax_id(db_conn):
+    # 插入一筆 tax_id 為空值（或 None）的商家
+    cursor = db_conn.cursor()
+    cursor.execute(
+        "INSERT INTO merchants (name, address, zip_code, tax_id, website) VALUES (?, ?, ?, ?, ?)",
+        ("無統編商店", "台北市信義區路一段", "110", None, None)
+    )
+    db_conn.commit()
+    inserted_id = cursor.lastrowid
+
+    # 模擬 API 呼叫
+    client = TestClient(app)
+    response = client.get(f"/api/merchants/{inserted_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert "industries" in data
+    assert data["industries"] == []
+
 

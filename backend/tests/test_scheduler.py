@@ -10,6 +10,7 @@ def test_scheduler_db_creation():
         
         # 直接連線建立空的表格（模擬 PDF 解析前的 CREATE TABLE 與 FTS 建立）
         conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA foreign_keys = ON;")
         cursor = conn.cursor()
         
         # 這段邏輯應該與修改後的 parse_pdf_to_db 相同
@@ -146,6 +147,7 @@ def test_scheduler_industry_migration():
         
         # 建立舊 DB 的 merchants 與 merchant_industries 表格
         old_conn = sqlite3.connect(old_db)
+        old_conn.execute("PRAGMA foreign_keys = ON;")
         old_conn.execute("CREATE TABLE merchants (id INTEGER PRIMARY KEY, name TEXT, tax_id TEXT UNIQUE)")
         old_conn.execute("CREATE TABLE merchant_industries (id INTEGER PRIMARY KEY, tax_id TEXT, industry_code TEXT, industry_name TEXT, priority INTEGER)")
         
@@ -162,6 +164,7 @@ def test_scheduler_industry_migration():
         
         # 建立新 DB 的 merchants 與 merchant_industries 表格
         new_conn = sqlite3.connect(new_db)
+        new_conn.execute("PRAGMA foreign_keys = ON;")
         new_conn.execute("CREATE TABLE merchants (id INTEGER PRIMARY KEY, name TEXT, tax_id TEXT UNIQUE)")
         new_conn.execute("CREATE TABLE merchant_industries (id INTEGER PRIMARY KEY, tax_id TEXT, industry_code TEXT, industry_name TEXT, priority INTEGER)")
         
@@ -176,6 +179,7 @@ def test_scheduler_industry_migration():
         
         # 驗證新 DB 成功接收資料
         new_conn = sqlite3.connect(new_db)
+        new_conn.execute("PRAGMA foreign_keys = ON;")
         rows = new_conn.execute("SELECT tax_id, industry_code, industry_name, priority FROM merchant_industries ORDER BY tax_id").fetchall()
         new_conn.close()
         
