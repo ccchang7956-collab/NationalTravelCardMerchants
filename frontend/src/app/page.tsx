@@ -3,6 +3,8 @@ import Link from "next/link";
 import Form from "next/form";
 import { redirect } from "next/navigation";
 import { MagnifyingGlassIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, MapIcon } from "@heroicons/react/24/outline";
+import HomeSearchSection from "@/components/HomeSearchSection";
+import type { FilterState } from "@/components/FilterSheet";
 
 const TAIWAN_CITIES = [
   "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
@@ -23,7 +25,7 @@ export async function generateMetadata({
   const city = typeof resolved.city === "string" ? resolved.city : "";
 
   // 有搜尋條件或翻頁時不索引，避免搜尋結果頁稀釋首頁
-  const hasFilters = !!(q || city);
+  const hasFilters = !!(q || city || resolved.has_website || resolved.radius_km);
 
   return {
     alternates: {
@@ -49,10 +51,22 @@ export default async function Home({
   const parsedPage = typeof resolvedParams.page === "string" ? parseInt(resolvedParams.page, 10) : 1;
   const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
   const city = typeof resolvedParams.city === "string" ? resolvedParams.city : "";
-  
+
+  // 新增篩選參數解析
+  const hasWebsiteParam = resolvedParams.has_website;
+  const hasWebsite: boolean | null =
+    hasWebsiteParam === "true" ? true : hasWebsiteParam === "false" ? false : null;
+  const radiusKm: number | null =
+    typeof resolvedParams.radius_km === "string"
+      ? parseFloat(resolvedParams.radius_km) || null
+      : null;
+  const latParam = typeof resolvedParams.lat === "string" ? parseFloat(resolvedParams.lat) : NaN;
+  const lonParam = typeof resolvedParams.lon === "string" ? parseFloat(resolvedParams.lon) : NaN;
+
   const query = new URLSearchParams();
   if (q) query.append("q", q);
   if (city) query.append("city", city);
+  if (hasWebsite !== null) query.append("has_website", String(hasWebsite));
   query.append("page", page.toString());
   query.append("per_page", "20");
 
@@ -82,6 +96,26 @@ export default async function Home({
     redirect(`/?${redirectQuery.toString()}`);
   }
 
+  const initialFilters: FilterState = {
+    city,
+    hasWebsite,
+    radiusKm,
+  };
+
+  const buildPageUrl = (targetPage: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (city) params.set("city", city);
+    if (hasWebsite !== null) params.set("has_website", String(hasWebsite));
+    if (radiusKm !== null && !isNaN(latParam) && !isNaN(lonParam)) {
+      params.set("radius_km", String(radiusKm));
+      params.set("lat", latParam.toFixed(5));
+      params.set("lon", lonParam.toFixed(5));
+    }
+    params.set("page", String(targetPage));
+    return `/?${params.toString()}`;
+  };
+
   let sortedCities = stats?.cities || [];
   if (sortedCities.length > 0) {
     sortedCities = [...sortedCities].sort((a: any, b: any) => {
@@ -106,39 +140,12 @@ export default async function Home({
         )}
       </div>
 
-      {/* Search Form - Submitting to current URL */}
-      <Form action="/" className="bg-card p-6 rounded-2xl shadow-sm border border-border/60">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
-            <input 
-              type="text" 
-              name="q"
-              defaultValue={q}
-              placeholder="搜尋店名 or 地址..." 
-              className="w-full pl-10 pr-4 py-2.5 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
-            />
-          </div>
-          
-          <div className="relative md:w-48">
-            <MapPinIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
-            <select 
-              name="city"
-              defaultValue={city}
-              className="w-full pl-10 pr-4 py-2.5 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all appearance-none"
-            >
-              <option value="">所有縣市</option>
-              {sortedCities.map((c: any) => (
-                <option key={c.city} value={c.city}>{c.city} ({c.count})</option>
-              ))}
-            </select>
-          </div>
-          
-          <button type="submit" className="bg-accent text-white px-6 py-2.5 rounded-lg hover:bg-accent-hover transition-colors font-medium">
-            搜尋
-          </button>
-        </div>
-      </Form>
+      {/* Search + Filter Section */}
+      <HomeSearchSection
+        initialQ={q}
+        initialFilters={initialFilters}
+        cities={TAIWAN_CITIES}
+      />
 
       {/* Results Meta */}
       <div className="text-sm text-muted">
@@ -204,7 +211,7 @@ export default async function Home({
             {/* 上一頁 */}
             {page > 1 ? (
               <Link
-                href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=${page - 1}`}
+                href={buildPageUrl(page - 1)}
                 className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm"
               >
                 ←
@@ -217,7 +224,7 @@ export default async function Home({
             {page > 3 && (
               <>
                 <Link
-                  href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=1`}
+                  href={buildPageUrl(1)}
                   className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm"
                 >
                   1
@@ -251,7 +258,7 @@ export default async function Home({
                 ) : (
                   <Link
                     key={p}
-                    href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=${p}`}
+                    href={buildPageUrl(p)}
                     className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm min-w-[36px] text-center"
                   >
                     {p}
@@ -268,7 +275,7 @@ export default async function Home({
                   <span className="px-1 py-2 text-sm text-muted">…</span>
                 )}
                 <Link
-                  href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=${totalPages}`}
+                  href={buildPageUrl(totalPages)}
                   className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm"
                 >
                   {totalPages}
@@ -279,7 +286,7 @@ export default async function Home({
             {/* 下一頁 */}
             {page < totalPages ? (
               <Link
-                href={`/?q=${encodeURIComponent(q)}&city=${encodeURIComponent(city)}&page=${page + 1}`}
+                href={buildPageUrl(page + 1)}
                 className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm"
               >
                 →
@@ -294,6 +301,14 @@ export default async function Home({
             <Form action="/" className="flex items-center gap-2 text-sm text-muted">
               {q && <input type="hidden" name="q" value={q} />}
               {city && <input type="hidden" name="city" value={city} />}
+              {hasWebsite !== null && <input type="hidden" name="has_website" value={String(hasWebsite)} />}
+              {radiusKm !== null && !isNaN(latParam) && !isNaN(lonParam) && (
+                <>
+                  <input type="hidden" name="radius_km" value={String(radiusKm)} />
+                  <input type="hidden" name="lat" value={latParam.toFixed(5)} />
+                  <input type="hidden" name="lon" value={lonParam.toFixed(5)} />
+                </>
+              )}
               <span>跳至第</span>
               <input
                 type="number"
