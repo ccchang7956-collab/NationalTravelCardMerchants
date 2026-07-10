@@ -269,9 +269,10 @@ def get_stats(db: sqlite3.Connection = Depends(get_db)):
 def get_industries(db: sqlite3.Connection = Depends(get_db)):
     cursor = db.cursor()
     cursor.execute("""
-        SELECT DISTINCT industry_code, industry_name 
-        FROM merchant_industries 
-        WHERE industry_code != '' AND industry_name != ''
-        ORDER BY industry_code ASC
+        SELECT DISTINCT mi.industry_code, mi.industry_name 
+        FROM merchant_industries mi
+        JOIN merchants m ON mi.tax_id = m.tax_id
+        WHERE mi.industry_code != '' AND mi.industry_name != ''
+        ORDER BY mi.industry_code ASC
     """)
     return [{"industry_code": row["industry_code"], "industry_name": row["industry_name"]} for row in cursor.fetchall()]
