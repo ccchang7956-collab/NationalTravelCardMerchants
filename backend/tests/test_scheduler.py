@@ -138,3 +138,36 @@ def test_scheduler_wrapped_website_merge():
     assert merged_lines[2] == "12345678"
     assert merged_lines[3] == "www.cool-place.org/index.html"
     assert merged_lines[4] == "飯店名稱"
+
+def test_scheduler_industry_migration():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        old_db = os.path.join(tmpdir, "old.db")
+        new_db = os.path.join(tmpdir, "new.db")
+        
+        # 建立舊 DB 寫入行業別
+        old_conn = sqlite3.connect(old_db)
+        old_conn.execute("CREATE TABLE merchant_industries (id INTEGER PRIMARY KEY, tax_id TEXT, industry_code TEXT, industry_name TEXT, priority INTEGER)")
+        old_conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES ('12345678', '561115', '餐館業', 1)")
+        old_conn.commit()
+        old_conn.close()
+        
+        # 建立新 DB
+        new_conn = sqlite3.connect(new_db)
+        new_conn.execute("CREATE TABLE merchant_industries (id INTEGER PRIMARY KEY, tax_id TEXT, industry_code TEXT, industry_name TEXT, priority INTEGER)")
+        new_conn.commit()
+        new_conn.close()
+        
+        # 呼叫遷移函數
+        from scheduler.update_data import migrate_industries
+        migrate_industries(old_db, new_db)
+        
+        # 驗證新 DB 成功接收資料
+        new_conn = sqlite3.connect(new_db)
+        row = new_conn.execute("SELECT tax_id, industry_code, industry_name, priority FROM merchant_industries").fetchone()
+        new_conn.close()
+        
+        assert row is not None
+        assert row[0] == "12345678"
+        assert row[1] == "561115"
+        assert row[2] == "餐館業"
+

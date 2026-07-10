@@ -562,6 +562,52 @@ def migrate_coords(old_db: str, new_db: str) -> int:
         if new_conn:
             new_conn.close()
 
+def migrate_industries(old_db: str, new_db: str) -> int:
+    """從舊 DB 遷移行業別資料到新 DB（以 tax_id 對應），回傳遷移筆數。"""
+    if not os.path.exists(old_db):
+        log.info("ℹ️  無舊 DB，跳過行業別資料遷移")
+        return 0
+    log.info("🏬  從舊 DB 遷移行業別資料...")
+    old_conn = None
+    new_conn = None
+    try:
+        old_conn = sqlite3.connect(old_db)
+        old_conn.execute("PRAGMA busy_timeout = 5000;")
+        
+        # 檢查舊表是否存在
+        table_exists = old_conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='merchant_industries'"
+        ).fetchone()
+        if not table_exists:
+            log.info("   舊 DB 無 merchant_industries 表")
+            return 0
+            
+        rows = old_conn.execute(
+            "SELECT tax_id, industry_code, industry_name, priority FROM merchant_industries"
+        ).fetchall()
+        
+        if not rows:
+            log.info("   舊 DB 無行業別資料")
+            return 0
+            
+        new_conn = sqlite3.connect(new_db)
+        new_conn.execute("PRAGMA busy_timeout = 5000;")
+        new_conn.executemany(
+            "INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",
+            [(tid, code, name, priority) for tid, code, name, priority in rows]
+        )
+        new_conn.commit()
+        log.info(f"✅ 行業別資料遷移完成：{len(rows)} 筆")
+        return len(rows)
+    except Exception as e:
+        log.error(f"⚠️ 遷移行業別資料失敗: {e}")
+        return 0
+    finally:
+        if old_conn:
+            old_conn.close()
+        if new_conn:
+            new_conn.close()
+
 def fill_missing_coords(db_path: str) -> int:
     """對沒有座標的商家用郵遞區號 fallback 填補，回傳填補筆數。"""
     log.info("📍 用郵遞區號填補缺失座標...")
@@ -671,6 +717,7 @@ def main():
 
         # 5. 遷移座標
         migrate_coords(DB_PATH, new_db)
+        migrate_industries(DB_PATH, new_db)
 
         # 6. 填補缺失座標
         fill_missing_coords(new_db)
