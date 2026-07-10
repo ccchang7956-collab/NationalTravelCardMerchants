@@ -26,6 +26,18 @@ def test_scheduler_db_creation():
             )
         """)
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS merchant_industries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_id TEXT NOT NULL,
+                industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_merchant_industries_tax_id ON merchant_industries(tax_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_merchant_industries_code ON merchant_industries(industry_code)")
+        cursor.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS merchants_fts USING fts5(
                 name,
                 address,
@@ -52,6 +64,14 @@ def test_scheduler_db_creation():
         
         assert res is not None
         assert res[0] == "測試特約大飯店"
+        
+        # 驗證新表是否被建立
+        info = cursor.execute("PRAGMA table_info(merchant_industries)").fetchall()
+        cols = {col[1]: col[2] for col in info}
+        assert "tax_id" in cols
+        assert "industry_code" in cols
+        assert "industry_name" in cols
+        assert "priority" in cols
         
         conn.close()
 

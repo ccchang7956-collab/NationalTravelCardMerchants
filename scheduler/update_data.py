@@ -364,6 +364,7 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
         cursor = conn.cursor()
+        cursor.execute("DROP TABLE IF EXISTS merchant_industries")
         cursor.execute("DROP TABLE IF EXISTS merchants")
         cursor.execute("""
             CREATE TABLE merchants (
@@ -381,6 +382,19 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
         cursor.execute("CREATE INDEX idx_zip_code ON merchants(zip_code)")
         cursor.execute("CREATE INDEX idx_tax_id ON merchants(tax_id)")
         cursor.execute("CREATE INDEX idx_lat_lon ON merchants(lat, lon)")
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS merchant_industries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_id TEXT NOT NULL,
+                industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_merchant_industries_tax_id ON merchant_industries(tax_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_merchant_industries_code ON merchant_industries(industry_code)")
         
         # 同步建立 FTS 虛擬表
         cursor.execute("""
@@ -684,10 +698,25 @@ def main():
                         tokenize='trigram'
                     )
                 """)
+                prod_conn.execute("""
+                    CREATE TABLE IF NOT EXISTS main.merchant_industries (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        tax_id TEXT NOT NULL,
+                        industry_code TEXT NOT NULL,
+                        industry_name TEXT NOT NULL,
+                        priority INTEGER NOT NULL,
+                        FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+                    )
+                """)
+                prod_conn.execute("CREATE INDEX IF NOT EXISTS main.idx_merchant_industries_tax_id ON merchant_industries(tax_id)")
+                prod_conn.execute("CREATE INDEX IF NOT EXISTS main.idx_merchant_industries_code ON merchant_industries(industry_code)")
+                
                 prod_conn.execute("ATTACH DATABASE ? AS new_db", (new_db,))
                 prod_conn.execute("BEGIN TRANSACTION")
+                prod_conn.execute("DELETE FROM main.merchant_industries")
                 prod_conn.execute("DELETE FROM main.merchants")
                 prod_conn.execute("INSERT INTO main.merchants SELECT * FROM new_db.merchants")
+                prod_conn.execute("INSERT INTO main.merchant_industries SELECT * FROM new_db.merchant_industries")
                 prod_conn.execute("INSERT INTO main.merchants_fts(merchants_fts) VALUES('rebuild')")
                 prod_conn.execute("COMMIT")
                 prod_conn.execute("DETACH DATABASE new_db")

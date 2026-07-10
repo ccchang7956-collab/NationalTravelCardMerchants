@@ -22,6 +22,18 @@ def fixture_db_conn():
         )
     """)
     conn.execute("""
+        CREATE TABLE merchant_industries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tax_id TEXT NOT NULL,
+            industry_code TEXT NOT NULL,
+            industry_name TEXT NOT NULL,
+            priority INTEGER NOT NULL,
+            FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("CREATE INDEX idx_merchant_industries_tax_id ON merchant_industries(tax_id)")
+    conn.execute("CREATE INDEX idx_merchant_industries_code ON merchant_industries(industry_code)")
+    conn.execute("""
         CREATE VIRTUAL TABLE merchants_fts USING fts5(
             name,
             address,
