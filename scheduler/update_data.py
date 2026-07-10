@@ -302,7 +302,6 @@ def download_zip(dest: str) -> bool:
     
     from requests.adapters import HTTPAdapter
     from urllib3.util import Retry
-    from unittest.mock import Mock
 
     session = requests.Session()
     retries = Retry(
@@ -314,28 +313,9 @@ def download_zip(dest: str) -> bool:
     session.mount("https://", HTTPAdapter(max_retries=retries))
     session.mount("http://", HTTPAdapter(max_retries=retries))
 
-    is_mock = isinstance(session, Mock) or isinstance(session.get, Mock)
-
     try:
-        if is_mock:
-            # 測試環境下，因為 Session 被 Mock 了，自動重試失效，需手動重試以通過測試斷言
-            resp = None
-            last_err = None
-            for attempt in range(3):
-                try:
-                    resp = session.get(DOWNLOAD_URL, headers=headers, timeout=60, stream=True)
-                    resp.raise_for_status()
-                    last_err = None
-                    break
-                except Exception as e:
-                    last_err = e
-            if last_err:
-                raise last_err
-        else:
-            # 真實環境下，直接由 HTTPAdapter + Retry 自動處理重試
-            resp = session.get(DOWNLOAD_URL, headers=headers, timeout=60, stream=True)
-            resp.raise_for_status()
-
+        resp = session.get(DOWNLOAD_URL, headers=headers, timeout=60, stream=True)
+        resp.raise_for_status()
         with open(dest, "wb") as f:
             for chunk in resp.iter_content(chunk_size=65536):
                 f.write(chunk)
