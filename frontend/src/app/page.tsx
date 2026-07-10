@@ -53,7 +53,7 @@ export default async function Home({
   const city = typeof resolvedParams.city === "string" ? resolvedParams.city : "";
 
   // 新增篩選參數解析
-  const hasWebsiteParam = resolvedParams.has_website;
+  const hasWebsiteParam = typeof resolvedParams.has_website === "string" ? resolvedParams.has_website : undefined;
   const hasWebsite: boolean | null =
     hasWebsiteParam === "true" ? true : hasWebsiteParam === "false" ? false : null;
   const radiusKm: number | null =
@@ -92,6 +92,12 @@ export default async function Home({
     const redirectQuery = new URLSearchParams();
     if (q) redirectQuery.append("q", q);
     if (city) redirectQuery.append("city", city);
+    if (hasWebsite !== null) redirectQuery.append("has_website", String(hasWebsite));
+    if (radiusKm !== null && !isNaN(latParam) && !isNaN(lonParam)) {
+      redirectQuery.append("radius_km", String(radiusKm));
+      redirectQuery.append("lat", latParam.toFixed(5));
+      redirectQuery.append("lon", lonParam.toFixed(5));
+    }
     redirectQuery.append("page", totalPages.toString());
     redirect(`/?${redirectQuery.toString()}`);
   }

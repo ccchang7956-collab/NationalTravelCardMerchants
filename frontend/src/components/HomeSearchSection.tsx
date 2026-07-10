@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Form from "next/form";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import FilterSheet, { FilterState, DEFAULT_FILTER_STATE } from "@/components/FilterSheet";
+import FilterSheet, { FilterState } from "@/components/FilterSheet";
 
 interface HomeSearchSectionProps {
   initialQ: string;
@@ -22,7 +22,7 @@ export default function HomeSearchSection({
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const geoRef = useRef<GeolocationPosition | null>(null);
+
 
   const handleRequestLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -34,7 +34,7 @@ export default function HomeSearchSection({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        geoRef.current = pos;
+
         setUserLocation(loc);
         setLocationLoading(false);
       },
