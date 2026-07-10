@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MapPinIcon, PaperAirplaneIcon, ArrowLeftIcon, ChevronRightIcon, GlobeAltIcon, AdjustmentsHorizontalIcon, MagnifyingGlassIcon, MapIcon } from "@heroicons/react/24/outline";
 import AddressSearch from "@/components/AddressSearch";
+import FilterSheet, { FilterState, DEFAULT_FILTER_STATE } from "@/components/FilterSheet";
 
 // Dynamically import the map to avoid SSR issues (Leaflet needs window)
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -59,6 +60,9 @@ function MapContent() {
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
   const [locationStatus, setLocationStatus] = useState<string>("請輸入地址、定位，或點擊地圖搜尋");
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [filterState, setFilterState] = useState<FilterState>(DEFAULT_FILTER_STATE);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationGeoError, setLocationGeoError] = useState<string | null>(null);
 
   // Sync state to URL
   const updateURL = useCallback((lat: number, lon: number, r: number, q: string) => {
@@ -192,6 +196,43 @@ function MapContent() {
     );
   }, [fetchNearby, radius, keyword]);
 
+  const handleFilterRequestLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationGeoError("您的瀏覽器不支援定位功能");
+      return;
+    }
+    setLocationLoading(true);
+    setLocationGeoError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+        setUserLocation(loc);
+        setCenter(loc);
+        setLocationLoading(false);
+      },
+      (err) => {
+        setLocationGeoError("定位失敗：" + err.message);
+        setLocationLoading(false);
+      },
+      { enableHighAccuracy: false, timeout: 8000 }
+    );
+  }, []);
+
+  const handleFilterChange = useCallback(
+    (newFilters: FilterState) => {
+      setFilterState(newFilters);
+      // Apply radius if set and we have a location
+      const newRadius = newFilters.radiusKm ?? radius;
+      if (newFilters.radiusKm !== null) {
+        setRadius(newFilters.radiusKm);
+        setTempRadius(newFilters.radiusKm);
+      }
+      // Re-fetch with updated filters
+      fetchNearby(center[0], center[1], newRadius, keyword);
+    },
+    [fetchNearby, center, radius, keyword]
+  );
+
   const handleMapClick = useCallback((lat: number, lon: number) => {
     setUserLocation(null);
     setCenter([lat, lon]);
@@ -249,9 +290,25 @@ function MapContent() {
               placeholder="在附近搜尋關鍵字 (例如: 咖啡)"
               className="w-full pl-9 pr-4 py-2 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all text-sm"
             />
-            <button onClick={handleKeywordSearch} className="shrink-0 bg-accent px-4 py-2 rounded-lg text-sm text-white font-medium hover:bg-accent-hover transition-colors">
-              篩選
+            <button
+              onClick={handleKeywordSearch}
+              className="shrink-0 bg-accent px-4 py-2 rounded-lg text-sm text-white font-medium hover:bg-accent-hover transition-colors cursor-pointer"
+            >
+              搜尋
             </button>
+            <FilterSheet
+              filters={filterState}
+              cities={[
+                "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
+                "台中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "台南市",
+                "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"
+              ]}
+              onChange={handleFilterChange}
+              userLocation={userLocation ? { lat: userLocation[0], lon: userLocation[1] } : null}
+              onRequestLocation={handleFilterRequestLocation}
+              locationLoading={locationLoading}
+              locationError={locationGeoError}
+            />
           </div>
 
           {/* Radius control */}
