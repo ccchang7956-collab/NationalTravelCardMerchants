@@ -24,6 +24,8 @@ def parse_search_query(q: Optional[str]) -> Tuple[Optional[str], List[str]]:
     seen = set()
     for t in cleaned_q.split():
         t_clean = t.strip()
+        if t_clean.replace('"', '') == '':
+            continue
         if t_clean and t_clean not in seen:
             seen.add(t_clean)
             terms.append(t_clean)

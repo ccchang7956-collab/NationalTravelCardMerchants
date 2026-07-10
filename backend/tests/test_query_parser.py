@@ -31,5 +31,8 @@ def test_parse_search_query_extreme_inputs():
     assert parse_search_query("  \t\n  ") == (None, [])
     # 測試全特殊字元
     assert parse_search_query("!@# $%^") == (None, [])
+    # 測試純雙引號
+    assert parse_search_query('"') == (None, [])
+    assert parse_search_query('"""') == (None, [])
 
 
