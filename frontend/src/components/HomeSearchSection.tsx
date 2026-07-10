@@ -22,7 +22,12 @@ export default function HomeSearchSection({
 
   useEffect(() => {
     setFilters(initialFilters);
-  }, [initialFilters]);
+  }, [
+    initialFilters.city,
+    initialFilters.hasWebsite,
+    initialFilters.radiusKm,
+    initialFilters.industryCode
+  ]);
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);

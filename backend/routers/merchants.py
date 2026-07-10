@@ -4,7 +4,7 @@ import re
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional, List, Tuple
 from backend.database import get_db
-from backend.models import Merchant, MerchantWithCoords, PaginatedMerchants, Stats, CityStat
+from backend.models import Merchant, MerchantWithCoords, PaginatedMerchants, Stats, CityStat, IndustryInfo
 
 def parse_search_query(q: Optional[str]) -> Tuple[Optional[str], List[str]]:
     """
@@ -265,9 +265,8 @@ def get_stats(db: sqlite3.Connection = Depends(get_db)):
     }
 
 
-@router.get("/industries", response_model=List[dict])
+@router.get("/industries", response_model=List[IndustryInfo])
 def get_industries(db: sqlite3.Connection = Depends(get_db)):
-    db.execute("PRAGMA foreign_keys = ON;")
     cursor = db.cursor()
     cursor.execute("""
         SELECT DISTINCT industry_code, industry_name 
@@ -275,4 +274,4 @@ def get_industries(db: sqlite3.Connection = Depends(get_db)):
         WHERE industry_code != '' AND industry_name != ''
         ORDER BY industry_code ASC
     """)
-    return [{"industry_code": row[0], "industry_name": row[1]} for row in cursor.fetchall()]
+    return [{"industry_code": row["industry_code"], "industry_name": row["industry_name"]} for row in cursor.fetchall()]

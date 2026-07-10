@@ -18,6 +18,7 @@ export const DEFAULT_FILTER_STATE: FilterState = {
 };
 
 const RADIUS_STEPS = [0.5, 1, 2, 5, 10, 20];
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 interface FilterSheetProps {
   filters: FilterState;
@@ -59,7 +60,7 @@ export default function FilterSheet({
   useEffect(() => {
     if (!isOpen || industries.length > 0 || industriesLoading) return;
     setIndustriesLoading(true);
-    fetch("/api/industries")
+    fetch(`${API_URL}/api/industries`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {

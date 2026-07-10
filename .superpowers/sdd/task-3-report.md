@@ -44,3 +44,21 @@
   - 執行 `npm run build --prefix frontend`。
   - 編譯結果：建置成功 (Compiled successfully)，無任何 TypeScript 或是 Next.js build 錯誤。
 
+## 7. 最終審查修正 (Final Code Review Fixes)
+- **前端 API 請求主機 (API_URL)**：
+  - 在 [FilterSheet.tsx](file:///Users/ccchang/Project/NationalTravelCardMerchants/frontend/src/components/FilterSheet.tsx) 中定義 `API_URL`：
+    ```typescript
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    ```
+    並將原本的相對路徑 `fetch("/api/industries")` 修改為使用絕對路徑 `fetch(`${API_URL}/api/industries`)`，避免本地端前端開發 (port 3000) 呼叫時發生 404 錯誤。
+- **優化 useEffect 依賴陣列**：
+  - 在 [HomeSearchSection.tsx](file:///Users/ccchang/Project/NationalTravelCardMerchants/frontend/src/components/HomeSearchSection.tsx) 中，調整監聽 `initialFilters` 的依賴陣列為具體欄位：`initialFilters.city`、`initialFilters.hasWebsite`、`initialFilters.radiusKm`、`initialFilters.industryCode`，防止因物件參照變更導致不必要的重複渲染與 API 請求。
+- **後端 Pydantic 模型與 API 路由優化**：
+  - 在 [models.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/backend/models.py) 中定義新模型 `IndustryInfo` 用於動態行業別下拉選單。
+  - 在 [merchants.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/backend/routers/merchants.py) 中：
+    - 匯入 `IndustryInfo` 並將 `get_industries` 路由的 `response_model` 修改為 `List[IndustryInfo]`。
+    - 移除唯讀查詢中多餘的 `db.execute("PRAGMA foreign_keys = ON;")`。
+    - 改以 Column Name Key 取得 SQL 查詢結果欄位以防出錯：`row["industry_code"]`、`row["industry_name"]`。
+- **編譯與測試驗證**：
+  - 後端測試：執行 `PYTHONPATH=. pytest backend/tests/ -v`，25 項測試皆全數通過。
+  - 前端建置：執行 `npm run build --prefix frontend`，前端靜態頁面編譯建置成功。

@@ -6,6 +6,10 @@ class MerchantIndustry(BaseModel):
     industry_name: str
     priority: int
 
+class IndustryInfo(BaseModel):
+    industry_code: str
+    industry_name: str
+
 class MerchantBase(BaseModel):
     name: str
     address: Optional[str] = None
