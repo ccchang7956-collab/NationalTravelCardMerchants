@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     url: SITE_URL,
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "國民旅遊卡特約商店查詢",
     description: "快速搜尋全台國民旅遊卡特約商店，收錄超過萬間特約店家。",
   },
