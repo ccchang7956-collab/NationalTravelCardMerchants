@@ -7,12 +7,14 @@ export interface FilterState {
   city: string;
   hasWebsite: boolean | null;
   radiusKm: number | null;
+  industryCode?: string;
 }
 
 export const DEFAULT_FILTER_STATE: FilterState = {
   city: "",
   hasWebsite: null,
   radiusKm: null,
+  industryCode: "",
 };
 
 const RADIUS_STEPS = [0.5, 1, 2, 5, 10, 20];
@@ -32,6 +34,7 @@ function countActiveFilters(filters: FilterState): number {
   if (filters.city) count++;
   if (filters.hasWebsite !== null) count++;
   if (filters.radiusKm !== null) count++;
+  if (filters.industryCode) count++;
   return count;
 }
 
@@ -45,10 +48,27 @@ export default function FilterSheet({
   locationError,
 }: FilterSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [industries, setIndustries] = useState<Array<{ industry_code: string; industry_name: string }>>([]);
+  const [industriesLoading, setIndustriesLoading] = useState(false);
+
   // Local draft state — only committed on "套用"
   const [draft, setDraft] = useState<FilterState>(filters);
   // Touch state for swipe-to-close
   const touchStartY = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || industries.length > 0 || industriesLoading) return;
+    setIndustriesLoading(true);
+    fetch("/api/industries")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setIndustries(data);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch industries:", err))
+      .finally(() => setIndustriesLoading(false));
+  }, [isOpen, industries.length, industriesLoading]);
 
   // Sync draft when filters change externally (e.g. URL navigation)
   useEffect(() => {
@@ -204,6 +224,26 @@ export default function FilterSheet({
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* 行業別 */}
+          <div>
+            <label htmlFor="filter-industry" className="block text-sm font-medium text-foreground mb-2">
+              行業別
+            </label>
+            <select
+              id="filter-industry"
+              value={draft.industryCode || ""}
+              onChange={(e) => setDraft({ ...draft, industryCode: e.target.value })}
+              className="w-full px-3 py-2.5 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all text-sm cursor-pointer"
+            >
+              <option value="">所有行業</option>
+              {industries.map((ind) => (
+                <option key={ind.industry_code} value={ind.industry_code}>
+                  {ind.industry_name} ({ind.industry_code})
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Has Website */}
