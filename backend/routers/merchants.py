@@ -60,6 +60,7 @@ def get_merchants(
     city: Optional[str] = Query(None, description="Filter by city (e.g. 台北市)"),
     zip_code: Optional[str] = Query(None, description="Exact match zip code"),
     has_website: Optional[bool] = Query(None, description="Filter only stores with website"),
+    industry_code: Optional[str] = Query(None, description="Filter by industry code (supports prefix wildcard matching)"),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page"),
     db: sqlite3.Connection = Depends(get_db)
@@ -96,6 +97,15 @@ def get_merchants(
         where_clauses.append("m.website IS NOT NULL AND m.website != ''")
     elif has_website is False:
         where_clauses.append("(m.website IS NULL OR m.website = '')")
+
+    if industry_code:
+        where_clauses.append("""
+            EXISTS (
+                SELECT 1 FROM merchant_industries mi 
+                WHERE mi.tax_id = m.tax_id AND mi.industry_code LIKE ?
+            )
+        """)
+        params.append(f"{industry_code}%")
 
     # 拼接 JOIN
     if joins:
@@ -139,6 +149,7 @@ def get_nearby_merchants(
     lon: float = Query(..., ge=-180.0, le=180.0, description="Longitude of center point"),
     radius_km: float = Query(2.0, ge=0.1, le=50.0, description="Search radius in km"),
     q: Optional[str] = Query(None, description="Search keyword for name or address"),
+    industry_code: Optional[str] = Query(None, description="Filter by industry code (supports prefix wildcard matching)"),
     limit: int = Query(100, ge=1, le=500, description="Max number of results"),
     db: sqlite3.Connection = Depends(get_db)
 ):
@@ -166,6 +177,15 @@ def get_nearby_merchants(
             safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
             params.extend([f"%{safe_term}%", f"%{safe_term}%"])
+
+    if industry_code:
+        where_clauses.append("""
+            EXISTS (
+                SELECT 1 FROM merchant_industries mi 
+                WHERE mi.tax_id = m.tax_id AND mi.industry_code LIKE ?
+            )
+        """)
+        params.append(f"{industry_code}%")
 
     if joins:
         query += " " + " ".join(joins)
@@ -243,3 +263,16 @@ def get_stats(db: sqlite3.Connection = Depends(get_db)):
         "has_website": has_website,
         "cities": valid_cities
     }
+
+
+@router.get("/industries", response_model=List[dict])
+def get_industries(db: sqlite3.Connection = Depends(get_db)):
+    db.execute("PRAGMA foreign_keys = ON;")
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT DISTINCT industry_code, industry_name 
+        FROM merchant_industries 
+        WHERE industry_code != '' AND industry_name != ''
+        ORDER BY industry_code ASC
+    """)
+    return [{"industry_code": row[0], "industry_name": row[1]} for row in cursor.fetchall()]

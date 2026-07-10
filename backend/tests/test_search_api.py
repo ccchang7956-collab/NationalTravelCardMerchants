@@ -56,6 +56,7 @@ def fixture_db_conn():
     )
     conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("11111111", "561115", "餐館業", 1))
     conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("11111111", "561116", "飲料店業", 2))
+    conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("33333333", "551011", "旅館業", 1))
     conn.execute("INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')")
     conn.commit()
     
@@ -179,5 +180,53 @@ def test_get_merchant_empty_tax_id(db_conn):
     data = response.json()
     assert "industries" in data
     assert data["industries"] == []
+
+
+def test_get_industries_api(db_conn):
+    client = TestClient(app)
+    response = client.get("/api/industries")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 3
+    assert data[0]["industry_code"] == "551011"
+    assert data[0]["industry_name"] == "旅館業"
+    assert data[1]["industry_code"] == "561115"
+    assert data[1]["industry_name"] == "餐館業"
+
+
+def test_merchants_filter_by_industry(db_conn):
+    client = TestClient(app)
+    # 1. 測試精確子類別代碼 (551011)
+    response = client.get("/api/merchants?industry_code=551011")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["items"][0]["name"] == "彰化大飯店"
+
+    # 2. 測試大類別前綴模糊匹配 (56) - 應該匹配到台北大安咖啡店
+    response = client.get("/api/merchants?industry_code=56")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["items"][0]["name"] == "台北大安咖啡店"
+
+
+def test_nearby_merchants_filter_by_industry(db_conn):
+    client = TestClient(app)
+    # 搜尋台北 (25.03, 121.56) 附近的商店，半徑 5km，應有台北大安咖啡店
+    # 1. 搜尋行業別為 56 (咖啡店/餐飲飲料)
+    response = client.get("/api/merchants/nearby?lat=25.03&lon=121.56&radius_km=5&industry_code=56")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "台北大安咖啡店"
+
+    # 2. 搜尋行業別為 55 (旅館)，應該查不到台北大安咖啡店
+    response = client.get("/api/merchants/nearby?lat=25.03&lon=121.56&radius_km=5&industry_code=55")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0
+
+
 
 
