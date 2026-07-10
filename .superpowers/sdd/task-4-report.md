@@ -123,3 +123,22 @@ $ PYTHONPATH=. pytest backend/tests -v
 - 執行 `PYTHONPATH=. pytest backend/tests/ -v`
 - **結果**: 22 個測試項目全部通過 (100% Pass)，包含所有 FTS、API 路由、Scheduler 以及新同步 DDL 的整合測試。
 
+## Final Fix 3 修復內容 (Final Fixes 3)
+1. **修正批次刪除/寫入時序衝突 (Batch Delete/Insert Timing Conflict)**：
+   - 修改 [scripts/import_industry.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/scripts/import_industry.py)：
+     - 在迴圈內，當 `len(batch) >= 1000` 觸發寫入前，先檢查並執行 `to_delete_batch` 內的刪除動作並將其清空，確保新寫入的商家行業資料不會被後續的批次刪除動作誤刪。
+     - 在迴圈外清理剩餘資料時，也確保先執行 `to_delete_batch` 的刪除，再執行 `batch` 的插入。
+
+2. **新增空 CSV 防禦機制 (Empty CSV StopIteration Defense)**：
+   - 修改 [scripts/import_industry.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/scripts/import_industry.py)：
+     - 將讀取 CSV 標頭的 `header = next(reader)` 包裝在 `try-except StopIteration` 區塊中。
+     - 若遭遇 `StopIteration`（表示 CSV 檔為空），則印出警告並提早 `return` 結束匯入，以避免程式崩潰。
+
+3. **SQL 語句明確列出欄位 (Explicit column listing in SQL)**：
+   - 修改 [scheduler/update_data.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/scheduler/update_data.py)：
+     - 重寫大約第 779 行的 SQL 寫入語句，將 `INSERT INTO main.merchant_industries SELECT * FROM new_db.merchant_industries` 改為明確列出欄位名稱：`INSERT INTO main.merchant_industries (id, tax_id, industry_code, industry_name, priority) SELECT id, tax_id, industry_code, industry_name, priority FROM new_db.merchant_industries`，提升 SQL 的嚴謹度與維護性。
+
+## Final Fix 3 測試結果
+- 執行 `PYTHONPATH=. pytest backend/tests/ -v`
+- **結果**: 22 個測試項目全部通過 (100% Pass)，包含所有 FTS、API 路由、Scheduler 以及新時序與欄位定義的整合測試。
+

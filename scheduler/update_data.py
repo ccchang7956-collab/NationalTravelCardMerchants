@@ -776,7 +776,7 @@ def main():
                 prod_conn.execute("DELETE FROM main.merchant_industries")
                 prod_conn.execute("DELETE FROM main.merchants")
                 prod_conn.execute("INSERT INTO main.merchants SELECT * FROM new_db.merchants")
-                prod_conn.execute("INSERT INTO main.merchant_industries SELECT * FROM new_db.merchant_industries")
+                prod_conn.execute("INSERT INTO main.merchant_industries (id, tax_id, industry_code, industry_name, priority) SELECT id, tax_id, industry_code, industry_name, priority FROM new_db.merchant_industries")
                 prod_conn.execute("INSERT INTO main.merchants_fts(merchants_fts) VALUES('rebuild')")
                 prod_conn.execute("COMMIT")
                 prod_conn.execute("DETACH DATABASE new_db")

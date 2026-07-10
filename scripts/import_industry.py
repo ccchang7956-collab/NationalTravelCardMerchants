@@ -30,7 +30,11 @@ def import_csv_to_db(csv_path: str, db_path: str):
                     reader = csv.reader(f)
                     
                     # 跳過 header 行
-                    header = next(reader)
+                    try:
+                        header = next(reader)
+                    except StopIteration:
+                        print("Warning: CSV file is empty. Skipping import.")
+                        return
                     
                     batch = []
                     count = 0
@@ -61,6 +65,9 @@ def import_csv_to_db(csv_path: str, db_path: str):
                                         batch.append((tax_id, code, name, i + 1))
                                         
                             if len(batch) >= 1000:
+                                if to_delete_batch:
+                                    cursor.executemany("DELETE FROM merchant_industries WHERE tax_id = ?", to_delete_batch)
+                                    to_delete_batch = []
                                 cursor.executemany(
                                     "INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",
                                     batch
@@ -71,7 +78,6 @@ def import_csv_to_db(csv_path: str, db_path: str):
                     if to_delete_batch:
                         cursor.executemany("DELETE FROM merchant_industries WHERE tax_id = ?", to_delete_batch)
                         to_delete_batch = []
-
                     if batch:
                         cursor.executemany(
                             "INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",
