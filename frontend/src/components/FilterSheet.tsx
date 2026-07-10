@@ -162,7 +162,7 @@ export default function FilterSheet({
             篩選條件
           </h2>
           <div className="flex items-center gap-3">
-            {activeCount > 0 && (
+            {countActiveFilters(draft) > 0 && (
               <button
                 onClick={handleClear}
                 className="text-sm text-muted hover:text-accent transition-colors cursor-pointer"
@@ -255,7 +255,6 @@ export default function FilterSheet({
               {RADIUS_STEPS.map((km) => (
                 <button
                   key={km}
-                  disabled={!userLocation}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!userLocation) {
@@ -264,6 +263,7 @@ export default function FilterSheet({
                     }
                     setDraft({ ...draft, radiusKm: draft.radiusKm === km ? null : km });
                   }}
+                  aria-disabled={!userLocation}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-150 border cursor-pointer ${
                     draft.radiusKm === km
                       ? "bg-accent text-white border-accent"
