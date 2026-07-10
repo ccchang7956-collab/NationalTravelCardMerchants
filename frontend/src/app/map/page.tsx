@@ -65,18 +65,20 @@ function MapContent() {
   const [locationGeoError, setLocationGeoError] = useState<string | null>(null);
 
   // Sync state to URL
-  const updateURL = useCallback((lat: number, lon: number, r: number, q: string) => {
+  const updateURL = useCallback((lat: number, lon: number, r: number, q: string, indCode: string = "") => {
     const currentLat = searchParams.get("lat");
     const currentLon = searchParams.get("lon");
     const currentR = searchParams.get("radius");
     const currentQ = searchParams.get("q") || "";
+    const currentIndCode = searchParams.get("industry_code") || "";
 
     // Check if URL query params match the new values to avoid infinite routing loop
     if (
       currentLat && parseFloat(currentLat).toFixed(5) === lat.toFixed(5) &&
       currentLon && parseFloat(currentLon).toFixed(5) === lon.toFixed(5) &&
       currentR && parseFloat(currentR) === r &&
-      currentQ === q
+      currentQ === q &&
+      currentIndCode === indCode
     ) {
       return;
     }
@@ -86,10 +88,11 @@ function MapContent() {
     params.set("lon", lon.toFixed(5));
     params.set("radius", r.toString());
     if (q) params.set("q", q);
+    if (indCode) params.set("industry_code", indCode);
     router.replace(`/map?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
 
-  const fetchNearby = useCallback(async (lat: number, lon: number, r: number, q: string) => {
+  const fetchNearby = useCallback(async (lat: number, lon: number, r: number, q: string, indCode: string = "") => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -97,11 +100,12 @@ function MapContent() {
     abortControllerRef.current = controller;
 
     setLoading(true);
-    updateURL(lat, lon, r, q);
+    updateURL(lat, lon, r, q, indCode);
     try {
       const qParam = q ? `&q=${encodeURIComponent(q)}` : "";
+      const indParam = indCode ? `&industry_code=${encodeURIComponent(indCode)}` : "";
       const res = await fetch(
-        `${API_URL}/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${r}&limit=200${qParam}`,
+        `${API_URL}/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${r}&limit=200${qParam}${indParam}`,
         { signal: controller.signal }
       );
       if (res.ok) {
@@ -126,6 +130,7 @@ function MapContent() {
     const lon = searchParams.get("lon");
     const r = searchParams.get("radius");
     const q = searchParams.get("q");
+    const indCode = searchParams.get("industry_code");
 
     const parsedLat = lat ? parseFloat(lat) : DEFAULT_CENTER[0];
     const parsedLon = lon ? parseFloat(lon) : DEFAULT_CENTER[1];
@@ -135,6 +140,7 @@ function MapContent() {
     const currentLon = isNaN(parsedLon) ? DEFAULT_CENTER[1] : parsedLon;
     const currentRadius = isNaN(parsedRadius) || parsedRadius <= 0 ? 2 : parsedRadius;
     const currentKeyword = q || "";
+    const currentIndCode = indCode || "";
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (center[0].toFixed(5) !== currentLat.toFixed(5) || center[1].toFixed(5) !== currentLon.toFixed(5)) {
@@ -149,29 +155,33 @@ function MapContent() {
     if (keyword !== currentKeyword) {
       setKeyword(currentKeyword);
     }
+    if (filterState.industryCode !== currentIndCode) {
+      setFilterState(prev => ({ ...prev, industryCode: currentIndCode }));
+    }
 
     const isStateSynced =
       center[0].toFixed(5) === currentLat.toFixed(5) &&
       center[1].toFixed(5) === currentLon.toFixed(5) &&
       radius === currentRadius &&
-      keyword === currentKeyword;
+      keyword === currentKeyword &&
+      filterState.industryCode === currentIndCode;
 
     if (lat && lon && (isFirstLoadRef.current || !isStateSynced)) {
-      fetchNearby(currentLat, currentLon, currentRadius, currentKeyword);
+      fetchNearby(currentLat, currentLon, currentRadius, currentKeyword, currentIndCode);
     }
     isFirstLoadRef.current = false;
-  }, [searchParams, fetchNearby, center, radius, keyword]); // 監聽 searchParams 的變化以支援雙向綁定與歷史導航
+  }, [searchParams, fetchNearby, center, radius, keyword, filterState.industryCode]); // 監聽 searchParams 的變化以支援雙向綁定與歷史導航
 
   useEffect(() => {
     if (tempRadius === radius) return;
     
     const timer = setTimeout(() => {
       setRadius(tempRadius);
-      fetchNearby(center[0], center[1], tempRadius, keyword);
+      fetchNearby(center[0], center[1], tempRadius, keyword, filterState.industryCode || "");
     }, 300);
     
     return () => clearTimeout(timer);
-  }, [tempRadius, radius, center, keyword, fetchNearby]);
+  }, [tempRadius, radius, center, keyword, filterState.industryCode, fetchNearby]);
 
 
   const handleLocate = useCallback(() => {
@@ -186,7 +196,7 @@ function MapContent() {
         const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
         setUserLocation(loc);
         setCenter(loc);
-        fetchNearby(loc[0], loc[1], radius, keyword);
+        fetchNearby(loc[0], loc[1], radius, keyword, filterState.industryCode || "");
       },
       (err) => {
         setGeoError("定位失敗：" + err.message);
@@ -194,7 +204,7 @@ function MapContent() {
       },
       { enableHighAccuracy: false, timeout: 5000 }
     );
-  }, [fetchNearby, radius, keyword]);
+  }, [fetchNearby, radius, keyword, filterState.industryCode]);
 
   const handleFilterRequestLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -228,7 +238,7 @@ function MapContent() {
         setTempRadius(newFilters.radiusKm);
       }
       // Re-fetch with updated filters
-      fetchNearby(center[0], center[1], newRadius, keyword);
+      fetchNearby(center[0], center[1], newRadius, keyword, newFilters.industryCode || "");
     },
     [fetchNearby, center, radius, keyword]
   );
@@ -236,20 +246,20 @@ function MapContent() {
   const handleMapClick = useCallback((lat: number, lon: number) => {
     setUserLocation(null);
     setCenter([lat, lon]);
-    fetchNearby(lat, lon, radius, keyword);
+    fetchNearby(lat, lon, radius, keyword, filterState.industryCode || "");
     setLocationStatus(`已選擇地點：${lat.toFixed(4)}, ${lon.toFixed(4)}`);
-  }, [fetchNearby, radius, keyword]);
+  }, [fetchNearby, radius, keyword, filterState.industryCode]);
 
   const handleAddressSelect = useCallback((lat: number, lon: number) => {
     setUserLocation(null);
     setCenter([lat, lon]);
-    fetchNearby(lat, lon, radius, keyword);
+    fetchNearby(lat, lon, radius, keyword, filterState.industryCode || "");
     setLocationStatus(`已切換至搜尋地址`);
-  }, [fetchNearby, radius, keyword]);
+  }, [fetchNearby, radius, keyword, filterState.industryCode]);
 
   const handleKeywordSearch = useCallback(() => {
-    fetchNearby(center[0], center[1], radius, keyword);
-  }, [center, radius, keyword, fetchNearby]);
+    fetchNearby(center[0], center[1], radius, keyword, filterState.industryCode || "");
+  }, [center, radius, keyword, filterState.industryCode, fetchNearby]);
 
   return (
     <div className="flex flex-col gap-4 h-full -mx-2">

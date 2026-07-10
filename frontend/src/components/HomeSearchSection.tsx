@@ -59,6 +59,8 @@ export default function HomeSearchSection({
       if (newFilters.city) params.set("city", newFilters.city);
       if (newFilters.hasWebsite !== null)
         params.set("has_website", String(newFilters.hasWebsite));
+      if (newFilters.industryCode)
+        params.set("industry_code", newFilters.industryCode);
       if (newFilters.radiusKm !== null && userLocation) {
         params.set("radius_km", String(newFilters.radiusKm));
         params.set("lat", userLocation.lat.toFixed(5));
@@ -90,6 +92,9 @@ export default function HomeSearchSection({
         {filters.city && <input type="hidden" name="city" value={filters.city} />}
         {filters.hasWebsite !== null && (
           <input type="hidden" name="has_website" value={String(filters.hasWebsite)} />
+        )}
+        {filters.industryCode && (
+          <input type="hidden" name="industry_code" value={filters.industryCode} />
         )}
         {filters.radiusKm !== null && userLocation && (
           <>

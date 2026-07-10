@@ -56,6 +56,7 @@ export default async function Home({
   const hasWebsiteParam = typeof resolvedParams.has_website === "string" ? resolvedParams.has_website : undefined;
   const hasWebsite: boolean | null =
     hasWebsiteParam === "true" ? true : hasWebsiteParam === "false" ? false : null;
+  const industryCode = typeof resolvedParams.industry_code === "string" ? resolvedParams.industry_code : "";
   const radiusKm: number | null =
     typeof resolvedParams.radius_km === "string"
       ? parseFloat(resolvedParams.radius_km) || null
@@ -67,6 +68,7 @@ export default async function Home({
   if (q) query.append("q", q);
   if (city) query.append("city", city);
   if (hasWebsite !== null) query.append("has_website", String(hasWebsite));
+  if (industryCode) query.append("industry_code", industryCode);
   query.append("page", page.toString());
   query.append("per_page", "20");
 
@@ -93,6 +95,7 @@ export default async function Home({
     if (q) redirectQuery.append("q", q);
     if (city) redirectQuery.append("city", city);
     if (hasWebsite !== null) redirectQuery.append("has_website", String(hasWebsite));
+    if (industryCode) redirectQuery.append("industry_code", industryCode);
     if (radiusKm !== null && !isNaN(latParam) && !isNaN(lonParam)) {
       redirectQuery.append("radius_km", String(radiusKm));
       redirectQuery.append("lat", latParam.toFixed(5));
@@ -106,6 +109,7 @@ export default async function Home({
     city,
     hasWebsite,
     radiusKm,
+    industryCode,
   };
 
   const buildPageUrl = (targetPage: number) => {
@@ -113,6 +117,7 @@ export default async function Home({
     if (q) params.set("q", q);
     if (city) params.set("city", city);
     if (hasWebsite !== null) params.set("has_website", String(hasWebsite));
+    if (industryCode) params.set("industry_code", industryCode);
     if (radiusKm !== null && !isNaN(latParam) && !isNaN(lonParam)) {
       params.set("radius_km", String(radiusKm));
       params.set("lat", latParam.toFixed(5));
@@ -162,9 +167,18 @@ export default async function Home({
       {merchants.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {merchants.map((m: any) => {
-            const mapUrl = m.lat && m.lon
-              ? `/map?lat=${m.lat}&lon=${m.lon}&radius=1`
-              : `/map${city ? `?city=${encodeURIComponent(city)}` : ""}`;
+            const mapParams = new URLSearchParams();
+            if (m.lat && m.lon) {
+              mapParams.set("lat", m.lat.toString());
+              mapParams.set("lon", m.lon.toString());
+              mapParams.set("radius", "1");
+            } else if (city) {
+              mapParams.set("city", city);
+            }
+            if (industryCode) {
+              mapParams.set("industry_code", industryCode);
+            }
+            const mapUrl = `/map?${mapParams.toString()}`;
             return (
               <div key={m.id} className="relative group">
                 <Link href={`/merchant/${m.tax_id || m.id}`} className="block">
@@ -308,6 +322,7 @@ export default async function Home({
               {q && <input type="hidden" name="q" value={q} />}
               {city && <input type="hidden" name="city" value={city} />}
               {hasWebsite !== null && <input type="hidden" name="has_website" value={String(hasWebsite)} />}
+              {industryCode && <input type="hidden" name="industry_code" value={industryCode} />}
               {radiusKm !== null && !isNaN(latParam) && !isNaN(lonParam) && (
                 <>
                   <input type="hidden" name="radius_km" value={String(radiusKm)} />
