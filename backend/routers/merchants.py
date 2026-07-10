@@ -102,7 +102,9 @@ def get_merchants(
         where_clauses.append("""
             EXISTS (
                 SELECT 1 FROM merchant_industries mi 
-                WHERE mi.tax_id = m.tax_id AND mi.industry_code LIKE ?
+                WHERE mi.tax_id = m.tax_id 
+                  AND mi.industry_code LIKE ?
+                  AND mi.priority = 1
             )
         """)
         params.append(f"{industry_code}%")
@@ -182,7 +184,9 @@ def get_nearby_merchants(
         where_clauses.append("""
             EXISTS (
                 SELECT 1 FROM merchant_industries mi 
-                WHERE mi.tax_id = m.tax_id AND mi.industry_code LIKE ?
+                WHERE mi.tax_id = m.tax_id 
+                  AND mi.industry_code LIKE ?
+                  AND mi.priority = 1
             )
         """)
         params.append(f"{industry_code}%")
@@ -273,6 +277,7 @@ def get_industries(db: sqlite3.Connection = Depends(get_db)):
         FROM merchant_industries mi
         JOIN merchants m ON mi.tax_id = m.tax_id
         WHERE mi.industry_code != '' AND mi.industry_name != ''
+          AND mi.priority = 1
         ORDER BY mi.industry_code ASC
     """)
     return [{"industry_code": row["industry_code"], "industry_name": row["industry_name"]} for row in cursor.fetchall()]

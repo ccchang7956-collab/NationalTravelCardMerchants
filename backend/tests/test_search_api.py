@@ -187,7 +187,7 @@ def test_get_industries_api(db_conn):
     response = client.get("/api/industries")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 3
+    assert len(data) == 2
     assert data[0]["industry_code"] == "551011"
     assert data[0]["industry_name"] == "旅館業"
     assert data[1]["industry_code"] == "561115"
