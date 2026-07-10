@@ -351,23 +351,150 @@ export default async function Home({
         </div>
       )}
 
-      {/* SEO 靜態說明區塊：幫助 Google 理解頁面主題 */}
+      {/* SEO 靜態說明區塊 + FAQ Schema */}
       {!q && !city && page === 1 && (
-        <section
-          aria-label="關於國民旅遊卡特約商店"
-          className="mt-12 pt-8 border-t border-border/40 text-sm text-muted space-y-3 leading-relaxed"
-        >
-          <h2 className="text-base font-medium text-foreground/70">關於國民旅遊卡特約商店查詢</h2>
-          <p>
-            國民旅遊卡（National Travel Card）為行政院人事行政總處推動之國內旅遊補助方案，
-            公務人員及其眷屬可持國旅卡於全台特約商店消費，涵蓋住宿、餐飲、休閒遊樂、
-            交通運輸等各類別。
-          </p>
-          <p>
-            本系統收錄最新政府開放資料，提供全台特約商店即時查詢服務，
-            支援店名搜尋、縣市篩選，以及地圖定位查看附近商店。
-          </p>
-        </section>
+        <>
+          <section
+            aria-label="關於國民旅遊卡特約商店"
+            className="seo-intro mt-12 pt-8 border-t border-border/40 text-sm text-muted space-y-4 leading-relaxed"
+          >
+            <h2 className="text-base font-medium text-foreground/70">
+              關於國民旅遊卡特約商店查詢
+            </h2>
+            <p>
+              <strong>國民旅遊卡（National Travel Card）</strong>
+              為行政院人事行政總處推動之國內旅遊補助方案，全體公務人員及其眷屬可持國旅卡於全台超過
+              {stats ? ` ${stats.total_merchants.toLocaleString()} ` : " 55,000 "}
+              間特約商店消費。
+            </p>
+            <p>
+              特約商店涵蓋多種類別：
+            </p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>🏨 住宿（飯店、民宿、旅館）</li>
+              <li>🍽️ 餐飲（餐廳、咖啡廳）</li>
+              <li>🎡 休閒遊樂（主題樂園、溫泉、觀光景點）</li>
+              <li>🚌 交通運輸（租車、客運）</li>
+              <li>🛍️ 文化體育（書店、運動中心）</li>
+            </ul>
+            <p>
+              本系統收錄最新政府開放資料，每日自動比對更新，提供全台特約商店即時查詢服務，
+              支援店名搜尋、縣市篩選，以及地圖定位查看附近商店。
+            </p>
+            <p className="text-xs text-muted/60">
+              資料來源：行政院人事行政總處政府開放資料。如有疑問請以官方公告為準。
+            </p>
+          </section>
+
+          {/* FAQ 常見問題（雙效：可視文字 + Schema） */}
+          <section
+            aria-label="國旅卡常見問題"
+            className="mt-8 pt-6 border-t border-border/40 space-y-4"
+          >
+            <h2 className="text-base font-medium text-foreground/70 text-sm">
+              常見問題
+            </h2>
+            <div className="space-y-3 text-sm text-muted leading-relaxed">
+              <details className="group">
+                <summary className="cursor-pointer text-foreground/80 hover:text-foreground transition-colors font-medium">
+                  國民旅遊卡可以在哪裡使用？
+                </summary>
+                <p className="mt-2 ml-4">
+                  國民旅遊卡（國旅卡）可在全台超過
+                  {stats ? ` ${stats.total_merchants.toLocaleString()} ` : " 55,000 "}
+                  間特約商店使用，涵蓋住宿、餐飲、休閒遊樂、文化體育、交通運輸等類別。本系統提供即時查詢服務，支援縣市篩選與店名搜尋。
+                </p>
+              </details>
+              <details className="group">
+                <summary className="cursor-pointer text-foreground/80 hover:text-foreground transition-colors font-medium">
+                  如何查詢附近的國旅卡特約商店？
+                </summary>
+                <p className="mt-2 ml-4">
+                  可使用本系統的地圖功能，開啟定位後即可查看附近 1～5
+                  公里內的特約商店。也可在首頁依縣市、行業類別進行篩選查詢。
+                </p>
+              </details>
+              <details className="group">
+                <summary className="cursor-pointer text-foreground/80 hover:text-foreground transition-colors font-medium">
+                  國民旅遊卡特約商店資料多久更新一次？
+                </summary>
+                <p className="mt-2 ml-4">
+                  本系統資料來源為政府開放資料，系統每日自動比對更新，確保提供最新的特約商店清單。
+                </p>
+              </details>
+              <details className="group">
+                <summary className="cursor-pointer text-foreground/80 hover:text-foreground transition-colors font-medium">
+                  哪個縣市的國旅卡特約商店最多？
+                </summary>
+                <p className="mt-2 ml-4">
+                  根據最新資料，台北市（中山區為最密集，超過 1,700
+                  間）、新北市、台中市為特約商店數量最多的縣市，各有數千間特約商店。
+                </p>
+              </details>
+              <details className="group">
+                <summary className="cursor-pointer text-foreground/80 hover:text-foreground transition-colors font-medium">
+                  誰可以使用國民旅遊卡？
+                </summary>
+                <p className="mt-2 ml-4">
+                  國民旅遊卡（National Travel Card）由行政院人事行政總處推動，適用於全體公務人員及其眷屬，用於國內旅遊相關消費補助。
+                </p>
+              </details>
+            </div>
+          </section>
+
+          {/* FAQPage JSON-LD Schema */}
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "FAQPage",
+                mainEntity: [
+                  {
+                    "@type": "Question",
+                    name: "國民旅遊卡可以在哪裡使用？",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: `國民旅遊卡（國旅卡）可在全台超過${stats ? ` ${stats.total_merchants.toLocaleString()} ` : " 55,000 "}間特約商店使用，涵蓋住宿、餐飲、休閒遊樂、文化體育、交通運輸等類別。本系統提供即時查詢服務，支援縣市篩選與店名搜尋。`,
+                    },
+                  },
+                  {
+                    "@type": "Question",
+                    name: "如何查詢附近的國旅卡特約商店？",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "可使用本系統的地圖功能，開啟定位後即可查看附近 1～5 公里內的特約商店。也可依縣市、行業類別進行篩選查詢。",
+                    },
+                  },
+                  {
+                    "@type": "Question",
+                    name: "國民旅遊卡特約商店資料多久更新一次？",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "本系統資料來源為政府開放資料，系統每日自動比對更新，確保提供最新的特約商店清單。",
+                    },
+                  },
+                  {
+                    "@type": "Question",
+                    name: "哪個縣市的國旅卡特約商店最多？",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "根據最新資料，台北市（中山區為最密集，超過 1,700 間）、新北市、台中市為特約商店數量最多的縣市，各有數千間特約商店。",
+                    },
+                  },
+                  {
+                    "@type": "Question",
+                    name: "誰可以使用國民旅遊卡？",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "國民旅遊卡（National Travel Card）由行政院人事行政總處推動，適用於全體公務人員及其眷屬，用於國內旅遊相關消費補助。",
+                    },
+                  },
+                ],
+              }),
+            }}
+          />
+        </>
       )}
 
     </div>
