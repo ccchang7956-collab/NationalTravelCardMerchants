@@ -592,13 +592,17 @@ def migrate_industries(old_db: str, new_db: str) -> int:
             
         new_conn = sqlite3.connect(new_db)
         new_conn.execute("PRAGMA busy_timeout = 5000;")
-        new_conn.executemany(
-            "INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",
-            [(tid, code, name, priority) for tid, code, name, priority in rows]
-        )
-        new_conn.commit()
-        log.info(f"✅ 行業別資料遷移完成：{len(rows)} 筆")
-        return len(rows)
+        new_tax_ids = {row[0] for row in new_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL").fetchall()}
+        
+        filtered_rows = [(tid, code, name, priority) for tid, code, name, priority in rows if tid in new_tax_ids]
+        if filtered_rows:
+            new_conn.executemany(
+                "INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",
+                filtered_rows
+            )
+            new_conn.commit()
+        log.info(f"✅ 行業別資料遷移完成：{len(filtered_rows)} 筆")
+        return len(filtered_rows)
     except Exception as e:
         log.error(f"⚠️ 遷移行業別資料失敗: {e}")
         return 0

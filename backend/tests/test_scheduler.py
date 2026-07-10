@@ -144,16 +144,29 @@ def test_scheduler_industry_migration():
         old_db = os.path.join(tmpdir, "old.db")
         new_db = os.path.join(tmpdir, "new.db")
         
-        # 建立舊 DB 寫入行業別
+        # 建立舊 DB 的 merchants 與 merchant_industries 表格
         old_conn = sqlite3.connect(old_db)
+        old_conn.execute("CREATE TABLE merchants (id INTEGER PRIMARY KEY, name TEXT, tax_id TEXT UNIQUE)")
         old_conn.execute("CREATE TABLE merchant_industries (id INTEGER PRIMARY KEY, tax_id TEXT, industry_code TEXT, industry_name TEXT, priority INTEGER)")
+        
+        # 寫入兩個 merchants 到 old.db
+        old_conn.execute("INSERT INTO merchants (name, tax_id) VALUES ('Merchant A', '12345678')")
+        old_conn.execute("INSERT INTO merchants (name, tax_id) VALUES ('Merchant B', '99999999')")
+        
+        # 寫入兩個 merchants 的行業別對應到 old.db
         old_conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES ('12345678', '561115', '餐館業', 1)")
+        old_conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES ('99999999', '561116', '飲料店業', 2)")
+        
         old_conn.commit()
         old_conn.close()
         
-        # 建立新 DB
+        # 建立新 DB 的 merchants 與 merchant_industries 表格
         new_conn = sqlite3.connect(new_db)
+        new_conn.execute("CREATE TABLE merchants (id INTEGER PRIMARY KEY, name TEXT, tax_id TEXT UNIQUE)")
         new_conn.execute("CREATE TABLE merchant_industries (id INTEGER PRIMARY KEY, tax_id TEXT, industry_code TEXT, industry_name TEXT, priority INTEGER)")
+        
+        # 新 DB 中只寫入 Merchant A
+        new_conn.execute("INSERT INTO merchants (name, tax_id) VALUES ('Merchant A', '12345678')")
         new_conn.commit()
         new_conn.close()
         
@@ -163,11 +176,12 @@ def test_scheduler_industry_migration():
         
         # 驗證新 DB 成功接收資料
         new_conn = sqlite3.connect(new_db)
-        row = new_conn.execute("SELECT tax_id, industry_code, industry_name, priority FROM merchant_industries").fetchone()
+        rows = new_conn.execute("SELECT tax_id, industry_code, industry_name, priority FROM merchant_industries ORDER BY tax_id").fetchall()
         new_conn.close()
         
-        assert row is not None
-        assert row[0] == "12345678"
-        assert row[1] == "561115"
-        assert row[2] == "餐館業"
+        # 驗證只有 Merchant A 被遷移，而 Merchant B 被跳過
+        assert len(rows) == 1
+        assert rows[0][0] == "12345678"
+        assert rows[0][1] == "561115"
+        assert rows[0][2] == "餐館業"
 
