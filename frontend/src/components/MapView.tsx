@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { escapeHtml, sanitizeUrl } from "../utils/sanitize";
 
 // Static CSS imports — must be at top level (Turbopack requirement)
 import "leaflet/dist/leaflet.css";
@@ -159,14 +160,18 @@ export default function MapView({
           : "";
 
       const websiteLink = m.website
-        ? `<a href="${m.website.startsWith("http") ? m.website : "http://" + m.website}" target="_blank" rel="noopener" style="font-size:11px;color:#C25E40;display:block;margin-top:4px">🔗 官方網站</a>`
+        ? `<a href="${sanitizeUrl(m.website)}" target="_blank" rel="noopener" style="font-size:11px;color:#C25E40;display:block;margin-top:4px">🔗 官方網站</a>`
         : "";
+
+      const safeName = escapeHtml(m.name);
+      const safeAddress = escapeHtml(m.address || "");
+      const safeTaxId = escapeHtml(m.tax_id || "");
 
       marker.bindPopup(
         `<div style="min-width:200px;font-family:system-ui;padding:4px 0">
-          <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:4px">${m.name}</div>
-          <div style="font-size:12px;color:#666;margin-bottom:4px">${m.address || ""}</div>
-          <div style="font-size:11px;color:#888">統編：${m.tax_id || ""}</div>
+          <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:4px">${safeName}</div>
+          <div style="font-size:12px;color:#666;margin-bottom:4px">${safeAddress}</div>
+          <div style="font-size:11px;color:#888">統編：${safeTaxId}</div>
           ${websiteLink}
           ${distText ? `<div style="margin-top:4px;font-size:11px">${distText} 外</div>` : ""}
           <a href="/merchant/${m.tax_id || m.id}" class="merchant-detail-link" data-href="/merchant/${m.tax_id || m.id}" style="display:block;margin-top:8px;text-align:center;background:#C25E40;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer">查看詳情</a>
