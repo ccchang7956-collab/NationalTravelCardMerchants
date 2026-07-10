@@ -73,9 +73,12 @@ def test_import_industry_encoding_and_idempotency():
             )
         """)
         conn.execute("INSERT INTO merchants (name, tax_id) VALUES (?, ?)", ("商店A", "11111111"))
-        # 先插入一筆舊行業資料，確認匯入時會先被清空
+        conn.execute("INSERT INTO merchants (name, tax_id) VALUES (?, ?)", ("商店C", "33333333"))
+        # 先插入舊行業資料，確認匯入時只有 CSV 內商店的行業會被清空，其他商店則保留
         conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",
-                     ("11111111", "999999", "舊行業", 1))
+                     ("11111111", "999999", "舊行業A", 1))
+        conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",
+                     ("33333333", "888888", "舊行業C", 1))
         conn.commit()
         
         # 使用 cp950 編碼模擬 CSV 檔案內容
@@ -90,11 +93,14 @@ def test_import_industry_encoding_and_idempotency():
         from scripts.import_industry import import_csv_to_db
         import_csv_to_db(csv_path, db_path)
         
-        # 驗證資料庫結果：舊行業應該被刪除，取而代之的是新的兩個行業
-        res = conn.execute("SELECT tax_id, industry_code, industry_name, priority FROM merchant_industries ORDER BY priority").fetchall()
+        # 驗證資料庫結果：舊行業應該被刪除，取而代之的是新的兩個行業，而商店C的資料應被保留
+        res = conn.execute("SELECT tax_id, industry_code, industry_name, priority FROM merchant_industries ORDER BY tax_id, priority").fetchall()
         conn.close()
         
-        assert len(res) == 2
+        assert len(res) == 3
+        # 商店A (11111111) 新的兩個行業
         assert res[0] == ("11111111", "561115", "餐館業", 1)
         assert res[1] == ("11111111", "561116", "飲料店業", 2)
+        # 商店C (33333333) 保留的舊行業
+        assert res[2] == ("33333333", "888888", "舊行業C", 1)
 

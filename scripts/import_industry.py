@@ -23,9 +23,7 @@ def import_csv_to_db(csv_path: str, db_path: str):
     for enc in encodings:
         f = None
         try:
-            # 匯入前先執行一次性清空
-            cursor.execute("DELETE FROM merchant_industries")
-            
+            deleted_tax_ids = set()
             f = open(csv_path, mode="r", encoding=enc)
             reader = csv.reader(f)
             
@@ -39,6 +37,9 @@ def import_csv_to_db(csv_path: str, db_path: str):
                     continue
                 tax_id = row[0].strip()
                 if tax_id and tax_id in existing_tax_ids:
+                    if tax_id not in deleted_tax_ids:
+                        cursor.execute("DELETE FROM merchant_industries WHERE tax_id = ?", (tax_id,))
+                        deleted_tax_ids.add(tax_id)
                     # 解析主次行業 (最多四組)
                     # 欄位 index:
                     # 0: tax_id
