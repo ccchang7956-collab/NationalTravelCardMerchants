@@ -47,7 +47,6 @@ export default function FilterSheet({
   const [isOpen, setIsOpen] = useState(false);
   // Local draft state — only committed on "套用"
   const [draft, setDraft] = useState<FilterState>(filters);
-  const panelRef = useRef<HTMLDivElement>(null);
   // Touch state for swipe-to-close
   const touchStartY = useRef<number | null>(null);
 
@@ -56,11 +55,16 @@ export default function FilterSheet({
     setDraft(filters);
   }, [filters]);
 
+  const handleClose = useCallback(() => {
+    setIsOpen(false);
+    setDraft(filters); // reset draft to match currently applied filters
+  }, [filters]);
+
   // Focus trap & Escape key
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsOpen(false);
+      if (e.key === "Escape") handleClose();
     };
     document.addEventListener("keydown", handleKeyDown);
     document.body.style.overflow = "hidden";
@@ -68,7 +72,7 @@ export default function FilterSheet({
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = "";
     };
-  }, [isOpen]);
+  }, [isOpen, handleClose]);
 
   const handleOpen = useCallback(() => {
     setDraft(filters); // Reset draft to current applied filters
@@ -84,9 +88,7 @@ export default function FilterSheet({
     setDraft(DEFAULT_FILTER_STATE);
   }, []);
 
-  const handleOverlayClick = useCallback(() => {
-    setIsOpen(false);
-  }, []);
+  const handleOverlayClick = handleClose;
 
   // Swipe-to-close handlers
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -140,10 +142,11 @@ export default function FilterSheet({
 
       {/* Bottom Sheet Panel */}
       <div
-        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="filter-sheet-title"
+        aria-hidden={!isOpen}
+        inert={!isOpen || undefined}
         className={`filter-sheet-panel ${isOpen ? "open" : ""}`}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -171,7 +174,7 @@ export default function FilterSheet({
               </button>
             )}
             <button
-              onClick={() => setIsOpen(false)}
+              onClick={handleClose}
               aria-label="關閉篩選面板"
               className="p-1 rounded-lg text-muted hover:text-foreground hover:bg-muted-bg transition-colors cursor-pointer"
             >
@@ -264,12 +267,12 @@ export default function FilterSheet({
                     setDraft({ ...draft, radiusKm: draft.radiusKm === km ? null : km });
                   }}
                   aria-disabled={!userLocation}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-150 border cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-150 border ${
                     draft.radiusKm === km
-                      ? "bg-accent text-white border-accent"
+                      ? 'bg-accent text-white border-accent cursor-pointer'
                       : !userLocation
-                      ? "bg-muted-bg text-muted/40 border-transparent cursor-not-allowed"
-                      : "bg-muted-bg text-muted border-transparent hover:border-border"
+                      ? 'bg-muted-bg text-muted/40 border-transparent cursor-not-allowed'
+                      : 'bg-muted-bg text-muted border-transparent hover:border-border cursor-pointer'
                   }`}
                 >
                   {km} km
