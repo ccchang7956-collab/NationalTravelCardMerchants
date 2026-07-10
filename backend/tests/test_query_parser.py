@@ -36,3 +36,11 @@ def test_parse_search_query_extreme_inputs():
     assert parse_search_query('"""') == (None, [])
 
 
+def test_parse_search_query_safe_chars():
+    # 測試包含 - & + = 的安全常用字元
+    assert parse_search_query("7-11 咖啡") == ('"7-11"', ["咖啡"])
+    assert parse_search_query("A&B 義大利") == ('"A&B" AND "義大利"', [])
+    assert parse_search_query("2+2=4") == ('"2+2=4"', [])
+
+
+

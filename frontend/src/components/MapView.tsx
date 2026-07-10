@@ -160,7 +160,7 @@ export default function MapView({
           : "";
 
       const websiteLink = m.website
-        ? `<a href="${sanitizeUrl(m.website)}" target="_blank" rel="noopener" style="font-size:11px;color:#C25E40;display:block;margin-top:4px">🔗 官方網站</a>`
+        ? `<a href="${escapeHtml(sanitizeUrl(m.website))}" target="_blank" rel="noopener" style="font-size:11px;color:#C25E40;display:block;margin-top:4px">🔗 官方網站</a>`
         : "";
 
       const safeName = escapeHtml(m.name);

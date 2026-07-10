@@ -16,9 +16,9 @@ def parse_search_query(q: Optional[str]) -> Tuple[Optional[str], List[str]]:
     if not q:
         return None, []
     
-    # 移除非字母、非數字、非中文字元，保留雙引號與空白（保留空白以利 split）
+    # 移除非字母、非數字、非中文字元，保留雙引號、空白、-、&、+、=（保留空白以利 split）
     # 這可以防止如特殊符號造成的無意義 SQL 檢索
-    cleaned_q = re.sub(r'[^\w\s\u4e00-\u9fff"]', '', q)
+    cleaned_q = re.sub(r'[^\w\s\u4e00-\u9fff"\-&+=]', '', q)
     
     terms = []
     seen = set()

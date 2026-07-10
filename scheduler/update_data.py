@@ -295,6 +295,8 @@ def zipcode_coords(zip_code: Optional[str]) -> Optional[Tuple[float, float]]:
 
 def download_zip(dest: str) -> bool:
     """從政府開放資料下載 ZIP 檔，回傳是否成功。"""
+    import socket
+    socket.setdefaulttimeout(60)
     log.info(f"📥 下載資料：{DOWNLOAD_URL}")
     headers = {
         "User-Agent": "NationalTravelCardBot/1.0 (automated data update)"
