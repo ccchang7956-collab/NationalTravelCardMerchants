@@ -24,3 +24,12 @@ def test_parse_search_query_deduplication():
     # 測試重複詞彙去重
     assert parse_search_query("台北 咖啡店 台北 咖啡店") == ('"咖啡店"', ["台北"])
 
+
+def test_parse_search_query_extreme_inputs():
+    # 測試純空白或垃圾字元
+    assert parse_search_query("   ") == (None, [])
+    assert parse_search_query("  \t\n  ") == (None, [])
+    # 測試全特殊字元
+    assert parse_search_query("!@# $%^") == (None, [])
+
+
