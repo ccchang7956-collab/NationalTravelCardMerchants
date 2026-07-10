@@ -149,4 +149,37 @@ fix(scripts): rewrite resource management using context managers to prevent leak
 - Replace manual database connection close with `with sqlite3.connect` block.
 - Replace manual file open/close with nested `with open` block inside the encoding loop.
 - Remove redundant f.close() and conn.close() calls.
+
+## 10. 第四次修正報告 (Fourth Fix Report)
+根據 Reviewer 的最新回饋，我們對資源管理進行了更進一步的修正，處理了 `sqlite3` 連線未被關閉以及未使用的 `import`：
+
+1. **修正 sqlite3 連線洩漏 (Connection Leak)**：
+   - 在 Python 的 `sqlite3` 模組中，`with sqlite3.connect(db_path) as conn:` 只會在 exit 時處理交易的 `commit` 或 `rollback`，**並不會自動關閉資料庫連線**。
+   - 為了解決這個連線洩漏問題，將 `import_csv_to_db` 修改為使用顯式的 `try...finally` 結構。在 `try` 區塊中取得 `conn` 並執行所有匯入邏輯，並確保在 `finally` 區塊中執行 `conn.close()`。
+2. **移除未使用的 Import**：
+   - 移除 `scripts/import_industry.py` 頂部未使用的 `import sys`。
+
+### 測試結果
+執行 `PYTHONPATH=. pytest backend/tests/test_import_industry.py -v`：
+```
+============================= test session starts ==============================
+platform darwin -- Python 3.9.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/ccchang/Project/NationalTravelCardMerchants/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/ccchang/Project/NationalTravelCardMerchants
+plugins: anyio-4.12.1
+collecting ... collected 2 items
+
+backend/tests/test_import_industry.py::test_import_industry_logic PASSED [ 50%]
+backend/tests/test_import_industry.py::test_import_industry_encoding_and_idempotency PASSED [100%]
+
+============================== 2 passed in 0.02s ===============================
+```
+
+### Commit 訊息
+```
+fix(scripts): fix sqlite3 connection leak and remove unused import
+
+- Use explicit try...finally structure to ensure sqlite3 connection is closed.
+- Remove unused `import sys` at the top of import_industry.py.
+```
 ```

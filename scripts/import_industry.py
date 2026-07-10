@@ -2,14 +2,14 @@ import csv
 import os
 import sqlite3
 import argparse
-import sys
 
 def import_csv_to_db(csv_path: str, db_path: str):
     if not os.path.exists(csv_path):
         print(f"Error: CSV file {csv_path} not found.")
         return
         
-    with sqlite3.connect(db_path) as conn:
+    conn = sqlite3.connect(db_path)
+    try:
         cursor = conn.cursor()
         
         # 讀取現有統編
@@ -83,6 +83,8 @@ def import_csv_to_db(csv_path: str, db_path: str):
                 
         if not success:
             print("Error: Could not decode CSV file with available encodings.")
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Import industry codes to merchants database.")
