@@ -166,6 +166,7 @@ export default function MapView({
       const safeName = escapeHtml(m.name);
       const safeAddress = escapeHtml(m.address || "");
       const safeTaxId = escapeHtml(m.tax_id || "");
+      const safeDetailId = m.tax_id ? safeTaxId : String(m.id);
 
       marker.bindPopup(
         `<div style="min-width:200px;font-family:system-ui;padding:4px 0">
@@ -174,7 +175,7 @@ export default function MapView({
           <div style="font-size:11px;color:#888">統編：${safeTaxId}</div>
           ${websiteLink}
           ${distText ? `<div style="margin-top:4px;font-size:11px">${distText} 外</div>` : ""}
-          <a href="/merchant/${m.tax_id || m.id}" class="merchant-detail-link" data-href="/merchant/${m.tax_id || m.id}" style="display:block;margin-top:8px;text-align:center;background:#C25E40;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer">查看詳情</a>
+          <a href="/merchant/${safeDetailId}" class="merchant-detail-link" data-href="/merchant/${safeDetailId}" style="display:block;margin-top:8px;text-align:center;background:#C25E40;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer">查看詳情</a>
         </div>`,
         { maxWidth: 260 }
       );
