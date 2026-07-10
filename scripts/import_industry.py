@@ -41,7 +41,7 @@ def import_csv_to_db(csv_path: str, db_path: str):
                     for row in reader:
                         if not row or len(row) < 8:
                             continue
-                        tax_id = row[0].strip()
+                        tax_id = row[1].strip()
                         if tax_id and tax_id in existing_tax_ids:
                             if tax_id not in deleted_tax_ids:
                                 deleted_tax_ids.add(tax_id)
@@ -51,13 +51,13 @@ def import_csv_to_db(csv_path: str, db_path: str):
                                     to_delete_batch = []
                             # 解析主次行業 (最多四組)
                             # 欄位 index:
-                            # 0: tax_id
-                            # 6,7: 主代號, 主名稱
-                            # 8,9: 次1代號, 次1名稱
-                            # 10,11: 次2代號, 次2名稱
-                            # 12,13: 次3代號, 次3名稱
+                            # 1: tax_id
+                            # 8,9: 主代號, 主名稱
+                            # 10,11: 次1代號, 次1名稱
+                            # 12,13: 次2代號, 次2名稱
+                            # 14,15: 次3代號, 次3名稱
                             for i in range(4):
-                                base_idx = 6 + (i * 2)
+                                base_idx = 8 + (i * 2)
                                 if base_idx + 1 < len(row):
                                     code = row[base_idx].strip()
                                     name = row[base_idx + 1].strip()

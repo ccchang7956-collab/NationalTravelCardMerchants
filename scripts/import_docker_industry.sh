@@ -46,7 +46,7 @@ echo "🚀 6. 正在 backend 容器內執行匯入腳本 (此步驟需要數十�
 docker compose exec backend python /tmp/import_industry.py --csv /tmp/tax.csv --db /data/merchants.db
 
 echo "🧹 7. 清除 Docker 容器與本地的暫存檔案..."
-docker compose exec backend rm -f /tmp/tax.csv /tmp/import_industry.py
+docker compose exec --user root backend rm -f /tmp/tax.csv /tmp/import_industry.py
 rm -rf "$TEMP_DIR"
 
 echo "✨ 完成！最新的營業登記行業別資料已自動下載並成功匯入 Docker 資料庫。"
