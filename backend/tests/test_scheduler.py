@@ -149,7 +149,16 @@ def test_scheduler_industry_migration():
         old_conn = sqlite3.connect(old_db)
         old_conn.execute("PRAGMA foreign_keys = ON;")
         old_conn.execute("CREATE TABLE merchants (id INTEGER PRIMARY KEY, name TEXT, tax_id TEXT UNIQUE)")
-        old_conn.execute("CREATE TABLE merchant_industries (id INTEGER PRIMARY KEY, tax_id TEXT, industry_code TEXT, industry_name TEXT, priority INTEGER)")
+        old_conn.execute("""
+            CREATE TABLE IF NOT EXISTS merchant_industries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_id TEXT NOT NULL,
+                industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+            )
+        """)
         
         # 寫入兩個 merchants 到 old.db
         old_conn.execute("INSERT INTO merchants (name, tax_id) VALUES ('Merchant A', '12345678')")
@@ -166,7 +175,16 @@ def test_scheduler_industry_migration():
         new_conn = sqlite3.connect(new_db)
         new_conn.execute("PRAGMA foreign_keys = ON;")
         new_conn.execute("CREATE TABLE merchants (id INTEGER PRIMARY KEY, name TEXT, tax_id TEXT UNIQUE)")
-        new_conn.execute("CREATE TABLE merchant_industries (id INTEGER PRIMARY KEY, tax_id TEXT, industry_code TEXT, industry_name TEXT, priority INTEGER)")
+        new_conn.execute("""
+            CREATE TABLE IF NOT EXISTS merchant_industries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_id TEXT NOT NULL,
+                industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+            )
+        """)
         
         # 新 DB 中只寫入 Merchant A
         new_conn.execute("INSERT INTO merchants (name, tax_id) VALUES ('Merchant A', '12345678')")

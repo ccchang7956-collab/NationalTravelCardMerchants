@@ -18,12 +18,13 @@ def test_import_industry_logic():
             )
         """)
         conn.execute("""
-            CREATE TABLE merchant_industries (
+            CREATE TABLE IF NOT EXISTS merchant_industries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tax_id TEXT,
-                industry_code TEXT,
-                industry_name TEXT,
-                priority INTEGER
+                tax_id TEXT NOT NULL,
+                industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
             )
         """)
         conn.execute("INSERT INTO merchants (name, tax_id) VALUES (?, ?)", ("商店A", "11111111"))
@@ -66,12 +67,13 @@ def test_import_industry_encoding_and_idempotency():
             )
         """)
         conn.execute("""
-            CREATE TABLE merchant_industries (
+            CREATE TABLE IF NOT EXISTS merchant_industries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tax_id TEXT,
-                industry_code TEXT,
-                industry_name TEXT,
-                priority INTEGER
+                tax_id TEXT NOT NULL,
+                industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
             )
         """)
         conn.execute("INSERT INTO merchants (name, tax_id) VALUES (?, ?)", ("商店A", "11111111"))
@@ -120,12 +122,12 @@ def test_foreign_key_cascade_delete():
             )
         """)
         conn.execute("""
-            CREATE TABLE merchant_industries (
+            CREATE TABLE IF NOT EXISTS merchant_industries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tax_id TEXT,
-                industry_code TEXT,
-                industry_name TEXT,
-                priority INTEGER,
+                tax_id TEXT NOT NULL,
+                industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL,
+                priority INTEGER NOT NULL,
                 FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
             )
         """)

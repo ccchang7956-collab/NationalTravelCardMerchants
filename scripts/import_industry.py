@@ -1,12 +1,13 @@
 import csv
 import os
+import sys
 import sqlite3
 import argparse
 
 def import_csv_to_db(csv_path: str, db_path: str):
     if not os.path.exists(csv_path):
         print(f"Error: CSV file {csv_path} not found.")
-        return
+        sys.exit(1)
         
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON;")
@@ -92,6 +93,7 @@ def import_csv_to_db(csv_path: str, db_path: str):
                 
         if not success:
             print("Error: Could not decode CSV file with available encodings.")
+            sys.exit(1)
     finally:
         conn.close()
 

@@ -23,7 +23,7 @@ def fixture_db_conn():
         )
     """)
     conn.execute("""
-        CREATE TABLE merchant_industries (
+        CREATE TABLE IF NOT EXISTS merchant_industries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tax_id TEXT NOT NULL,
             industry_code TEXT NOT NULL,

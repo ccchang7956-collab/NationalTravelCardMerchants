@@ -106,3 +106,20 @@ $ PYTHONPATH=. pytest backend/tests -v
 - 執行 `PYTHONPATH=. pytest backend/tests/ -v`
 - **結果**: 22 個測試項目全部通過 (100% Pass)，包含新加入的外鍵串聯刪除測試、API 空 `tax_id` 與預設值測試。
 
+## Final Fix 2 修復內容 (Final Fixes 2)
+1. **測試 Schema 同步 (Test Schema Synchronization)**：
+   - 更新所有測試檔案中模擬與暫時建立 `merchant_industries` 的 SQL 語句，使其與正式 production DDL 完全一致，包含 `NOT NULL` 約束與外鍵 `FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE`。
+   - 修改的檔案包含：
+     - [backend/tests/test_import_industry.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/backend/tests/test_import_industry.py)
+     - [backend/tests/test_scheduler.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/backend/tests/test_scheduler.py)
+     - [backend/tests/test_search_api.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/backend/tests/test_search_api.py)
+
+2. **匯入腳本 Exit Code 修正 (Import Script Exit Code)**：
+   - 修改 [scripts/import_industry.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/scripts/import_industry.py)：
+     - 於檔案頂部引入 `sys` 模組。
+     - 在 `import_csv_to_db` 函數中，若發現 CSV 檔案不存在或遭遇編碼解碼失敗 (`not success`) 時，呼叫 `sys.exit(1)` 而非單純的 `return`，使 shell 能取得非零的錯誤回傳值。
+
+## Final Fix 2 測試結果
+- 執行 `PYTHONPATH=. pytest backend/tests/ -v`
+- **結果**: 22 個測試項目全部通過 (100% Pass)，包含所有 FTS、API 路由、Scheduler 以及新同步 DDL 的整合測試。
+
