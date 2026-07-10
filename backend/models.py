@@ -1,12 +1,18 @@
 from pydantic import BaseModel
 from typing import Optional, List
 
+class MerchantIndustry(BaseModel):
+    industry_code: str
+    industry_name: str
+    priority: int
+
 class MerchantBase(BaseModel):
     name: str
     address: Optional[str] = None
     zip_code: Optional[str] = None
     tax_id: Optional[str] = None
     website: Optional[str] = None
+    industries: Optional[List[MerchantIndustry]] = None
 
 class Merchant(MerchantBase):
     id: int

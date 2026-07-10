@@ -195,7 +195,18 @@ def get_merchant(merchant_id_or_tax_id: str, db: sqlite3.Connection = Depends(ge
     row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Merchant not found")
-    return dict(row)
+    
+    merchant = dict(row)
+    
+    # 撈取該店家的行業別，依 priority 排序
+    ind_cursor = db.cursor()
+    ind_cursor.execute(
+        "SELECT industry_code, industry_name, priority FROM merchant_industries WHERE tax_id = ? ORDER BY priority ASC",
+        (merchant["tax_id"],)
+    )
+    industries = [dict(r) for r in ind_cursor.fetchall()]
+    merchant["industries"] = industries
+    return merchant
 
 
 @router.get("/stats", response_model=Stats)

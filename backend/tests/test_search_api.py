@@ -53,6 +53,8 @@ def fixture_db_conn():
         "INSERT INTO merchants VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         test_merchants
     )
+    conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("11111111", "561115", "餐館業", 1))
+    conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("11111111", "561116", "飲料店業", 2))
     conn.execute("INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')")
     conn.commit()
     
@@ -144,4 +146,17 @@ def test_get_stats():
     assert "台北市" in city_names
     assert "高雄市" in city_names
     assert "彰化縣" in city_names
+
+
+def test_get_merchant_by_id_includes_industries(db_conn):
+    client = TestClient(app)
+    response = client.get("/api/merchants/11111111")
+    assert response.status_code == 200
+    data = response.json()
+    assert "industries" in data
+    assert len(data["industries"]) == 2
+    assert data["industries"][0]["industry_name"] == "餐館業"
+    assert data["industries"][0]["priority"] == 1
+    assert data["industries"][1]["industry_name"] == "飲料店業"
+    assert data["industries"][1]["priority"] == 2
 
