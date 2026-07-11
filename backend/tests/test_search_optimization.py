@@ -16,20 +16,48 @@ def test_parse_search_query():
     assert parse_search_query("CHIC古亭") == '"CHIC 古 亭"'
 
 def test_fts_match_correctness():
-    # 驗證 FTS MATCH 與 LIKE 的回傳結果基本一致
-    conn = sqlite3.connect(DB_PATH)
+    # 使用記憶體資料庫進行完全密封的測試
+    conn = sqlite3.connect(":memory:")
     cursor = conn.cursor()
     
-    keyword = "咖啡"
-    # LIKE 查詢數量
-    cursor.execute("SELECT COUNT(*) FROM merchants WHERE name LIKE ? OR address LIKE ?", (f"%{keyword}%", f"%{keyword}%"))
-    like_count = cursor.fetchone()[0]
+    # 建立表與 FTS5 虛擬表
+    cursor.execute("""
+        CREATE TABLE merchants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            address TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE VIRTUAL TABLE merchants_fts USING fts5(
+            name,
+            address,
+            tokenize="unicode61"
+        )
+    """)
     
-    # FTS MATCH 查詢數量
-    fts_q = parse_search_query(keyword)
+    # 插入測試資料
+    test_data = [
+        ("台北大飯店", "台北市中正區"),
+        ("台北小樽咖啡", "台北市大安區"),
+        ("台中咖啡廳", "台中市西區"),
+        ("台南大飯店", "台南市中西區")
+    ]
+    for name, address in test_data:
+        cursor.execute("INSERT INTO merchants (name, address) VALUES (?, ?)", (name, address))
+        rowid = cursor.lastrowid
+        cursor.execute("INSERT INTO merchants_fts (rowid, name, address) VALUES (?, ?, ?)", 
+                       (rowid, space_segment(name), space_segment(address)))
+    conn.commit()
+    
+    # 測試短中文搜尋 "台北"
+    fts_q = parse_search_query("台北")
     cursor.execute("SELECT COUNT(*) FROM merchants m JOIN merchants_fts f ON m.id = f.rowid WHERE f.merchants_fts MATCH ?", (fts_q,))
-    fts_count = cursor.fetchone()[0]
+    assert cursor.fetchone()[0] == 2  # 台北大飯店、台北小樽咖啡
     
-    # 允許少量由於「台/臺」正規化產生的預期差異，但應該非常接近
-    assert abs(like_count - fts_count) < 20
+    # 測試多重條件 "台北 咖啡"
+    fts_q_mixed = parse_search_query("台北 咖啡")
+    cursor.execute("SELECT COUNT(*) FROM merchants m JOIN merchants_fts f ON m.id = f.rowid WHERE f.merchants_fts MATCH ?", (fts_q_mixed,))
+    assert cursor.fetchone()[0] == 1  # 台北小樽咖啡
+    
     conn.close()

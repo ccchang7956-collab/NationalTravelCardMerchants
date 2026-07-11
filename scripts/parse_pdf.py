@@ -32,7 +32,8 @@ def space_segment(text: str) -> str:
     return " ".join(result)
 
 def normalize_text(text):
-    return unicodedata.normalize("NFKC", text.strip())
+    text = unicodedata.normalize("NFKC", text.strip())
+    return text.replace("臺", "台")
 
 def is_website(text):
     text = text.lower()

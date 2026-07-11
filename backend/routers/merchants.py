@@ -1,6 +1,7 @@
 import sqlite3
 import math
 import re
+import unicodedata
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional, List, Tuple
 from backend.database import get_db
@@ -30,10 +31,14 @@ def parse_search_query(q: Optional[str]) -> Optional[str]:
     if not q:
         return None
     
+    # 進行 Unicode 標準化，並將「臺」置換為「台」以利檢索
+    q_norm = unicodedata.normalize("NFKC", q.strip())
+    q_norm = q_norm.replace("臺", "台")
     # 先將雙引號移除，以避免字串中夾雜雙引號導致的分詞斷開
-    q = q.replace('"', '')
-    # 移除非字母、數字、中文與安全符號，保留 '-' 以利處理如 '7-11' 的詞彙
-    cleaned_q = re.sub(r'[^\w\s\u4e00-\u9fff\-&+=]', ' ', q)
+    q_norm = q_norm.replace('"', '')
+    
+    # 保留字母、數字、中文與安全符號，其餘轉為空格
+    cleaned_q = re.sub(r'[^\w\s\u4e00-\u9fff\-&+=]', ' ', q_norm)
     
     parts = []
     seen = set()
@@ -45,9 +50,6 @@ def parse_search_query(q: Optional[str]) -> Optional[str]:
             continue
         seen.add(term)
         segmented = space_segment(term)
-        # 如果分詞結果為空，則忽略該詞
-        if not segmented:
-            continue
         parts.append(f'"{segmented}"')
         
     return " AND ".join(parts) if parts else None
