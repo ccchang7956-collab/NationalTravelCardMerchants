@@ -244,6 +244,27 @@ TAIWAN_ZIPCODES: dict[str, tuple[float, float, float]] = {
 # ── 模組級 RNG（固定 seed 確保可重現，不污染全域 random state）─────────────────
 _rng = random.Random(42)
 
+def space_segment(text: str) -> str:
+    if not text:
+        return ""
+    result = []
+    current_word = []
+    for char in text:
+        if "\u4e00" <= char <= "\u9fff":
+            if current_word:
+                result.append("".join(current_word))
+                current_word = []
+            result.append(char)
+        elif char.isalnum():
+            current_word.append(char)
+        else:
+            if current_word:
+                result.append("".join(current_word))
+                current_word = []
+    if current_word:
+        result.append("".join(current_word))
+    return " ".join(result)
+
 def normalize_text(text: str) -> str:
     text = unicodedata.normalize("NFKC", text.strip())
     return text.replace("臺", "台")
@@ -398,13 +419,12 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_merchant_industries_code ON merchant_industries(industry_code)")
         
         # 同步建立 FTS 虛擬表
+        cursor.execute("DROP TABLE IF EXISTS merchants_fts")
         cursor.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS merchants_fts USING fts5(
+            CREATE VIRTUAL TABLE merchants_fts USING fts5(
                 name,
                 address,
-                content='merchants',
-                content_rowid='id',
-                tokenize='trigram'
+                tokenize="unicode61"
             );
         """)
         conn.commit()
@@ -522,6 +542,17 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
             insert_data
         )
         conn.commit()
+
+        # 同步寫入 FTS5
+        cursor.execute("SELECT id, name, address FROM merchants")
+        inserted = cursor.fetchall()
+        fts_insert = [(r[0], space_segment(r[1]), space_segment(r[2])) for r in inserted]
+        cursor.executemany(
+            "INSERT INTO merchants_fts (rowid, name, address) VALUES (?, ?, ?)",
+            fts_insert
+        )
+        conn.commit()
+
         count = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
         doc.close()
         log.info(f"✅ 解析完成，寫入 {count} 筆")
@@ -749,13 +780,12 @@ def main():
                 prod_conn.execute("PRAGMA journal_mode=WAL;")
                 prod_conn.execute("PRAGMA synchronous = NORMAL;")
                 # Run DDL outside transaction
+                prod_conn.execute("DROP TABLE IF EXISTS main.merchants_fts")
                 prod_conn.execute("""
                     CREATE VIRTUAL TABLE IF NOT EXISTS main.merchants_fts USING fts5(
                         name,
                         address,
-                        content='merchants',
-                        content_rowid='id',
-                        tokenize='trigram'
+                        tokenize="unicode61"
                     )
                 """)
                 prod_conn.execute("""
@@ -775,9 +805,10 @@ def main():
                 prod_conn.execute("BEGIN TRANSACTION")
                 prod_conn.execute("DELETE FROM main.merchant_industries")
                 prod_conn.execute("DELETE FROM main.merchants")
+                prod_conn.execute("DELETE FROM main.merchants_fts")
                 prod_conn.execute("INSERT INTO main.merchants SELECT * FROM new_db.merchants")
                 prod_conn.execute("INSERT INTO main.merchant_industries (id, tax_id, industry_code, industry_name, priority) SELECT id, tax_id, industry_code, industry_name, priority FROM new_db.merchant_industries")
-                prod_conn.execute("INSERT INTO main.merchants_fts(merchants_fts) VALUES('rebuild')")
+                prod_conn.execute("INSERT INTO main.merchants_fts (rowid, name, address) SELECT rowid, name, address FROM new_db.merchants_fts")
                 prod_conn.execute("COMMIT")
                 prod_conn.execute("DETACH DATABASE new_db")
             except Exception as e:

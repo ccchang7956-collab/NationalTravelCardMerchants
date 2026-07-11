@@ -11,6 +11,27 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 DB_PATH = os.path.join(PROJECT_ROOT, "backend", "merchants.db")
 PDF_PATH = os.path.join(PROJECT_ROOT, "docs", "QualifiedRetailerList.pdf")
 
+def space_segment(text):
+    if not text:
+        return ""
+    result = []
+    current_word = []
+    for char in text:
+        if "\u4e00" <= char <= "\u9fff":
+            if current_word:
+                result.append("".join(current_word))
+                current_word = []
+            result.append(char)
+        elif char.isalnum():
+            current_word.append(char)
+        else:
+            if current_word:
+                result.append("".join(current_word))
+                current_word = []
+    if current_word:
+        result.append("".join(current_word))
+    return " ".join(result)
+
 def normalize_text(text):
     return unicodedata.normalize("NFKC", text.strip())
 
@@ -42,12 +63,24 @@ def init_db():
             address TEXT,
             zip_code TEXT,
             tax_id TEXT UNIQUE,
-            website TEXT
+            website TEXT,
+            lat REAL,
+            lon REAL
         )
     """)
     cursor.execute("CREATE INDEX idx_name ON merchants(name)")
     cursor.execute("CREATE INDEX idx_zip_code ON merchants(zip_code)")
     cursor.execute("CREATE INDEX idx_tax_id ON merchants(tax_id)")
+    
+    # 建立獨立的 FTS5 虛擬表
+    cursor.execute("DROP TABLE IF EXISTS merchants_fts")
+    cursor.execute("""
+        CREATE VIRTUAL TABLE merchants_fts USING fts5(
+            name,
+            address,
+            tokenize="unicode61"
+        )
+    """)
     conn.commit()
     return conn
 
@@ -192,6 +225,16 @@ def main():
     cursor.executemany(
         "INSERT OR IGNORE INTO merchants (name, address, zip_code, tax_id, website) VALUES (?, ?, ?, ?, ?)",
         insert_data
+    )
+    conn.commit()
+    
+    # 讀取剛剛寫入的資料以同步至 FTS5
+    cursor.execute("SELECT id, name, address FROM merchants")
+    inserted = cursor.fetchall()
+    fts_insert = [(r[0], space_segment(r[1]), space_segment(r[2])) for r in inserted]
+    cursor.executemany(
+        "INSERT INTO merchants_fts (rowid, name, address) VALUES (?, ?, ?)",
+        fts_insert
     )
     conn.commit()
     
