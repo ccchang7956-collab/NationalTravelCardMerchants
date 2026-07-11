@@ -1,64 +1,120 @@
-# Task 3 實作與測試報告：前端頁面篩選狀態與 API 串接
+# Task 3 整合測試與效能基準測試報告
 
-## 1. 實作內容 (What you implemented)
-- **修改地圖頁面 API 請求與 URL 參數綁定** (`frontend/src/app/map/page.tsx`)：
-  - 更新 `updateURL` 回呼，加入 `industry_code` 參數。如果 `industry_code` 存在，則動態追加 `industry_code` 參數，以便隨時同步篩選狀態到網址中，支援使用者直接分享地圖篩選結果或進行瀏覽器歷史瀏覽。
-  - 更新 `fetchNearby` 函式，支援 `industryCode` 參數。在呼叫後端 API `/api/merchants/nearby` 時，如果 `industryCode` 不為空值，則動態追加 `&industry_code=${encodeURIComponent(indCode)}` 以獲取特定行業別的特約商店。
-  - 在 `useEffect` 監聽與雙向綁定邏輯中同步 `industry_code` 的網址變化，並使 `fetchNearby` 在參數改變時能自動觸發更新。
-  - 更新元件內的各種地圖互動回呼（如點擊地圖 `handleMapClick`、輸入地址 `handleAddressSelect`、搜尋關鍵字 `handleKeywordSearch`、定位 `handleLocate` 等），在呼叫 `fetchNearby` 時皆帶入當前 `filterState.industryCode`。
+## 1. 整合測試執行結果 (Pytest)
 
-- **更新首頁與首頁搜尋轉導邏輯** (`frontend/src/app/page.tsx`)：
-  - 在 `Home` 首頁伺服器元件（RSC）中，從網址參數解析出 `industry_code`。
-  - 當向後端 `/api/merchants` 發送請求時，動態將 `industry_code` 追加至 API 查詢字串中。
-  - 在翻頁重定向（`redirect`）、分頁按鈕網址生成（`buildPageUrl`）以及跳頁輸入表單的隱藏欄位中，皆完整串接並帶入 `industry_code` 參數。
-  - 修改特約商店列表卡片，點擊右上角的地圖按鈕（在地圖上查看）跳轉至 `/map` 頁面時，若當前有行業別篩選狀態，則動態將 `industry_code` 追加到 URL 參數中。
+執行指令：
+```bash
+PYTHONPATH=. pytest backend/tests/ -v
+```
 
-- **更新首頁搜尋區塊狀態與表單提交** (`frontend/src/components/HomeSearchSection.tsx`)：
-  - 在 `handleFilterChange` 邏輯中，確保行業別篩選值 `newFilters.industryCode` 正確寫入 `industry_code` 網址參數中。
-  - 在 `HomeSearchSection` 的表單內，新增隱藏輸入欄位 `<input type="hidden" name="industry_code" value={filters.industryCode} />`，確保點擊「搜尋」提交表單時能順利將行業別狀態傳遞給後端。
+測試輸出：
+```text
+============================= test session starts ==============================
+platform darwin -- Python 3.9.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/ccchang/Project/NationalTravelCardMerchants/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/ccchang/Project/NationalTravelCardMerchants
+plugins: anyio-4.12.1
+collecting ... collected 28 items
 
-## 2. 測試內容與編譯結果 (What you tested and compile results)
-- **後端 API 整合測試**：
-  - 執行 `PYTHONPATH=. pytest backend/tests/ -v`。
-  - 測試結果：全數測試通過 (25 passed, 0 failed, 6 warnings)。
-- **前端編譯建置測試**：
-  - 執行 `npm run build --prefix frontend`。
-  - 測試結果：編譯順利通過 (Compiled successfully)，沒有任何 TypeScript 或語法錯誤。
+backend/tests/test_import_industry.py::test_import_industry_logic PASSED [  3%]
+backend/tests/test_import_industry.py::test_import_industry_encoding_and_idempotency PASSED [  7%]
+backend/tests/test_import_industry.py::test_foreign_key_cascade_delete PASSED [ 10%]
+backend/tests/test_query_parser.py::test_parse_search_query_empty PASSED [ 14%]
+backend/tests/test_query_parser.py::test_parse_search_query_short_terms PASSED [ 17%]
+backend/tests/test_query_parser.py::test_parse_search_query_long_terms PASSED [ 21%]
+backend/tests/test_query_parser.py::test_parse_search_query_mixed_terms PASSED [ 25%]
+backend/tests/test_query_parser.py::test_parse_search_query_escape_quotes PASSED [ 28%]
+backend/tests/test_query_parser.py::test_parse_search_query_deduplication PASSED [ 32%]
+backend/tests/test_query_parser.py::test_parse_search_query_extreme_inputs PASSED [ 35%]
+backend/tests/test_query_parser.py::test_parse_search_query_safe_chars PASSED [ 39%]
+backend/tests/test_scheduler.py::test_scheduler_db_creation PASSED       [ 42%]
+backend/tests/test_scheduler.py::test_scheduler_page_0_filtering_logic PASSED [ 46%]
+backend/tests/test_scheduler.py::test_scheduler_wrapped_website_merge PASSED [ 50%]
+backend/tests/test_scheduler.py::test_scheduler_industry_migration PASSED [ 53%]
+backend/tests/test_scheduler_network.py::test_download_zip_with_adapter_mock_fails PASSED [ 57%]
+backend/tests/test_scheduler_network.py::test_download_zip_real_retry_chain PASSED [ 60%]
+backend/tests/test_search_api.py::test_get_merchants_hybrid_search PASSED [ 64%]
+backend/tests/test_search_api.py::test_get_nearby_merchants_hybrid_search PASSED [ 67%]
+backend/tests/test_search_api.py::test_get_stats PASSED                  [ 71%]
+backend/tests/test_search_api.py::test_get_merchant_by_id_includes_industries PASSED [ 75%]
+backend/tests/test_search_api.py::test_get_merchant_empty_tax_id PASSED  [ 78%]
+backend/tests/test_search_api.py::test_get_industries_api PASSED         [ 82%]
+backend/tests/test_search_api.py::test_merchants_filter_by_industry PASSED [ 85%]
+backend/tests/test_search_api.py::test_nearby_merchants_filter_by_industry PASSED [ 89%]
+backend/tests/test_search_optimization.py::test_space_segment PASSED     [ 92%]
+backend/tests/test_search_optimization.py::test_parse_search_query PASSED [ 96%]
+backend/tests/test_search_optimization.py::test_fts_match_correctness PASSED [100%]
 
-## 3. 變更的檔案 (Files changed)
-- [frontend/src/app/map/page.tsx](file:///Users/ccchang/Project/NationalTravelCardMerchants/frontend/src/app/map/page.tsx) (修改)
-- [frontend/src/app/page.tsx](file:///Users/ccchang/Project/NationalTravelCardMerchants/frontend/src/app/page.tsx) (修改)
-- [frontend/src/components/HomeSearchSection.tsx](file:///Users/ccchang/Project/NationalTravelCardMerchants/frontend/src/components/HomeSearchSection.tsx) (修改)
+======================== 28 passed, 6 warnings in 0.28s ========================
+```
 
-## 4. 自為審查發現 (Self-review findings)
-- 所有頁面的行業別篩選功能已完整串接後端 API。
-- URL 狀態雙向綁定正常，無論是透過搜尋提交、篩選套用，或是列表卡片跳轉至地圖，都能正確傳遞、套用並渲染最新的行業別資料。
+測試驗證了以下項目：
+- `test_space_segment`：確保中英數混合字詞（例如 "臺北市中正區"、"CHIC古亭店"、"7-11便利店"）能正確進行空白切分。
+- `test_parse_search_query`：驗證搜尋語句能成功轉換為 FTS5 專用的語法，並包含對特殊字元（如雙引號）的容錯移除，以及 Unicode 標準化將「臺」置換為「台」。
+- `test_fts_match_correctness`：**使用記憶體資料庫 (`:memory:`) 的密封測試**，模擬測試資料（如「台北大飯店」、「台北小樽咖啡」、「台中咖啡廳」等），驗證包含短詞以及多重條件的 FTS5 搜尋正確性，不依賴外部生產資料庫。
 
-## 5. 問題或疑慮 (Any issues or concerns)
-- 無。
+---
 
-## 6. Fix Subagent 修正紀錄
-- **狀態不同步問題修正**：
-  - 在 [HomeSearchSection.tsx](file:///Users/ccchang/Project/NationalTravelCardMerchants/frontend/src/components/HomeSearchSection.tsx) 中，加入 `useEffect` 監聽 `initialFilters` 的變化。當外部 props 或是瀏覽器上下一步歷史導航更新了首頁搜尋元件的 `initialFilters` 時，能即時同步更新元件內部的 `filters` state。
-- **重新驗證前端編譯**：
-  - 執行 `npm run build --prefix frontend`。
-  - 編譯結果：建置成功 (Compiled successfully)，無任何 TypeScript 或是 Next.js build 錯誤。
+## 2. 基準測試效能結果 (Benchmark)
 
-## 7. 最終審查修正 (Final Code Review Fixes)
-- **前端 API 請求主機 (API_URL)**：
-  - 在 [FilterSheet.tsx](file:///Users/ccchang/Project/NationalTravelCardMerchants/frontend/src/components/FilterSheet.tsx) 中定義 `API_URL`：
-    ```typescript
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-    ```
-    並將原本的相對路徑 `fetch("/api/industries")` 修改為使用絕對路徑 `fetch(`${API_URL}/api/industries`)`，避免本地端前端開發 (port 3000) 呼叫時發生 404 錯誤。
-- **優化 useEffect 依賴陣列**：
-  - 在 [HomeSearchSection.tsx](file:///Users/ccchang/Project/NationalTravelCardMerchants/frontend/src/components/HomeSearchSection.tsx) 中，調整監聽 `initialFilters` 的依賴陣列為具體欄位：`initialFilters.city`、`initialFilters.hasWebsite`、`initialFilters.radiusKm`、`initialFilters.industryCode`，防止因物件參照變更導致不必要的重複渲染與 API 請求。
-- **後端 Pydantic 模型與 API 路由優化**：
-  - 在 [models.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/backend/models.py) 中定義新模型 `IndustryInfo` 用於動態行業別下拉選單。
-  - 在 [merchants.py](file:///Users/ccchang/Project/NationalTravelCardMerchants/backend/routers/merchants.py) 中：
-    - 匯入 `IndustryInfo` 並將 `get_industries` 路由的 `response_model` 修改為 `List[IndustryInfo]`。
-    - 移除唯讀查詢中多餘的 `db.execute("PRAGMA foreign_keys = ON;")`。
-    - 改以 Column Name Key 取得 SQL 查詢結果欄位以防出錯：`row["industry_code"]`、`row["industry_name"]`。
-- **編譯與測試驗證**：
-  - 後端測試：執行 `PYTHONPATH=. pytest backend/tests/ -v`，25 項測試皆全數通過。
-  - 前端建置：執行 `npm run build --prefix frontend`，前端靜態頁面編譯建置成功。
+執行指令：
+```bash
+python3 scripts/migrate_and_benchmark.py
+```
+
+效能基準測試輸出：
+```text
+📦 連線至資料庫 /Users/ccchang/Project/NationalTravelCardMerchants/backend/merchants.db ...
+🛠️  建立 FTS5 虛擬表...
+🛠️  檢查並建立經緯度欄位...
+🛠️  建立經緯度聯合索引...
+⚡ 重建 FTS5 索引...
+✅ 資料庫遷移與索引重建成功！
+
+⏱️  開始搜尋效能基準測試 (每個關鍵字執行 50 次取平均時間)...
+-------------------------------------------------------------------------------------
+關鍵字          | 類型            | LIKE 平均時長      | FTS5 混合平均      | 加速倍數    
+-------------------------------------------------------------------------------------
+大飯店          | 3字長詞         |        5.776 ms |        0.272 ms |   21.2x
+咖啡廳          | 3字長詞         |        5.453 ms |        0.033 ms |  164.7x
+7-11            | 4字英文/數字    |        4.984 ms |        0.036 ms |  140.2x
+台北            | 2字短詞         |        5.362 ms |        0.661 ms |    8.1x
+台中            | 2字短詞         |        5.554 ms |        0.795 ms |    7.0x
+台北 大飯店     | 混合字詞        |        6.117 ms |        0.325 ms |   18.8x
+                | 空關鍵字        |        0.237 ms |        0.228 ms |    1.0x
+```
+
+### 效能分析：
+1. **短詞加速 (2字短詞)**：使用 FTS5 Trigram 結合空白切分優化後，針對「台北」、「台中」等 2 字短詞的平均搜尋時間縮短至 `0.66ms ~ 0.80ms`，加速倍數達 `7.0x ~ 8.1x`。
+2. **長詞與特殊英文/數字詞加速**：「大飯店」、「咖啡廳」、「7-11」等詞彙的搜尋速度獲得大幅提升，FTS5 混合平均僅 `0.03ms ~ 0.27ms`，效能提升可達 `21.2x` 至 `164.7x`。
+3. **混合字詞**：如「台北 大飯店」的 FTS5 混合平均時間為 `0.325 ms`，相較於 LIKE 的 `6.117 ms`，達到 `18.8x` 的加速。
+
+---
+
+## 3. Git Commit 資訊
+
+產生的 Commit 詳情如下：
+
+1. **修正 Code Review 反饋 (記憶體測試、台/臺字元標準化等)**：
+```text
+commit f10efb0d0c8f6533cd398a274e2fa4eb22946b4f
+Author: ccchang <ccchang@example.com>
+Date:   Sat Jul 11 14:38:38 2026 +0800
+
+    fix: address code review feedback on hermetic tests and query normalization
+```
+
+2. **初始 Task 3 Commit**：
+```text
+commit afa7c38f05fe8bd150317972f7316e73b3f856f2
+Author: ccchang <ccchang@example.com>
+Date:   Sat Jul 11 14:35:57 2026 +0800
+
+    test: add test suite and update benchmark for space-segmented Chinese search
+```
+
+異動檔案：
+- `backend/tests/test_search_optimization.py` (新增與重寫密封單元與整合測試)
+- `backend/routers/merchants.py` (整合 `unicodedata` 對查詢進行「台/臺」統一與 Unicode 正規化)
+- `scripts/parse_pdf.py` (同步更新 pdf 讀取時的「台/臺」轉換)
+- `scripts/migrate_and_benchmark.py` (移除舊版分流邏輯，採用全新的 `parse_search_query` FTS MATCH)
