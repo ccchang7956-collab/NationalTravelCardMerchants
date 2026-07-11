@@ -6,42 +6,46 @@ from typing import Optional, List, Tuple
 from backend.database import get_db
 from backend.models import Merchant, MerchantWithCoords, PaginatedMerchants, Stats, CityStat, IndustryInfo
 
-def parse_search_query(q: Optional[str]) -> Tuple[Optional[str], List[str]]:
+def space_segment(text: str) -> str:
+    if not text:
+        return ""
+    result = []
+    current_word = []
+    for char in text:
+        # 僅對 ASCII 字母與數字（英文/數字）進行分組
+        if char.isascii() and char.isalnum():
+            current_word.append(char)
+        else:
+            if current_word:
+                result.append("".join(current_word))
+                current_word = []
+            if not char.isspace():
+                result.append(char)
+    if current_word:
+        result.append("".join(current_word))
+    return " ".join(result)
+
+def parse_search_query(q: Optional[str]) -> Optional[str]:
     """
     解析搜尋字串 q。
     回傳:
-      - fts_query: 適用於 FTS5 MATCH 的字串 (長度 >= 3 的詞以 AND 連接，並用雙引號包覆)
-      - like_terms: 適用於 LIKE 的剩餘短詞 (長度 < 3)
+      - 適用於 FTS5 MATCH 的字串 (所有分詞以 AND 連接，並用雙引號包覆)
     """
     if not q:
-        return None, []
+        return None
     
-    # 移除非字母、非數字、非中文字元，保留雙引號、空白、-、&、+、=（保留空白以利 split）
-    # 這可以防止如特殊符號造成的無意義 SQL 檢索
-    cleaned_q = re.sub(r'[^\w\s\u4e00-\u9fff"\-&+=]', '', q)
+    # 保留字母、數字、中文與安全符號，其餘轉為空格
+    cleaned_q = re.sub(r'[^\w\s\u4e00-\u9fff\-&+=]', ' ', q)
     
-    terms = []
-    seen = set()
-    for t in cleaned_q.split():
-        t_clean = t.strip()
-        if t_clean.replace('"', '') == '':
+    parts = []
+    for term in cleaned_q.split():
+        term = term.strip()
+        if not term:
             continue
-        if t_clean and t_clean not in seen:
-            seen.add(t_clean)
-            terms.append(t_clean)
-            
-    fts_parts = []
-    like_terms = []
-    
-    for term in terms:
-        if len(term) >= 3:
-            escaped = term.replace('"', '""')
-            fts_parts.append(f'"{escaped}"')
-        else:
-            like_terms.append(term)
-            
-    fts_query = " AND ".join(fts_parts) if fts_parts else None
-    return fts_query, like_terms
+        segmented = space_segment(term)
+        parts.append(f'"{segmented}"')
+        
+    return " AND ".join(parts) if parts else None
 
 router = APIRouter()
 
@@ -73,16 +77,11 @@ def get_merchants(
 
     # 解析搜尋關鍵字
     if q:
-        fts_query, like_terms = parse_search_query(q)
+        fts_query = parse_search_query(q)
         if fts_query:
             joins.append("JOIN merchants_fts f ON m.id = f.rowid")
             where_clauses.append("f.merchants_fts MATCH ?")
             params.append(fts_query)
-            
-        for term in like_terms:
-            safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
-            params.extend([f"%{safe_term}%", f"%{safe_term}%"])
 
     if city:
         safe_city = city.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -169,16 +168,11 @@ def get_nearby_merchants(
     params = [lat - lat_delta, lat + lat_delta, lon - lon_delta, lon + lon_delta]
 
     if q:
-        fts_query, like_terms = parse_search_query(q)
+        fts_query = parse_search_query(q)
         if fts_query:
             joins.append("JOIN merchants_fts f ON m.id = f.rowid")
             where_clauses.append("f.merchants_fts MATCH ?")
             params.append(fts_query)
-            
-        for term in like_terms:
-            safe_term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            where_clauses.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
-            params.extend([f"%{safe_term}%", f"%{safe_term}%"])
 
     if industry_code:
         where_clauses.append("""
