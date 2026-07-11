@@ -4,6 +4,9 @@ import sys
 import time
 import sqlite3
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from backend.routers.merchants import parse_search_query
+
 # 取得 DB 路徑
 backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
 DB_PATH = os.path.join(backend_dir, "merchants.db")
@@ -113,37 +116,16 @@ def benchmark_queries():
                 conn.execute(like_sql, like_params).fetchone()
             t_like = ((time.time() - t0) / 50) * 1000  # ms
             
-            # --- 2. 新版 FTS5 混合搜尋模擬 ---
-            # 採用 parse_search_query 的分流邏輯
-            fts_parts = []
-            like_terms = []
-            for t in terms:
-                if len(t) >= 3:
-                    fts_parts.append(f'"{t.replace(chr(34), chr(34)+chr(34))}"')
-                else:
-                    like_terms.append(t)
-                    
-            fts_query = " AND ".join(fts_parts) if fts_parts else None
-            
-            fts_where = []
+            # --- 2. 新版 FTS5 搜尋模擬 ---
+            # 採用 parse_search_query 分詞後的 FTS MATCH 查詢
+            fts_query = parse_search_query(q)
             fts_params = []
-            fts_sql = ""
             
             if fts_query:
                 fts_sql = "SELECT COUNT(*) FROM merchants m JOIN merchants_fts f ON m.id = f.rowid WHERE f.merchants_fts MATCH ?"
                 fts_params.append(fts_query)
-                for t in like_terms:
-                    safe_t = t.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-                    fts_where.append("(m.name LIKE ? ESCAPE '\\' OR m.address LIKE ? ESCAPE '\\')")
-                    fts_params.extend([f"%{safe_t}%", f"%{safe_t}%"])
-                if fts_where:
-                    fts_sql += f" AND {' AND '.join(fts_where)}"
             else:
-                if like_where:
-                    fts_sql = f"SELECT COUNT(*) FROM merchants WHERE {' AND '.join(like_where)}"
-                else:
-                    fts_sql = "SELECT COUNT(*) FROM merchants WHERE 1=1"
-                fts_params = like_params
+                fts_sql = "SELECT COUNT(*) FROM merchants WHERE 1=1"
 
             t0 = time.time()
             for _ in range(50):
