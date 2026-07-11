@@ -250,14 +250,15 @@ def space_segment(text: str) -> str:
     result = []
     current_word = []
     for char in text:
-        # Group only ASCII alphanumeric characters (English/numbers)
+        # 僅對 ASCII 字母與數字（英文/數字）進行分組
         if char.isascii() and char.isalnum():
             current_word.append(char)
         else:
             if current_word:
                 result.append("".join(current_word))
                 current_word = []
-            if not char.isspace():
+            # 僅保留字母字元（包含常見與罕見中文字元），丟棄標點符號與空白
+            if char.isalpha():
                 result.append(char)
     if current_word:
         result.append("".join(current_word))

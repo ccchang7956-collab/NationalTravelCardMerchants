@@ -3,6 +3,7 @@ import sqlite3
 from fastapi.testclient import TestClient
 from backend.main import app
 from backend.database import get_db
+from backend.routers.merchants import space_segment
 
 # 建立測試資料庫
 @pytest.fixture(name="db_conn")
@@ -38,9 +39,7 @@ def fixture_db_conn():
         CREATE VIRTUAL TABLE merchants_fts USING fts5(
             name,
             address,
-            content='merchants',
-            content_rowid='id',
-            tokenize='trigram'
+            tokenize="unicode61"
         )
     """)
     
@@ -57,7 +56,13 @@ def fixture_db_conn():
     conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("11111111", "561115", "餐館業", 1))
     conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("11111111", "561116", "飲料店業", 2))
     conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("33333333", "551011", "旅館業", 1))
-    conn.execute("INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')")
+    
+    # 手動將分詞後的資料寫入 merchants_fts，對應 id 欄位
+    for m_id, name, address, _, _, _, _, _ in test_merchants:
+        conn.execute(
+            "INSERT INTO merchants_fts (rowid, name, address) VALUES (?, ?, ?)",
+            (m_id, space_segment(name), space_segment(address))
+        )
     conn.commit()
     
     yield conn

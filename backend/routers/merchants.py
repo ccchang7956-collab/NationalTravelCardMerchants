@@ -19,30 +19,35 @@ def space_segment(text: str) -> str:
             if current_word:
                 result.append("".join(current_word))
                 current_word = []
-            if not char.isspace():
+            # 僅保留字母字元（包含常見與罕見中文字元），丟棄標點符號與空白
+            if char.isalpha():
                 result.append(char)
     if current_word:
         result.append("".join(current_word))
     return " ".join(result)
 
 def parse_search_query(q: Optional[str]) -> Optional[str]:
-    """
-    解析搜尋字串 q。
-    回傳:
-      - 適用於 FTS5 MATCH 的字串 (所有分詞以 AND 連接，並用雙引號包覆)
-    """
     if not q:
         return None
     
-    # 保留字母、數字、中文與安全符號，其餘轉為空格
+    # 先將雙引號移除，以避免字串中夾雜雙引號導致的分詞斷開
+    q = q.replace('"', '')
+    # 移除非字母、數字、中文與安全符號，保留 '-' 以利處理如 '7-11' 的詞彙
     cleaned_q = re.sub(r'[^\w\s\u4e00-\u9fff\-&+=]', ' ', q)
     
     parts = []
+    seen = set()
     for term in cleaned_q.split():
         term = term.strip()
         if not term:
             continue
+        if term in seen:
+            continue
+        seen.add(term)
         segmented = space_segment(term)
+        # 如果分詞結果為空，則忽略該詞
+        if not segmented:
+            continue
         parts.append(f'"{segmented}"')
         
     return " AND ".join(parts) if parts else None
