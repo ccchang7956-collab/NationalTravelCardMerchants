@@ -17,17 +17,15 @@ def space_segment(text):
     result = []
     current_word = []
     for char in text:
-        if "\u4e00" <= char <= "\u9fff":
-            if current_word:
-                result.append("".join(current_word))
-                current_word = []
-            result.append(char)
-        elif char.isalnum():
+        # Group only ASCII alphanumeric characters (English/numbers)
+        if char.isascii() and char.isalnum():
             current_word.append(char)
         else:
             if current_word:
                 result.append("".join(current_word))
                 current_word = []
+            if not char.isspace():
+                result.append(char)
     if current_word:
         result.append("".join(current_word))
     return " ".join(result)

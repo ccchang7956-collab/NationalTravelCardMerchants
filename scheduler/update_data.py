@@ -250,17 +250,15 @@ def space_segment(text: str) -> str:
     result = []
     current_word = []
     for char in text:
-        if "\u4e00" <= char <= "\u9fff":
-            if current_word:
-                result.append("".join(current_word))
-                current_word = []
-            result.append(char)
-        elif char.isalnum():
+        # Group only ASCII alphanumeric characters (English/numbers)
+        if char.isascii() and char.isalnum():
             current_word.append(char)
         else:
             if current_word:
                 result.append("".join(current_word))
                 current_word = []
+            if not char.isspace():
+                result.append(char)
     if current_word:
         result.append("".join(current_word))
     return " ".join(result)
@@ -780,14 +778,6 @@ def main():
                 prod_conn.execute("PRAGMA journal_mode=WAL;")
                 prod_conn.execute("PRAGMA synchronous = NORMAL;")
                 # Run DDL outside transaction
-                prod_conn.execute("DROP TABLE IF EXISTS main.merchants_fts")
-                prod_conn.execute("""
-                    CREATE VIRTUAL TABLE IF NOT EXISTS main.merchants_fts USING fts5(
-                        name,
-                        address,
-                        tokenize="unicode61"
-                    )
-                """)
                 prod_conn.execute("""
                     CREATE TABLE IF NOT EXISTS main.merchant_industries (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -803,9 +793,16 @@ def main():
                 
                 prod_conn.execute("ATTACH DATABASE ? AS new_db", (new_db,))
                 prod_conn.execute("BEGIN TRANSACTION")
+                prod_conn.execute("DROP TABLE IF EXISTS main.merchants_fts")
+                prod_conn.execute("""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS main.merchants_fts USING fts5(
+                        name,
+                        address,
+                        tokenize="unicode61"
+                    )
+                """)
                 prod_conn.execute("DELETE FROM main.merchant_industries")
                 prod_conn.execute("DELETE FROM main.merchants")
-                prod_conn.execute("DELETE FROM main.merchants_fts")
                 prod_conn.execute("INSERT INTO main.merchants SELECT * FROM new_db.merchants")
                 prod_conn.execute("INSERT INTO main.merchant_industries (id, tax_id, industry_code, industry_name, priority) SELECT id, tax_id, industry_code, industry_name, priority FROM new_db.merchant_industries")
                 prod_conn.execute("INSERT INTO main.merchants_fts (rowid, name, address) SELECT rowid, name, address FROM new_db.merchants_fts")
