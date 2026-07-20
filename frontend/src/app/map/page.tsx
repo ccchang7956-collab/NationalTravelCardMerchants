@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { MapPinIcon, PaperAirplaneIcon, ArrowLeftIcon, ChevronRightIcon, GlobeAltIcon, AdjustmentsHorizontalIcon, MagnifyingGlassIcon, MapIcon } from "@heroicons/react/24/outline";
 import AddressSearch from "@/components/AddressSearch";
 import FilterSheet, { FilterState, DEFAULT_FILTER_STATE } from "@/components/FilterSheet";
+import { getPublicApiUrl } from "@/utils/env";
 
 // Dynamically import the map to avoid SSR issues (Leaflet needs window)
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -34,7 +35,7 @@ interface Merchant {
 }
 
 const DEFAULT_CENTER: [number, number] = [25.0339, 121.5645];
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const API_URL = getPublicApiUrl();
 
 function MapContent() {
   const router = useRouter();

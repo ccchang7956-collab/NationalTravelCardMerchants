@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { MagnifyingGlassIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, MapIcon } from "@heroicons/react/24/outline";
 import HomeSearchSection from "@/components/HomeSearchSection";
 import type { FilterState } from "@/components/FilterSheet";
+import { getBackendUrl } from "@/utils/env";
 
 const TAIWAN_CITIES = [
   "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
@@ -72,7 +73,7 @@ export default async function Home({
   query.append("page", page.toString());
   query.append("per_page", "20");
 
-  const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+  const API_URL = getBackendUrl();
   
   let data = null;
   let stats = null;
@@ -217,10 +218,25 @@ export default async function Home({
           })}
         </div>
       ) : (
-        <div className="text-center py-20 bg-card rounded-2xl border border-border/60">
-          <MagnifyingGlassIcon className="w-12 h-12 text-muted/30 mx-auto mb-4" />
-          <h2 className="text-lg font-medium text-foreground mb-1">找不到符合的商店</h2>
-          <p className="text-muted">請嘗試使用其他關鍵字或變更縣市篩選條件。</p>
+        <div className="text-center py-16 px-4 bg-card rounded-2xl border border-border/60 shadow-sm space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto text-accent">
+            <MagnifyingGlassIcon className="w-7 h-7" />
+          </div>
+          <div className="space-y-1 max-w-md mx-auto">
+            <h2 className="text-xl font-semibold text-foreground">找不到符合的商店</h2>
+            <p className="text-sm text-muted">
+              {q ? `找不到包含「${q}」的結果。` : "無符合當前篩選條件的特約商店。"}
+              請嘗試簡化關鍵字或重設篩選條件。
+            </p>
+          </div>
+          <div className="pt-2">
+            <Link
+              href="/"
+              className="inline-flex items-center px-4 py-2 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors shadow-sm"
+            >
+              重設所有搜尋與篩選
+            </Link>
+          </div>
         </div>
       )}
 

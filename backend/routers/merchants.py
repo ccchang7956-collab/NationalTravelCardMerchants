@@ -172,14 +172,21 @@ def get_nearby_merchants(
     lat_delta = radius_km / 111.0
     lon_delta = min(radius_km / (111.0 * math.cos(math.radians(lat))), 180.0)
 
-    query = "SELECT m.* FROM merchants m"
+    cos_lat = math.cos(math.radians(lat))
+    cos_lat_sq = cos_lat * cos_lat
+
+    query = f"""
+        SELECT m.*, 
+               ((m.lat - ?) * (m.lat - ?) + (m.lon - ?) * (m.lon - ?) * {cos_lat_sq}) AS _proxy_dist 
+        FROM merchants m
+    """
     joins = []
     where_clauses = [
         "m.lat IS NOT NULL",
         "m.lat BETWEEN ? AND ?",
         "m.lon BETWEEN ? AND ?"
     ]
-    params = [lat - lat_delta, lat + lat_delta, lon - lon_delta, lon + lon_delta]
+    params = [lat, lat, lon, lon, lat - lat_delta, lat + lat_delta, lon - lon_delta, lon + lon_delta]
 
     if q is not None and q.strip() != "":
         fts_query = parse_search_query(q)
@@ -204,6 +211,10 @@ def get_nearby_merchants(
         query += " " + " ".join(joins)
     if where_clauses:
         query += " WHERE " + " AND ".join(where_clauses)
+
+    candidate_limit = max(limit * 3, 300)
+    query += " ORDER BY _proxy_dist ASC LIMIT ?"
+    params.append(candidate_limit)
 
     cursor = db.cursor()
     cursor.execute(query, params)
