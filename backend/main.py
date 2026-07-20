@@ -4,8 +4,10 @@ import os
 import json
 import sqlite3
 
-from backend.routers import merchants
-from backend.database import DB_PATH, get_db_connection
+from backend.routers import merchants, auth
+from backend.database import DB_PATH, get_db_connection, init_db
+
+init_db()
 
 app = FastAPI(
     title="National Travel Card Merchants API",
@@ -26,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(merchants.router, prefix="/api", tags=["merchants"])
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 
 @app.get("/")
 def root():
