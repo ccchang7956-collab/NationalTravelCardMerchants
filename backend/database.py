@@ -31,6 +31,19 @@ def init_db(conn: sqlite3.Connection = None):
     cursor = conn.cursor()
     
     cursor.execute("""
+    CREATE TABLE IF NOT EXISTS merchants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        address TEXT,
+        zip_code TEXT,
+        tax_id TEXT,
+        website TEXT,
+        lat REAL,
+        lon REAL
+    );
+    """)
+
+    cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
