@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ListBulletIcon, MapIcon, ChartBarIcon, ArrowRightOnRectangleIcon, UserIcon } from "@heroicons/react/24/outline";
+import { ListBulletIcon, MapIcon, ChartBarIcon, ArrowRightOnRectangleIcon, UserIcon, CalendarDaysIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/context/AuthContext";
 import AuthModal from "@/components/AuthModal";
 
@@ -14,6 +14,7 @@ export default function Navbar() {
 
   const isListActive = pathname === "/";
   const isMapActive = pathname === "/map" || pathname?.startsWith("/map/");
+  const isItineraryActive = pathname === "/itinerary" || pathname?.startsWith("/itinerary/");
   const isDashboardActive = pathname === "/dashboard";
 
   return (
@@ -49,6 +50,17 @@ export default function Navbar() {
             >
               <MapIcon className={`w-5 h-5 transition-transform duration-300 ${isMapActive ? "rotate-3 scale-110" : "group-hover:scale-110"}`} />
               <span>地圖</span>
+            </Link>
+            <Link
+              href="/itinerary"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-all duration-200 ease-in-out hover:scale-[1.02] active:scale-[0.98] ${
+                isItineraryActive
+                  ? "text-accent bg-accent/10 font-medium"
+                  : "text-muted hover:text-foreground hover:bg-muted-bg"
+              }`}
+            >
+              <CalendarDaysIcon className={`w-5 h-5 transition-transform duration-300 ${isItineraryActive ? "scale-110" : "group-hover:scale-110"}`} />
+              <span>行程規劃</span>
             </Link>
 
             {user ? (

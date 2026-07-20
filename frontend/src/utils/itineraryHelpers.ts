@@ -1,10 +1,10 @@
 export interface ItineraryItem {
   id?: number;
-  merchant_id?: number;
+  merchant_id?: number | null;
   custom_name: string;
-  address?: string;
-  lat?: number;
-  lon?: number;
+  address?: string | null;
+  lat?: number | null;
+  lon?: number | null;
   order_index?: number;
   estimated_cost?: number;
   quota_category?: string;
