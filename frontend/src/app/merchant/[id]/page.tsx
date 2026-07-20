@@ -3,14 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, ArrowTopRightOnSquareIcon, MapIcon } from "@heroicons/react/24/outline";
 import MerchantMapSection from "@/components/MerchantMapSection";
+import MerchantActions from "@/components/MerchantActions";
 import { getBackendUrl } from "@/utils/env";
 
 const API_URL = getBackendUrl();
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 // Fetch merchant data
-// Next.js App Router 在同一 render 週期內會自動 memoize 相同 URL 的 fetch，
-// 因此 generateMetadata 和頁面元件共用同一份請求結果（不加 cache:'no-store'）
 async function getMerchant(id: string) {
   const res = await fetch(`${API_URL}/api/merchants/${id}`, { next: { revalidate: 3600 } });
   if (!res.ok) return null;
@@ -118,19 +117,21 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
       </Link>
       
       <div className="bg-card rounded-2xl p-8 md:p-10 shadow-sm border border-border/60">
-        <div className="flex items-center gap-3 mb-2">
-          <span className="bg-accent/10 text-accent px-3 py-1 rounded-full text-xs font-medium tracking-wide">
-            國民旅遊卡特約商店
-          </span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <span className="bg-accent/10 text-accent px-3 py-1 rounded-full text-xs font-medium tracking-wide">
+              國民旅遊卡特約商店
+            </span>
+            <h1 className="text-3xl md:text-4xl font-medium text-foreground mt-3">
+              {merchant.name}
+            </h1>
+          </div>
+          <MerchantActions merchant={{ id: merchant.id, name: merchant.name }} variant="detail" />
         </div>
-        
-        <h1 className="text-3xl md:text-4xl font-medium text-foreground mt-4 mb-8">
-          {merchant.name}
-        </h1>
         
         <div className="space-y-6 text-base text-foreground/80">
           <div className="flex items-start gap-3">
-            <MapPinIcon className="w-5 h-5 mt-0.5 text-muted" />
+            <MapPinIcon className="w-5 h-5 mt-0.5 text-muted shrink-0" />
             <div>
               <p className="font-medium text-foreground">商店地址</p>
               <p className="mt-1 text-muted">{merchant.zip_code} {merchant.address}</p>
@@ -146,7 +147,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
           </div>
           
           <div className="flex items-start gap-3">
-            <BuildingStorefrontIcon className="w-5 h-5 mt-0.5 text-muted" />
+            <BuildingStorefrontIcon className="w-5 h-5 mt-0.5 text-muted shrink-0" />
             <div>
               <p className="font-medium text-foreground">統一編號</p>
               <p className="mt-1 text-muted">{merchant.tax_id}</p>
@@ -155,7 +156,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
           
           {merchant.website && (
             <div className="flex items-start gap-3">
-              <GlobeAltIcon className="w-5 h-5 mt-0.5 text-muted" />
+              <GlobeAltIcon className="w-5 h-5 mt-0.5 text-muted shrink-0" />
               <div>
                 <p className="font-medium text-foreground">官方網站</p>
                 <a 

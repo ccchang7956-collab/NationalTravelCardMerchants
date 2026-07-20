@@ -4,6 +4,7 @@ import Form from "next/form";
 import { redirect } from "next/navigation";
 import { MagnifyingGlassIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, MapIcon } from "@heroicons/react/24/outline";
 import HomeSearchSection from "@/components/HomeSearchSection";
+import MerchantActions from "@/components/MerchantActions";
 import type { FilterState } from "@/components/FilterSheet";
 import { getBackendUrl } from "@/utils/env";
 
@@ -182,37 +183,48 @@ export default async function Home({
             const mapUrl = `/map?${mapParams.toString()}`;
             return (
               <div key={m.id} className="relative group">
-                <Link href={`/merchant/${m.tax_id || m.id}`} className="block">
-                  <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm hover:shadow-md hover:border-accent/40 transition-all duration-200 h-full flex flex-col">
-                    <h2 className="text-lg font-medium text-foreground group-hover:text-accent transition-colors pr-8">
-                      {m.name}
-                    </h2>
-                    <div className="mt-3 space-y-2 text-sm text-muted flex-1">
-                      <div className="flex items-start gap-2">
-                        <MapPinIcon className="w-4 h-4 mt-0.5 shrink-0 opacity-70" />
-                        <span>{m.zip_code} {m.address}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <BuildingStorefrontIcon className="w-4 h-4 shrink-0 opacity-70" />
-                        <span>統編：{m.tax_id}</span>
-                      </div>
-                      {m.website && (
-                        <div className="flex items-center gap-2 text-accent">
-                          <GlobeAltIcon className="w-4 h-4 shrink-0 opacity-70" />
-                          <span className="truncate">有專屬網站</span>
-                        </div>
-                      )}
+                <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm hover:shadow-md hover:border-accent/40 transition-all duration-200 h-full flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <Link href={`/merchant/${m.tax_id || m.id}`} className="block flex-1 group-hover:text-accent transition-colors">
+                        <h2 className="text-lg font-medium text-foreground pr-2">
+                          {m.name}
+                        </h2>
+                      </Link>
+                      <MerchantActions merchant={{ id: m.id, name: m.name }} variant="card" />
                     </div>
+                    <Link href={`/merchant/${m.tax_id || m.id}`} className="block mt-3">
+                      <div className="space-y-2 text-sm text-muted">
+                        <div className="flex items-start gap-2">
+                          <MapPinIcon className="w-4 h-4 mt-0.5 shrink-0 opacity-70" />
+                          <span>{m.zip_code} {m.address}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <BuildingStorefrontIcon className="w-4 h-4 shrink-0 opacity-70" />
+                          <span>統編：{m.tax_id}</span>
+                        </div>
+                        {m.website && (
+                          <div className="flex items-center gap-2 text-accent">
+                            <GlobeAltIcon className="w-4 h-4 shrink-0 opacity-70" />
+                            <span className="truncate">有專屬網站</span>
+                          </div>
+                        )}
+                      </div>
+                    </Link>
                   </div>
-                </Link>
-                {/* 在地圖查看按鈕（絕對定位，防止觸發卡片連結） */}
-                <Link
-                  href={mapUrl}
-                  title="在地圖上查看附近商店"
-                  className="absolute top-4 right-4 p-1.5 rounded-lg bg-muted-bg text-muted hover:bg-accent/10 hover:text-accent transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                >
-                  <MapIcon className="w-4 h-4" />
-                </Link>
+                  
+                  {/* 地圖查看連結 */}
+                  <div className="mt-4 pt-3 border-t border-border/40 flex justify-end">
+                    <Link
+                      href={mapUrl}
+                      title="在地圖上查看附近商店"
+                      className="inline-flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors"
+                    >
+                      <MapIcon className="w-3.5 h-3.5" />
+                      <span>查看附近商店</span>
+                    </Link>
+                  </div>
+                </div>
               </div>
             );
           })}
@@ -271,15 +283,13 @@ export default async function Home({
               </>
             )}
 
-            {/* 前後各 2 頁的頁碼（排除已在首頁/末頁區塊顯示的頁碼，避免重複） */}
+            {/* 前後各 2 頁的頁碼 */}
             {(() => {
               const windowStart = Math.max(1, page - 2);
               const windowEnd = Math.min(totalPages, page + 2);
               const pages: number[] = [];
               for (let p = windowStart; p <= windowEnd; p++) {
-                // 跳過 page=1（若 page>3 已由首頁區塊顯示）
                 if (p === 1 && page > 3) continue;
-                // 跳過最後一頁（若 page<totalPages-2 已由末頁區塊顯示）
                 if (p === totalPages && page < totalPages - 2) continue;
                 pages.push(p);
               }
@@ -302,7 +312,6 @@ export default async function Home({
                 )
               );
             })()}
-
 
             {/* 最後一頁 */}
             {page < totalPages - 2 && (
@@ -402,7 +411,7 @@ export default async function Home({
             </p>
           </section>
 
-          {/* FAQ 常見問題（雙效：可視文字 + Schema） */}
+          {/* FAQ 常見問題 */}
           <section
             aria-label="國旅卡常見問題"
             className="mt-8 pt-6 border-t border-border/40 space-y-4"
