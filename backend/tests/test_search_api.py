@@ -107,6 +107,21 @@ def test_get_merchants_hybrid_search():
     assert data["total"] == 1
     assert data["items"][0]["name"] == "彰化大飯店"
 
+def test_empty_punctuation_search_query():
+    client = TestClient(app)
+    # 輸入純標點符號/無效字元，parse_search_query 回傳 None 時應傳回空結果，而不是全表掃描
+    response = client.get("/api/merchants?q=!!!")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 0
+    assert data["items"] == []
+
+    response = client.get("/api/merchants/nearby?lat=25.03&lon=121.56&radius_km=5&q=!!!")
+    assert response.status_code == 200
+    data = response.json()
+    assert data == []
+
+
 def test_get_nearby_merchants_hybrid_search():
     client = TestClient(app)
     

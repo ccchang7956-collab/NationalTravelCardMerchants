@@ -678,6 +678,37 @@ def fill_missing_coords(db_path: str) -> int:
             conn.close()
 
 
+def atomic_swap_db(temp_db_path: str, target_db_path: str) -> None:
+    """
+    將剛解析建好的 temp_db_path 原子性替換至 target_db_path。
+    若舊 DB 存在則備份，並透過 os.replace 完成檔案層級替換，
+    避免線上 API 查詢時遇到 DROP TABLE 或連線鎖定錯誤。
+    """
+    backup_path = target_db_path + ".bak"
+    if os.path.exists(target_db_path):
+        try:
+            shutil.copy2(target_db_path, backup_path)
+            log.info(f"💾 已備份舊 DB → {backup_path}")
+        except Exception as e:
+            log.warning(f"⚠️ 備份舊 DB 失敗: {e}")
+
+    try:
+        os.chmod(temp_db_path, 0o644)
+    except Exception:
+        pass
+
+    os.replace(temp_db_path, target_db_path)
+    log.info(f"✅ 原子性替換 DB 成功：{target_db_path}")
+
+    for ext in ["-wal", "-shm"]:
+        old_wal = target_db_path + ext
+        if os.path.exists(old_wal):
+            try:
+                os.remove(old_wal)
+            except Exception:
+                pass
+
+
 # ── 主流程 ───────────────────────────────────────────────────────────────────
 
 def main():
@@ -765,89 +796,7 @@ def main():
         fill_missing_coords(new_db)
         
         # 7. 原子性替換生產 DB
-        backup_path = DB_PATH + ".bak"
-        if os.path.exists(DB_PATH):
-            shutil.copy2(DB_PATH, backup_path)
-            log.info(f"💾 已備份舊 DB → {backup_path}")
-            
-            log.info("🔄 使用 Transaction 原子性替換資料表...")
-            prod_conn = None
-            try:
-                prod_conn = sqlite3.connect(DB_PATH)
-                prod_conn.execute("PRAGMA foreign_keys = ON;")
-                prod_conn.execute("PRAGMA busy_timeout = 5000;")
-                prod_conn.execute("PRAGMA journal_mode=WAL;")
-                prod_conn.execute("PRAGMA synchronous = NORMAL;")
-                # Run DDL outside transaction
-                prod_conn.execute("""
-                    CREATE TABLE IF NOT EXISTS main.merchant_industries (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        tax_id TEXT NOT NULL,
-                        industry_code TEXT NOT NULL,
-                        industry_name TEXT NOT NULL,
-                        priority INTEGER NOT NULL,
-                        FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
-                    )
-                """)
-                prod_conn.execute("CREATE INDEX IF NOT EXISTS main.idx_merchant_industries_tax_id ON merchant_industries(tax_id)")
-                prod_conn.execute("CREATE INDEX IF NOT EXISTS main.idx_merchant_industries_code ON merchant_industries(industry_code)")
-                
-                prod_conn.execute("ATTACH DATABASE ? AS new_db", (new_db,))
-                prod_conn.execute("BEGIN TRANSACTION")
-                prod_conn.execute("DROP TABLE IF EXISTS main.merchants_fts")
-                prod_conn.execute("""
-                    CREATE VIRTUAL TABLE IF NOT EXISTS main.merchants_fts USING fts5(
-                        name,
-                        address,
-                        tokenize="unicode61"
-                    )
-                """)
-                prod_conn.execute("DELETE FROM main.merchant_industries")
-                prod_conn.execute("DELETE FROM main.merchants")
-                prod_conn.execute("INSERT INTO main.merchants SELECT * FROM new_db.merchants")
-                prod_conn.execute("INSERT INTO main.merchant_industries (id, tax_id, industry_code, industry_name, priority) SELECT id, tax_id, industry_code, industry_name, priority FROM new_db.merchant_industries")
-                prod_conn.execute("INSERT INTO main.merchants_fts (rowid, name, address) SELECT rowid, name, address FROM new_db.merchants_fts")
-                prod_conn.execute("COMMIT")
-                prod_conn.execute("DETACH DATABASE new_db")
-            except Exception as e:
-                log.error(f"❌ DB 原子性替換失敗，已回滾：{e}")
-                if prod_conn:
-                    try:
-                        prod_conn.execute("ROLLBACK")
-                    except Exception:
-                        pass
-                raise
-            finally:
-                if prod_conn:
-                    prod_conn.close()
-            try:
-                os.chmod(DB_PATH, 0o644)
-            except Exception:
-                pass
-            os.remove(new_db)
-        else:
-            shutil.move(new_db, DB_PATH)
-            try:
-                os.chmod(DB_PATH, 0o644)
-            except Exception:
-                pass
-            
-            # Rebuild FTS index for first-time database initialization
-            prod_conn = None
-            try:
-                prod_conn = sqlite3.connect(DB_PATH)
-                prod_conn.execute("PRAGMA foreign_keys = ON;")
-                prod_conn.execute("PRAGMA busy_timeout = 5000;")
-                prod_conn.execute("PRAGMA journal_mode=WAL;")
-                prod_conn.execute("PRAGMA synchronous = NORMAL;")
-                prod_conn.execute("INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild')")
-                prod_conn.commit()
-                log.info("✅ 首次初始化 DB 重建 FTS 索引完成")
-            except Exception as e:
-                log.error(f"❌ 首次初始化 DB 重建 FTS 索引失敗：{e}")
-            finally:
-                if prod_conn:
-                    prod_conn.close()
+        atomic_swap_db(new_db, DB_PATH)
         log.info(f"✅ DB 已更新：{DB_PATH}")
 
     # 8. 記錄 hash

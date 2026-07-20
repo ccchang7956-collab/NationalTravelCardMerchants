@@ -207,3 +207,35 @@ def test_scheduler_industry_migration():
         assert rows[0][1] == "561115"
         assert rows[0][2] == "餐館業"
 
+
+def test_atomic_db_replacement():
+    from scheduler.update_data import atomic_swap_db
+    with tempfile.TemporaryDirectory() as tmpdir:
+        target_db = os.path.join(tmpdir, "merchants.db")
+        new_db = os.path.join(tmpdir, "merchants.db.tmp")
+
+        # 寫入舊資料庫
+        old_conn = sqlite3.connect(target_db)
+        old_conn.execute("CREATE TABLE merchants (id INT, name TEXT)")
+        old_conn.execute("INSERT INTO merchants VALUES (1, 'Old Merchant')")
+        old_conn.commit()
+        old_conn.close()
+
+        # 寫入新資料庫
+        new_conn = sqlite3.connect(new_db)
+        new_conn.execute("CREATE TABLE merchants (id INT, name TEXT)")
+        new_conn.execute("INSERT INTO merchants VALUES (2, 'New Merchant')")
+        new_conn.commit()
+        new_conn.close()
+
+        # 執行原子性替換
+        atomic_swap_db(new_db, target_db)
+
+        # 驗證替換後資料為新資料庫的內容
+        check_conn = sqlite3.connect(target_db)
+        row = check_conn.execute("SELECT name FROM merchants").fetchone()
+        check_conn.close()
+        assert row[0] == "New Merchant"
+        assert not os.path.exists(new_db)
+
+

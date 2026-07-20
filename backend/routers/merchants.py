@@ -5,7 +5,7 @@ import unicodedata
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional, List, Tuple
 from backend.database import get_db
-from backend.models import Merchant, MerchantWithCoords, PaginatedMerchants, Stats, CityStat, IndustryInfo
+from backend.models import MerchantListItem, MerchantDetail, PaginatedMerchants, Stats, CityStat, IndustryInfo
 
 def space_segment(text: str) -> str:
     if not text:
@@ -83,12 +83,19 @@ def get_merchants(
     params = []
 
     # 解析搜尋關鍵字
-    if q:
+    if q is not None and q.strip() != "":
         fts_query = parse_search_query(q)
-        if fts_query:
-            joins.append("JOIN merchants_fts f ON m.id = f.rowid")
-            where_clauses.append("f.merchants_fts MATCH ?")
-            params.append(fts_query)
+        if not fts_query:
+            return {
+                "total": 0,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": 1,
+                "items": []
+            }
+        joins.append("JOIN merchants_fts f ON m.id = f.rowid")
+        where_clauses.append("f.merchants_fts MATCH ?")
+        params.append(fts_query)
 
     if city:
         safe_city = city.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -151,11 +158,11 @@ def get_merchants(
     }
 
 
-@router.get("/merchants/nearby", response_model=List[MerchantWithCoords])
+@router.get("/merchants/nearby", response_model=List[MerchantListItem])
 def get_nearby_merchants(
     lat: float = Query(..., ge=-89.0, le=89.0, description="Latitude of center point"),
     lon: float = Query(..., ge=-180.0, le=180.0, description="Longitude of center point"),
-    radius_km: float = Query(2.0, ge=0.1, le=50.0, description="Search radius in km"),
+    radius_km: float = Query(2.0, ge=0.1, le=20.0, description="Search radius in km"),
     q: Optional[str] = Query(None, description="Search keyword for name or address"),
     industry_code: Optional[str] = Query(None, description="Filter by industry code (supports prefix wildcard matching)"),
     limit: int = Query(100, ge=1, le=500, description="Max number of results"),
@@ -174,12 +181,13 @@ def get_nearby_merchants(
     ]
     params = [lat - lat_delta, lat + lat_delta, lon - lon_delta, lon + lon_delta]
 
-    if q:
+    if q is not None and q.strip() != "":
         fts_query = parse_search_query(q)
-        if fts_query:
-            joins.append("JOIN merchants_fts f ON m.id = f.rowid")
-            where_clauses.append("f.merchants_fts MATCH ?")
-            params.append(fts_query)
+        if not fts_query:
+            return []
+        joins.append("JOIN merchants_fts f ON m.id = f.rowid")
+        where_clauses.append("f.merchants_fts MATCH ?")
+        params.append(fts_query)
 
     if industry_code:
         where_clauses.append("""
@@ -213,7 +221,7 @@ def get_nearby_merchants(
     return results[:limit]
 
 
-@router.get("/merchants/{merchant_id_or_tax_id}", response_model=MerchantWithCoords)
+@router.get("/merchants/{merchant_id_or_tax_id}", response_model=MerchantDetail)
 def get_merchant(merchant_id_or_tax_id: str, db: sqlite3.Connection = Depends(get_db)):
     cursor = db.cursor()
     cursor.execute("SELECT * FROM merchants WHERE tax_id = ? OR id = ?", (merchant_id_or_tax_id, merchant_id_or_tax_id))

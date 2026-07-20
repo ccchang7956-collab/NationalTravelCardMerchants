@@ -11,28 +11,27 @@ class IndustryInfo(BaseModel):
     industry_name: str
 
 class MerchantBase(BaseModel):
+    id: int
     name: str
     address: Optional[str] = None
     zip_code: Optional[str] = None
     tax_id: Optional[str] = None
     website: Optional[str] = None
-    industries: List[MerchantIndustry] = []
 
-class Merchant(MerchantBase):
-    id: int
-
-class MerchantWithCoords(MerchantBase):
-    id: int
+class MerchantListItem(MerchantBase):
     lat: Optional[float] = None
     lon: Optional[float] = None
     distance_km: Optional[float] = None
+
+class MerchantDetail(MerchantListItem):
+    industries: List[MerchantIndustry] = []
 
 class PaginatedMerchants(BaseModel):
     total: int
     page: int
     per_page: int
     total_pages: int
-    items: List[MerchantWithCoords]
+    items: List[MerchantListItem]
 
 class CityStat(BaseModel):
     city: str
