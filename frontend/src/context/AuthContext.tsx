@@ -75,7 +75,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         })
         .finally(() => setLoading(false));
     } else {
-      setLoading(false);
+      Promise.resolve().then(() => setLoading(false));
     }
   }, []);
 

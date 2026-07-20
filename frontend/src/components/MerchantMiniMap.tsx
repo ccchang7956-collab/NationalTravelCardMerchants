@@ -1,5 +1,6 @@
 "use client";
 
+import type * as L from "leaflet";
 import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 
@@ -12,7 +13,7 @@ interface MerchantMiniMapProps {
 export default function MerchantMiniMap({ lat, lon, name }: MerchantMiniMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // 儲存 { map, marker } 以便後續更新
-  const instanceRef = useRef<{ map: any; marker: any } | null>(null);
+  const instanceRef = useRef<{ map: L.Map; marker: L.Marker } | null>(null);
 
   // ── 初始化地圖（只執行一次）────────────────────────────────────────────────
   useEffect(() => {
@@ -28,7 +29,7 @@ export default function MerchantMiniMap({ lat, lon, name }: MerchantMiniMapProps
       if (cancelled || !containerRef.current) return;
 
       // Fix default icon paths（webpack/turbopack bundling 需要）
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl:
           "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",

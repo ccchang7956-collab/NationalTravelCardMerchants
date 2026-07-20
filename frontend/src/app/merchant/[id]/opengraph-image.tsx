@@ -30,7 +30,7 @@ export default async function OgImage({
       address = merchant.address || "";
       cityBadge = address ? address.substring(0, 3) : "";
     }
-  } catch (_) {
+  } catch {
     // fallback to defaults
   }
 

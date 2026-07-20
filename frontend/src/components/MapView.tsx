@@ -1,5 +1,4 @@
-"use client";
-
+import type * as L from "leaflet";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { escapeHtml, sanitizeUrl } from "../utils/sanitize";
@@ -26,7 +25,7 @@ interface MapViewProps {
   center: [number, number];
   userLocation: [number, number] | null;
   onMapClick: (lat: number, lon: number) => void;
-  selectedMerchant: Merchant | null;
+  selectedMerchant?: Merchant | null;
   onSelectMerchant: (m: Merchant) => void;
   radius: number;
   tempRadius: number;
@@ -37,19 +36,18 @@ export default function MapView({
   center,
   userLocation,
   onMapClick,
-  selectedMerchant,
   onSelectMerchant,
   radius,
   tempRadius,
 }: MapViewProps) {
   const [mapReady, setMapReady] = useState(false);
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const markersLayerRef = useRef<any>(null);
-  const userMarkerRef = useRef<any>(null);
-  const centerMarkerRef = useRef<any>(null);
-  const circleRef = useRef<any>(null);
-  const LRef = useRef<any>(null);
+  const markersLayerRef = useRef<L.MarkerClusterGroup | null>(null);
+  const userMarkerRef = useRef<L.Marker | null>(null);
+  const centerMarkerRef = useRef<L.Marker | null>(null);
+  const circleRef = useRef<L.Circle | null>(null);
+  const LRef = useRef<typeof L | null>(null);
   const onMapClickRef = useRef(onMapClick);
   const router = useRouter();
   const isFirstRenderRef = useRef(true);
@@ -65,16 +63,16 @@ export default function MapView({
 
     const initMap = async () => {
       // Dynamically import leaflet JS (CSS already imported statically above)
-      const L = (await import("leaflet")).default;
+      const LModule = (await import("leaflet")).default;
       await import("leaflet.markercluster");
 
       if (!isMounted || !mapContainerRef.current) return;
 
-      LRef.current = L;
+      LRef.current = LModule;
 
       // Fix default icon paths for webpack/turbopack bundling
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
+      delete (LModule.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
+      LModule.Icon.Default.mergeOptions({
         iconRetinaUrl:
           "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
         iconUrl:
@@ -83,23 +81,23 @@ export default function MapView({
           "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
       });
 
-      const map = L.map(mapContainerRef.current!, {
+      const map = LModule.map(mapContainerRef.current!, {
         center: center,
         zoom: 14,
         zoomControl: true,
       });
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      LModule.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution:
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
       }).addTo(map);
 
-      map.on("click", (e: any) => {
+      map.on("click", (e: L.LeafletMouseEvent) => {
         onMapClickRef.current(e.latlng.lat, e.latlng.lng);
       });
 
-      const clusterGroup = (L as any).markerClusterGroup({
+      const clusterGroup = (LModule as unknown as { markerClusterGroup: (options: object) => L.MarkerClusterGroup }).markerClusterGroup({
         showCoverageOnHover: false,
         maxClusterRadius: 60,
         spiderfyOnMaxZoom: true,
@@ -132,8 +130,9 @@ export default function MapView({
   useEffect(() => {
     if (!mapReady || !mapRef.current || !markersLayerRef.current || !LRef.current) return;
     const L = LRef.current;
+    const markersLayer = markersLayerRef.current;
 
-    markersLayerRef.current.clearLayers();
+    markersLayer.clearLayers();
 
     const merchantIcon = L.divIcon({
       className: "",
@@ -181,8 +180,8 @@ export default function MapView({
       );
 
       // 攔截原生 <a> 點擊，改用 Next.js router 進行無刷新切換
-      marker.on("popupopen", (e: any) => {
-        const linkElement = e.popup.getElement()?.querySelector(".merchant-detail-link");
+      marker.on("popupopen", (e: L.PopupEvent) => {
+        const linkElement = e.popup.getElement()?.querySelector<HTMLElement>(".merchant-detail-link");
         if (linkElement) {
           linkElement.onclick = (ev: Event) => {
             ev.preventDefault();
@@ -195,9 +194,9 @@ export default function MapView({
       });
 
       marker.on("click", () => onSelectMerchant(m));
-      markersLayerRef.current.addLayer(marker);
+      markersLayer.addLayer(marker);
     });
-  }, [merchants, onSelectMerchant, mapReady]);
+  }, [merchants, onSelectMerchant, mapReady, router]);
 
   // Update user location marker
   useEffect(() => {

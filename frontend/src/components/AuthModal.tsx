@@ -43,8 +43,8 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }: Aut
 
       login(data.access_token, data.user);
       onClose();
-    } catch (err: any) {
-      setError(err.message || '連線錯誤');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '連線錯誤');
     } finally {
       setLoading(false);
     }

@@ -31,12 +31,13 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  if (!query.trim() && (results.length > 0 || showDropdown)) {
+    setResults([]);
+    setShowDropdown(false);
+  }
+
   useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
-      setShowDropdown(false);
-      return;
-    }
+    if (!query.trim()) return;
 
     const controller = new AbortController();
 

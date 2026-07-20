@@ -129,9 +129,26 @@ export default async function Home({
     return `/?${params.toString()}`;
   };
 
-  let sortedCities = stats?.cities || [];
+interface CityStat {
+  city: string;
+  count: number;
+}
+
+interface Merchant {
+  id: number;
+  name: string;
+  address: string | null;
+  zip_code: string | null;
+  tax_id: string | null;
+  website: string | null;
+  lat: number | null;
+  lon: number | null;
+  distance_km?: number;
+}
+
+  let sortedCities: CityStat[] = stats?.cities || [];
   if (sortedCities.length > 0) {
-    sortedCities = [...sortedCities].sort((a: any, b: any) => {
+    sortedCities = [...sortedCities].sort((a: CityStat, b: CityStat) => {
       const idxA = TAIWAN_CITIES.indexOf(a.city);
       const idxB = TAIWAN_CITIES.indexOf(b.city);
       return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
@@ -168,7 +185,7 @@ export default async function Home({
       {/* Merchant List */}
       {merchants.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {merchants.map((m: any) => {
+          {merchants.map((m: Merchant) => {
             const mapParams = new URLSearchParams();
             if (m.lat && m.lon) {
               mapParams.set("lat", m.lat.toString());

@@ -116,8 +116,8 @@ function MapContent() {
       } else {
         setLocationStatus("查詢失敗，請稍後再試");
       }
-    } catch (e: any) {
-      if (e.name === 'AbortError') return;
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') return;
       setLocationStatus("無法連線後端 API");
     } finally {
       if (abortControllerRef.current === controller) {
@@ -126,40 +126,39 @@ function MapContent() {
     }
   }, [updateURL]);
 
+  const lat = searchParams.get("lat");
+  const lon = searchParams.get("lon");
+  const r = searchParams.get("radius");
+  const q = searchParams.get("q");
+  const indCode = searchParams.get("industry_code");
+
+  const parsedLat = lat ? parseFloat(lat) : DEFAULT_CENTER[0];
+  const parsedLon = lon ? parseFloat(lon) : DEFAULT_CENTER[1];
+  const parsedRadius = r ? parseFloat(r) : 2;
+
+  const currentLat = isNaN(parsedLat) ? DEFAULT_CENTER[0] : parsedLat;
+  const currentLon = isNaN(parsedLon) ? DEFAULT_CENTER[1] : parsedLon;
+  const currentRadius = isNaN(parsedRadius) || parsedRadius <= 0 ? 2 : parsedRadius;
+  const currentKeyword = q || "";
+  const currentIndCode = indCode || "";
+
+  if (center[0].toFixed(5) !== currentLat.toFixed(5) || center[1].toFixed(5) !== currentLon.toFixed(5)) {
+    setCenter([currentLat, currentLon]);
+  }
+  if (radius !== currentRadius) {
+    setRadius(currentRadius);
+  }
+  if (tempRadius !== currentRadius) {
+    setTempRadius(currentRadius);
+  }
+  if (keyword !== currentKeyword) {
+    setKeyword(currentKeyword);
+  }
+  if (filterState.industryCode !== currentIndCode) {
+    setFilterState(prev => ({ ...prev, industryCode: currentIndCode }));
+  }
+
   useEffect(() => {
-    const lat = searchParams.get("lat");
-    const lon = searchParams.get("lon");
-    const r = searchParams.get("radius");
-    const q = searchParams.get("q");
-    const indCode = searchParams.get("industry_code");
-
-    const parsedLat = lat ? parseFloat(lat) : DEFAULT_CENTER[0];
-    const parsedLon = lon ? parseFloat(lon) : DEFAULT_CENTER[1];
-    const parsedRadius = r ? parseFloat(r) : 2;
-
-    const currentLat = isNaN(parsedLat) ? DEFAULT_CENTER[0] : parsedLat;
-    const currentLon = isNaN(parsedLon) ? DEFAULT_CENTER[1] : parsedLon;
-    const currentRadius = isNaN(parsedRadius) || parsedRadius <= 0 ? 2 : parsedRadius;
-    const currentKeyword = q || "";
-    const currentIndCode = indCode || "";
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (center[0].toFixed(5) !== currentLat.toFixed(5) || center[1].toFixed(5) !== currentLon.toFixed(5)) {
-      setCenter([currentLat, currentLon]);
-    }
-    if (radius !== currentRadius) {
-      setRadius(currentRadius);
-    }
-    if (tempRadius !== currentRadius) {
-      setTempRadius(currentRadius);
-    }
-    if (keyword !== currentKeyword) {
-      setKeyword(currentKeyword);
-    }
-    if (filterState.industryCode !== currentIndCode) {
-      setFilterState(prev => ({ ...prev, industryCode: currentIndCode }));
-    }
-
     const isStateSynced =
       center[0].toFixed(5) === currentLat.toFixed(5) &&
       center[1].toFixed(5) === currentLon.toFixed(5) &&
@@ -171,7 +170,7 @@ function MapContent() {
       fetchNearby(currentLat, currentLon, currentRadius, currentKeyword, currentIndCode);
     }
     isFirstLoadRef.current = false;
-  }, [searchParams, fetchNearby, center, radius, keyword, filterState.industryCode]); // 監聽 searchParams 的變化以支援雙向綁定與歷史導航
+  }, [searchParams, fetchNearby, center, radius, keyword, filterState.industryCode, lat, lon, currentLat, currentLon, currentRadius, currentKeyword, currentIndCode]);
 
   useEffect(() => {
     if (tempRadius === radius) return;

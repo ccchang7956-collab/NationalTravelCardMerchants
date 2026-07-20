@@ -138,7 +138,15 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (user) {
-      loadAllData();
+      let isMounted = true;
+      Promise.resolve().then(() => {
+        if (isMounted) {
+          loadAllData();
+        }
+      });
+      return () => {
+        isMounted = false;
+      };
     }
   }, [user, loadAllData]);
 

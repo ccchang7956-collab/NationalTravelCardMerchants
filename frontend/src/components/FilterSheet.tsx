@@ -59,22 +59,40 @@ export default function FilterSheet({
 
   useEffect(() => {
     if (!isOpen || industries.length > 0 || industriesLoading) return;
-    setIndustriesLoading(true);
-    fetch(`${API_URL}/api/industries`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setIndustries(data);
-        }
-      })
-      .catch((err) => console.error("Failed to fetch industries:", err))
-      .finally(() => setIndustriesLoading(false));
+    let isMounted = true;
+
+    Promise.resolve().then(() => {
+      if (!isMounted) return;
+      setIndustriesLoading(true);
+      fetch(`${API_URL}/api/industries`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (isMounted && Array.isArray(data)) {
+            setIndustries(data);
+          }
+        })
+        .catch((err) => console.error("Failed to fetch industries:", err))
+        .finally(() => {
+          if (isMounted) setIndustriesLoading(false);
+        });
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [isOpen, industries.length, industriesLoading]);
 
   // Sync draft when filters change externally (e.g. URL navigation)
-  useEffect(() => {
+  const [prevFilters, setPrevFilters] = useState<FilterState>(filters);
+  if (
+    filters.city !== prevFilters.city ||
+    filters.hasWebsite !== prevFilters.hasWebsite ||
+    filters.radiusKm !== prevFilters.radiusKm ||
+    filters.industryCode !== prevFilters.industryCode
+  ) {
+    setPrevFilters(filters);
     setDraft(filters);
-  }, [filters]);
+  }
 
   const handleClose = useCallback(() => {
     setIsOpen(false);

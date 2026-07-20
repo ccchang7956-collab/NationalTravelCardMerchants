@@ -28,7 +28,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     while (hasMore) {
       const res = await fetch(
         `${API_URL}/api/merchants?page=${page}&per_page=${PER_PAGE}`,
-        { next: { revalidate: 86400 } }
+        { next: { revalidate: 86400 }, signal: AbortSignal.timeout(3000) }
       );
 
       if (!res.ok) break;

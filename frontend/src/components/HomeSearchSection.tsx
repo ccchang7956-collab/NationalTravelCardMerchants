@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Form from "next/form";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
@@ -19,15 +19,17 @@ export default function HomeSearchSection({
 }: HomeSearchSectionProps) {
   const router = useRouter();
   const [filters, setFilters] = useState<FilterState>(initialFilters);
+  const [prevInitialFilters, setPrevInitialFilters] = useState<FilterState>(initialFilters);
 
-  useEffect(() => {
+  if (
+    initialFilters.city !== prevInitialFilters.city ||
+    initialFilters.hasWebsite !== prevInitialFilters.hasWebsite ||
+    initialFilters.radiusKm !== prevInitialFilters.radiusKm ||
+    initialFilters.industryCode !== prevInitialFilters.industryCode
+  ) {
+    setPrevInitialFilters(initialFilters);
     setFilters(initialFilters);
-  }, [
-    initialFilters.city,
-    initialFilters.hasWebsite,
-    initialFilters.radiusKm,
-    initialFilters.industryCode
-  ]);
+  }
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);

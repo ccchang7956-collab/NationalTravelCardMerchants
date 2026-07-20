@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { fetchWithAuth } from '@/utils/api';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
@@ -35,13 +35,15 @@ export default function AddExpenseModal({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      setMerchantName(defaultMerchantName);
-      setExpenseDate(getTodayString());
-      setError('');
-    }
-  }, [isOpen, defaultMerchantName]);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen && !prevIsOpen) {
+    setPrevIsOpen(true);
+    setMerchantName(defaultMerchantName);
+    setExpenseDate(getTodayString());
+    setError('');
+  } else if (!isOpen && prevIsOpen) {
+    setPrevIsOpen(false);
+  }
 
   if (!isOpen) return null;
 
@@ -83,8 +85,8 @@ export default function AddExpenseModal({
       setNote('');
       if (onSuccess) onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.message || '連線錯誤');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '連線錯誤');
     } finally {
       setLoading(false);
     }
