@@ -130,10 +130,17 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
     [fetchNearbyMerchants]
   );
 
-  // 當開啟抽屜時自動取得定位
+  // 當開啟抽屜時自動取得定位與監聽 Esc 鍵
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      window.addEventListener('keydown', handleKeyDown);
       Promise.resolve().then(() => {
         if (!coords) {
           requestLocationAndFetch(radius);
@@ -146,8 +153,9 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
     }
     return () => {
       document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, coords, radius, requestLocationAndFetch, fetchNearbyMerchants]);
+  }, [isOpen, coords, radius, requestLocationAndFetch, fetchNearbyMerchants, onClose]);
 
   // 切換半徑
   const handleRadiusChange = (newRadius: number) => {

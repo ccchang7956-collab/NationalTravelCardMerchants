@@ -14,6 +14,7 @@ def _safe_hashpw(password, salt):
 
 bcrypt.hashpw = _safe_hashpw
 
+import os
 import jwt
 from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
@@ -22,7 +23,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import sqlite3
 from backend.database import get_db
 
-SECRET_KEY = "national-travel-card-secret-key-change-in-prod"
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "national-travel-card-secret-key-change-in-prod")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 
