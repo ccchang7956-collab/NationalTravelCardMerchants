@@ -1,11 +1,9 @@
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
 import { buildGoogleMapsUrl, ItineraryItem } from './itineraryHelpers';
 
 describe('buildGoogleMapsUrl', () => {
   it('returns empty string for empty items array or null/undefined', () => {
-    assert.equal(buildGoogleMapsUrl([]), '');
-    assert.equal(buildGoogleMapsUrl(null as unknown as ItineraryItem[]), '');
+    expect(buildGoogleMapsUrl([])).toBe('');
+    expect(buildGoogleMapsUrl(null as unknown as ItineraryItem[])).toBe('');
   });
 
   it('returns Google Maps search URL for 1 item with lat/lon', () => {
@@ -13,7 +11,7 @@ describe('buildGoogleMapsUrl', () => {
       { custom_name: 'Taipei 101', lat: 25.0339, lon: 121.5645 }
     ];
     const url = buildGoogleMapsUrl(items);
-    assert.equal(url, 'https://www.google.com/maps/search/?api=1&query=25.0339%2C121.5645');
+    expect(url).toBe('https://www.google.com/maps/search/?api=1&query=25.0339%2C121.5645');
   });
 
   it('returns Google Maps search URL for 1 item with address fallback when lat/lon missing', () => {
@@ -21,7 +19,7 @@ describe('buildGoogleMapsUrl', () => {
       { custom_name: 'Taipei Station', address: 'No. 3, Beiping W Rd, Taipei City' }
     ];
     const url = buildGoogleMapsUrl(items);
-    assert.equal(url, `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('No. 3, Beiping W Rd, Taipei City')}`);
+    expect(url).toBe(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('No. 3, Beiping W Rd, Taipei City')}`);
   });
 
   it('returns Google Maps search URL for 1 item with custom_name fallback when lat/lon and address missing', () => {
@@ -29,7 +27,7 @@ describe('buildGoogleMapsUrl', () => {
       { custom_name: 'Mysterious Spot' }
     ];
     const url = buildGoogleMapsUrl(items);
-    assert.equal(url, `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Mysterious Spot')}`);
+    expect(url).toBe(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Mysterious Spot')}`);
   });
 
   it('returns Google Maps dir URL for 2 items without waypoints', () => {
@@ -38,8 +36,7 @@ describe('buildGoogleMapsUrl', () => {
       { custom_name: 'Raohe Night Market', lat: 25.0509, lon: 121.5775 }
     ];
     const url = buildGoogleMapsUrl(items);
-    assert.equal(
-      url,
+    expect(url).toBe(
       'https://www.google.com/maps/dir/?api=1&origin=25.0339%2C121.5645&destination=25.0509%2C121.5775'
     );
   });
@@ -51,10 +48,10 @@ describe('buildGoogleMapsUrl', () => {
       { custom_name: 'Raohe Night Market', lat: 25.0509, lon: 121.5775 }
     ];
     const url = buildGoogleMapsUrl(items);
-    assert.ok(url.startsWith('https://www.google.com/maps/dir/?api=1'));
-    assert.ok(url.includes('origin=25.0339%2C121.5645'));
-    assert.ok(url.includes('destination=25.0509%2C121.5775'));
-    assert.ok(url.includes('waypoints=25.0438%2C121.5607'));
+    expect(url.startsWith('https://www.google.com/maps/dir/?api=1')).toBe(true);
+    expect(url.includes('origin=25.0339%2C121.5645')).toBe(true);
+    expect(url.includes('destination=25.0509%2C121.5775')).toBe(true);
+    expect(url.includes('waypoints=25.0438%2C121.5607')).toBe(true);
   });
 
   it('handles multiple intermediate waypoints correctly', () => {
@@ -66,8 +63,7 @@ describe('buildGoogleMapsUrl', () => {
     ];
     const url = buildGoogleMapsUrl(items);
     const expectedWaypoints = `${encodeURIComponent('25.1,121.1')}|${encodeURIComponent('Taipei Zoo')}`;
-    assert.equal(
-      url,
+    expect(url).toBe(
       `https://www.google.com/maps/dir/?api=1&origin=25%2C121&destination=25.3%2C121.3&waypoints=${expectedWaypoints}`
     );
   });
