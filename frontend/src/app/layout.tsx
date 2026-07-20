@@ -25,6 +25,8 @@ export const metadata: Metadata = {
     "National Travel Card",
   ],
   authors: [{ name: "國旅卡商店檢索系統" }],
+  manifest: "/manifest.json",
+  themeColor: "#2563eb",
   alternates: {
     canonical: "/",
   },

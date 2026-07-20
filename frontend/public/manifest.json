@@ -1,0 +1,23 @@
+{
+  "name": "國民旅遊卡特約商店導航秘書",
+  "short_name": "國旅卡秘書",
+  "description": "全台國民旅遊卡特約商店查詢、雙額度補助統計與周邊地圖導航助手",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
