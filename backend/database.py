@@ -71,7 +71,38 @@ def init_db(conn: sqlite3.Connection = None):
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_favorites_user ON user_favorites(user_id);")
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_itineraries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            start_date TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS itinerary_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            itinerary_id INTEGER NOT NULL,
+            merchant_id INTEGER,
+            custom_name TEXT NOT NULL,
+            address TEXT,
+            lat REAL,
+            lon REAL,
+            order_index INTEGER NOT NULL,
+            estimated_cost REAL DEFAULT 0,
+            quota_category TEXT DEFAULT '一般消費',
+            stay_minutes INTEGER DEFAULT 60,
+            FOREIGN KEY (itinerary_id) REFERENCES user_itineraries (id) ON DELETE CASCADE,
+            FOREIGN KEY (merchant_id) REFERENCES merchants (id) ON DELETE SET NULL
+        )
+    """)
+
     conn.commit()
     if close_after:
         conn.close()
+
 

@@ -92,3 +92,44 @@ class AssistantSummary(BaseModel):
     total_spent: int
     favorites_count: int
 
+
+class ItineraryItemCreate(BaseModel):
+    merchant_id: Optional[int] = None
+    custom_name: str
+    address: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    order_index: int = 0
+    estimated_cost: float = 0.0
+    quota_category: str = "一般消費"
+    stay_minutes: int = 60
+
+class ItineraryItemResponse(ItineraryItemCreate):
+    id: int
+    itinerary_id: int
+
+class ItineraryCreate(BaseModel):
+    title: str
+    start_date: Optional[str] = None
+    notes: Optional[str] = None
+    items: List[ItineraryItemCreate] = []
+
+class ItineraryUpdate(BaseModel):
+    title: Optional[str] = None
+    start_date: Optional[str] = None
+    notes: Optional[str] = None
+    items: Optional[List[ItineraryItemCreate]] = None
+
+class ItineraryResponse(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    start_date: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str
+    updated_at: str
+    items: List[ItineraryItemResponse] = []
+    total_tourist_quota: float = 0.0
+    total_general_quota: float = 0.0
+
+
