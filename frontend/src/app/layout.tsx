@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Navbar from "@/components/Navbar";
+import GlobalRadar from "@/components/GlobalRadar";
 import { AuthProvider } from "@/context/AuthContext";
 import "./globals.css";
 
@@ -96,6 +97,7 @@ export default function RootLayout({
             <footer className="border-t border-border py-8 text-center text-sm text-muted mt-10">
               <p>資料來源：政府開放資料</p>
             </footer>
+            <GlobalRadar />
           </div>
         </AuthProvider>
       </body>
