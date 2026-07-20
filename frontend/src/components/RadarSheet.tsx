@@ -55,7 +55,8 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
     if (typeof window !== 'undefined') {
-      setIsOffline(!navigator.onLine);
+      const offlineState = !navigator.onLine;
+      Promise.resolve().then(() => setIsOffline(offlineState));
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
     }
@@ -133,11 +134,13 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      if (!coords) {
-        requestLocationAndFetch(radius);
-      } else {
-        fetchNearbyMerchants(coords.lat, coords.lon, radius);
-      }
+      Promise.resolve().then(() => {
+        if (!coords) {
+          requestLocationAndFetch(radius);
+        } else {
+          fetchNearbyMerchants(coords.lat, coords.lon, radius);
+        }
+      });
     } else {
       document.body.style.overflow = '';
     }
