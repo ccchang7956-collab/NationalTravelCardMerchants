@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { ListBulletIcon, MapIcon, ChartBarIcon, ArrowRightOnRectangleIcon, UserIcon, CalendarDaysIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/context/AuthContext";
 import AuthModal from "@/components/AuthModal";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -62,6 +63,8 @@ export default function Navbar() {
               <CalendarDaysIcon className={`w-5 h-5 transition-transform duration-300 ${isItineraryActive ? "scale-110" : "group-hover:scale-110"}`} />
               <span>行程規劃</span>
             </Link>
+
+            <ThemeToggle />
 
             {user ? (
               <>
