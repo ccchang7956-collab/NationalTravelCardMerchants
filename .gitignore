@@ -32,3 +32,8 @@ scripts/geocode_run.log
 .env
 data/
 *.bak
+
+# Agent Execution Logs
+.agents/
+.superpowers/
+

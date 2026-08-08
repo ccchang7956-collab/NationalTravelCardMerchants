@@ -239,3 +239,108 @@ def test_atomic_db_replacement():
         assert not os.path.exists(new_db)
 
 
+def test_transactional_sync_db_preserves_user_data():
+    from scheduler.update_data import transactional_sync_db
+    from backend.database import init_db
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        target_db = os.path.join(tmpdir, "target.db")
+        temp_db = os.path.join(tmpdir, "temp.db")
+
+        # 1. 建立並設置生產 DB（包含 5 張使用者個人資料表）
+        t_conn = sqlite3.connect(target_db)
+        t_conn.execute("PRAGMA foreign_keys = ON;")
+        init_db(t_conn)
+        t_cursor = t_conn.cursor()
+
+        # 寫入使用者與特約商店舊資料
+        t_cursor.execute("INSERT INTO merchants (id, name, address, zip_code, tax_id) VALUES (1, 'Old Merchant A', 'Old Addr A', '100', '12345678')")
+        t_cursor.execute("INSERT INTO users (id, email, hashed_password, name) VALUES (1, 'user@test.com', 'hash', 'Test User')")
+        t_cursor.execute("INSERT INTO user_expenses (user_id, merchant_id, merchant_name, amount, category, expense_date) VALUES (1, 1, 'Old Merchant A', 500, '觀光旅遊', '2026-08-01')")
+        t_cursor.execute("INSERT INTO user_favorites (user_id, merchant_id) VALUES (1, 1)")
+        t_cursor.execute("INSERT INTO user_itineraries (id, user_id, title) VALUES (1, 1, 'My Trip')")
+        t_cursor.execute("INSERT INTO itinerary_items (itinerary_id, merchant_id, custom_name, order_index) VALUES (1, 1, 'Stop 1', 0)")
+        t_conn.commit()
+        t_conn.close()
+
+        # 2. 建立新版 PDF 解析產生的暫存 DB（僅包含商家與行業別，無使用者資料表）
+        tmp_conn = sqlite3.connect(temp_db)
+        tmp_conn.execute("PRAGMA foreign_keys = ON;")
+        tmp_cursor = tmp_conn.cursor()
+        tmp_cursor.execute("""
+            CREATE TABLE merchants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                address TEXT,
+                zip_code TEXT,
+                tax_id TEXT UNIQUE,
+                website TEXT,
+                lat REAL,
+                lon REAL
+            )
+        """)
+        tmp_cursor.execute("""
+            CREATE TABLE merchant_industries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_id TEXT NOT NULL,
+                industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL,
+                priority INTEGER NOT NULL
+            )
+        """)
+
+        # 暫存 DB 包含更新後的 Merchant A 以及新增的 Merchant B
+        tmp_cursor.execute("INSERT INTO merchants (name, address, zip_code, tax_id, website) VALUES ('Updated Merchant A', 'New Addr A', '100', '12345678', 'https://m-a.com')")
+        tmp_cursor.execute("INSERT INTO merchants (name, address, zip_code, tax_id, website) VALUES ('New Merchant B', 'Addr B', '200', '87654321', 'https://m-b.com')")
+        tmp_cursor.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES ('12345678', '561115', '餐館業', 1)")
+        tmp_conn.commit()
+        tmp_conn.close()
+
+        # 3. 執行交易式同步
+        transactional_sync_db(temp_db, target_db)
+
+        # 4. 驗證生產 DB
+        res_conn = sqlite3.connect(target_db)
+        res_conn.row_factory = sqlite3.Row
+        res_cursor = res_conn.cursor()
+
+        # 驗證使用者 5 張表 100% 完好
+        users = res_cursor.execute("SELECT * FROM users").fetchall()
+        expenses = res_cursor.execute("SELECT * FROM user_expenses").fetchall()
+        favorites = res_cursor.execute("SELECT * FROM user_favorites").fetchall()
+        itineraries = res_cursor.execute("SELECT * FROM user_itineraries").fetchall()
+        items = res_cursor.execute("SELECT * FROM itinerary_items").fetchall()
+
+        assert len(users) == 1
+        assert users[0]["email"] == "user@test.com"
+
+        assert len(expenses) == 1
+        assert expenses[0]["merchant_id"] == 1
+
+        assert len(favorites) == 1
+        assert favorites[0]["merchant_id"] == 1
+
+        assert len(itineraries) == 1
+        assert len(items) == 1
+        assert items[0]["merchant_id"] == 1
+
+        # 驗證 Merchant A id 保留為 1 且內容已更新
+        m_a = res_cursor.execute("SELECT * FROM merchants WHERE tax_id = '12345678'").fetchone()
+        assert m_a["id"] == 1
+        assert m_a["name"] == "Updated Merchant A"
+        assert m_a["website"] == "https://m-a.com"
+
+        # 驗證 Merchant B 被順利新增
+        m_b = res_cursor.execute("SELECT * FROM merchants WHERE tax_id = '87654321'").fetchone()
+        assert m_b is not None
+        assert m_b["name"] == "New Merchant B"
+
+        # 驗證行業別已被寫入
+        ind = res_cursor.execute("SELECT * FROM merchant_industries WHERE tax_id = '12345678'").fetchall()
+        assert len(ind) == 1
+        assert ind[0]["industry_name"] == "餐館業"
+
+        res_conn.close()
+
+
+

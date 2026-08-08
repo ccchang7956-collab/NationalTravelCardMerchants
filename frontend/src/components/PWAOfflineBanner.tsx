@@ -1,26 +1,56 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useSyncExternalStore } from 'react';
 
-export default function PWAOfflineBanner() {
-  const [isOffline, setIsOffline] = useState<boolean>(false);
+let isOfflineState = typeof navigator !== 'undefined' ? !navigator.onLine : false;
+const listeners = new Set<() => void>();
+let cleanupListeners: (() => void) | null = null;
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
-      setIsOffline(!navigator.onLine);
-    }
+function subscribe(callback: () => void) {
+  listeners.add(callback);
 
-    const handleOffline = () => setIsOffline(true);
-    const handleOnline = () => setIsOffline(false);
+  if (typeof window !== 'undefined' && listeners.size === 1) {
+    isOfflineState = !navigator.onLine;
+    const handleOffline = () => {
+      isOfflineState = true;
+      listeners.forEach((cb) => cb());
+    };
+    const handleOnline = () => {
+      isOfflineState = false;
+      listeners.forEach((cb) => cb());
+    };
 
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
 
-    return () => {
+    cleanupListeners = () => {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
     };
-  }, []);
+  }
+
+  return () => {
+    listeners.delete(callback);
+    if (listeners.size === 0 && cleanupListeners) {
+      cleanupListeners();
+      cleanupListeners = null;
+    }
+  };
+}
+
+function getSnapshot() {
+  if (typeof navigator !== 'undefined' && listeners.size === 0) {
+    isOfflineState = !navigator.onLine;
+  }
+  return isOfflineState;
+}
+
+function getServerSnapshot() {
+  return false;
+}
+
+export default function PWAOfflineBanner() {
+  const isOffline = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   if (!isOffline) {
     return null;

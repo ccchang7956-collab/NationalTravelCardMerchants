@@ -7,63 +7,30 @@ from typing import Optional, List, Tuple
 from backend.database import get_db
 from backend.models import MerchantListItem, MerchantDetail, PaginatedMerchants, Stats, CityStat, IndustryInfo
 
-def space_segment(text: str) -> str:
-    if not text:
-        return ""
-    result = []
-    current_word = []
-    for char in text:
-        # 僅對 ASCII 字母與數字（英文/數字）進行分組
-        if char.isascii() and char.isalnum():
-            current_word.append(char)
-        else:
-            if current_word:
-                result.append("".join(current_word))
-                current_word = []
-            # 僅保留字母字元（包含常見與罕見中文字元），丟棄標點符號與空白
-            if char.isalpha():
-                result.append(char)
-    if current_word:
-        result.append("".join(current_word))
-    return " ".join(result)
-
-def parse_search_query(q: Optional[str]) -> Optional[str]:
-    if not q:
-        return None
-    
-    # 進行 Unicode 標準化，並將「臺」置換為「台」以利檢索
-    q_norm = unicodedata.normalize("NFKC", q.strip())
-    q_norm = q_norm.replace("臺", "台")
-    # 先將雙引號移除，以避免字串中夾雜雙引號導致的分詞斷開
-    q_norm = q_norm.replace('"', '')
-    
-    # 保留字母、數字、中文與安全符號，其餘轉為空格
-    cleaned_q = re.sub(r'[^\w\s\u4e00-\u9fff\-&+=]', ' ', q_norm)
-    
-    parts = []
-    seen = set()
-    for term in cleaned_q.split():
-        term = term.strip()
-        if not term:
-            continue
-        if term in seen:
-            continue
-        seen.add(term)
-        segmented = space_segment(term)
-        parts.append(f'"{segmented}"')
-        
-    return " AND ".join(parts) if parts else None
+from backend.services.search_service import space_segment, parse_search_query
 
 router = APIRouter()
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance in km between two lat/lon points."""
+    if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+        return 0.0
+    try:
+        lat1, lon1, lat2, lon2 = float(lat1), float(lon1), float(lat2), float(lon2)
+    except (ValueError, TypeError):
+        return 0.0
+
+    if math.isnan(lat1) or math.isnan(lon1) or math.isnan(lat2) or math.isnan(lon2) or \
+       math.isinf(lat1) or math.isinf(lon1) or math.isinf(lat2) or math.isinf(lon2):
+        return 0.0
+
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    a_clamped = max(0.0, min(1.0, a))
+    return R * 2 * math.atan2(math.sqrt(a_clamped), math.sqrt(max(0.0, 1.0 - a_clamped)))
 
 @router.get("/merchants", response_model=PaginatedMerchants)
 def get_merchants(
@@ -135,19 +102,28 @@ def get_merchants(
         count_query += where_str
 
     cursor = db.cursor()
-    cursor.execute(count_query, params)
-    total = cursor.fetchone()[0]
-    total_pages = math.ceil(total / per_page) if total > 0 else 1
-    offset = (page - 1) * per_page
+    try:
+        cursor.execute(count_query, params)
+        total = cursor.fetchone()[0]
+        total_pages = math.ceil(total / per_page) if total > 0 else 1
+        offset = (page - 1) * per_page
 
-    query += " LIMIT ? OFFSET ?"
-    # 為了不影響 params 陣列，另外拷貝分頁參數
-    query_params = list(params)
-    query_params.extend([per_page, offset])
-    
-    cursor.execute(query, query_params)
-    rows = cursor.fetchall()
-    items = [dict(row) for row in rows]
+        query += " LIMIT ? OFFSET ?"
+        # 為了不影響 params 陣列，另外拷貝分頁參數
+        query_params = list(params)
+        query_params.extend([per_page, offset])
+        
+        cursor.execute(query, query_params)
+        rows = cursor.fetchall()
+        items = [dict(row) for row in rows]
+    except sqlite3.OperationalError:
+        return {
+            "total": 0,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": 1,
+            "items": []
+        }
 
     return {
         "total": total,
@@ -160,20 +136,39 @@ def get_merchants(
 
 @router.get("/merchants/nearby", response_model=List[MerchantListItem])
 def get_nearby_merchants(
-    lat: float = Query(..., ge=-89.0, le=89.0, description="Latitude of center point"),
-    lon: float = Query(..., ge=-180.0, le=180.0, description="Longitude of center point"),
+    lat: float = Query(..., description="Latitude of center point"),
+    lon: float = Query(..., description="Longitude of center point"),
     radius_km: float = Query(2.0, ge=0.1, le=20.0, description="Search radius in km"),
     q: Optional[str] = Query(None, description="Search keyword for name or address"),
     industry_code: Optional[str] = Query(None, description="Filter by industry code (supports prefix wildcard matching)"),
     limit: int = Query(100, ge=1, le=500, description="Max number of results"),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    # Approx degrees per km
-    lat_delta = radius_km / 111.0
-    lon_delta = min(radius_km / (111.0 * math.cos(math.radians(lat))), 180.0)
+    if math.isnan(lat) or math.isnan(lon) or math.isinf(lat) or math.isinf(lon):
+        raise HTTPException(status_code=400, detail="Invalid latitude or longitude")
+    if not (-90.0 <= lat <= 90.0):
+        raise HTTPException(status_code=400, detail="Latitude must be between -90.0 and 90.0")
+    if not (-180.0 <= lon <= 180.0):
+        raise HTTPException(status_code=400, detail="Longitude must be between -180.0 and 180.0")
 
-    cos_lat = math.cos(math.radians(lat))
-    cos_lat_sq = cos_lat * cos_lat
+    cos_val = math.cos(math.radians(lat))
+    abs_cos = abs(cos_val)
+    if abs_cos < 1e-9:
+        lon_delta = 180.0
+    else:
+        lon_delta = min(radius_km / (111.0 * abs_cos), 180.0)
+
+    lat_delta = radius_km / 111.0
+    cos_lat_sq = cos_val * cos_val
+
+    min_lat = max(-90.0, lat - lat_delta)
+    max_lat = min(90.0, lat + lat_delta)
+    if abs_cos < 1e-9 or lon_delta >= 180.0:
+        min_lon = -180.0
+        max_lon = 180.0
+    else:
+        min_lon = lon - lon_delta
+        max_lon = lon + lon_delta
 
     query = f"""
         SELECT m.*, 
@@ -186,7 +181,7 @@ def get_nearby_merchants(
         "m.lat BETWEEN ? AND ?",
         "m.lon BETWEEN ? AND ?"
     ]
-    params = [lat, lat, lon, lon, lat - lat_delta, lat + lat_delta, lon - lon_delta, lon + lon_delta]
+    params = [lat, lat, lon, lon, min_lat, max_lat, min_lon, max_lon]
 
     if q is not None and q.strip() != "":
         fts_query = parse_search_query(q)
@@ -217,8 +212,11 @@ def get_nearby_merchants(
     params.append(candidate_limit)
 
     cursor = db.cursor()
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
+    try:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+    except sqlite3.OperationalError:
+        return []
     
     results = []
     for row in rows:

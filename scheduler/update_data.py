@@ -268,6 +268,13 @@ def normalize_text(text: str) -> str:
     text = unicodedata.normalize("NFKC", text.strip())
     return text.replace("臺", "台")
 
+def normalize_tax_id(tax_id: Optional[str]) -> Optional[str]:
+    if tax_id is None:
+        return None
+    cleaned = re.sub(r'[\s\u3000]+', '', str(tax_id))
+    return cleaned if cleaned else None
+
+
 def is_website(text: str) -> bool:
     text = text.lower()
     if "@" in text:
@@ -535,7 +542,16 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
             if last_items and is_website(last_items[0]):
                 records[-1]["website"] = last_items[0]
 
-        insert_data = [(r["name"], r["address"], r["zip_code"], r["tax_id"], r["website"]) for r in records]
+        insert_data = [
+            (
+                r["name"],
+                r["address"],
+                r["zip_code"],
+                normalize_tax_id(r["tax_id"]),
+                r["website"]
+            )
+            for r in records
+        ]
         cursor.executemany(
             "INSERT OR IGNORE INTO merchants (name, address, zip_code, tax_id, website) VALUES (?, ?, ?, ?, ?)",
             insert_data
@@ -576,16 +592,25 @@ def migrate_coords(old_db: str, new_db: str) -> int:
         new_conn.execute("PRAGMA foreign_keys = ON;")
         new_conn.execute("PRAGMA busy_timeout = 5000;")
         rows = old_conn.execute(
-            "SELECT tax_id, lat, lon FROM merchants WHERE lat IS NOT NULL AND tax_id IS NOT NULL"
+            "SELECT tax_id, lat, lon FROM merchants WHERE lat IS NOT NULL AND tax_id IS NOT NULL AND trim(tax_id) != ''"
         ).fetchall()
-        if not rows:
-            log.info("   舊 DB 無座標資料")
-            return 0
-        new_conn.executemany(
-            "UPDATE merchants SET lat=?, lon=? WHERE tax_id=?",
-            [(lat, lon, tid) for tid, lat, lon in rows]
-        )
-        new_conn.commit()
+        if rows:
+            new_conn.executemany(
+                "UPDATE merchants SET lat=?, lon=? WHERE tax_id=?",
+                [(lat, lon, tid) for tid, lat, lon in rows]
+            )
+            new_conn.commit()
+
+        null_rows = old_conn.execute(
+            "SELECT name, address, lat, lon FROM merchants WHERE lat IS NOT NULL AND (tax_id IS NULL OR trim(tax_id) = '')"
+        ).fetchall()
+        if null_rows:
+            new_conn.executemany(
+                "UPDATE merchants SET lat=?, lon=? WHERE (tax_id IS NULL OR trim(tax_id) = '') AND name=? AND COALESCE(address, '')=COALESCE(?, '') AND lat IS NULL",
+                [(lat, lon, name, address) for name, address, lat, lon in null_rows]
+            )
+            new_conn.commit()
+
         migrated = new_conn.execute("SELECT COUNT(*) FROM merchants WHERE lat IS NOT NULL").fetchone()[0]
         log.info(f"✅ 座標遷移完成：{migrated} 筆保留座標")
         return migrated
@@ -676,6 +701,170 @@ def fill_missing_coords(db_path: str) -> int:
     finally:
         if conn:
             conn.close()
+
+
+def transactional_sync_db(temp_db_path: str, target_db_path: str) -> None:
+    """
+    將剛解析建好的 temp_db_path 資料以 SQLite 交易與 UPSERT 方式同步更新至 target_db_path。
+    此方式可完整保留 target_db_path 中 users, user_expenses, user_favorites,
+    user_itineraries, itinerary_items 等 5 張使用者個人資料表，
+    並且維持既有特約商店之 id 主鍵與外鍵關聯不變。
+    """
+    from backend.database import init_db
+
+    target_dir = os.path.dirname(target_db_path)
+    if target_dir:
+        os.makedirs(target_dir, exist_ok=True)
+
+    # 1. 讀取 temp_db 資料
+    temp_conn = sqlite3.connect(temp_db_path)
+    temp_conn.row_factory = sqlite3.Row
+    try:
+        temp_merchants_rows = temp_conn.execute("SELECT name, address, zip_code, tax_id, website, lat, lon FROM merchants").fetchall()
+        
+        has_industries = temp_conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='merchant_industries'"
+        ).fetchone()
+        if has_industries:
+            temp_industries_rows = temp_conn.execute("SELECT tax_id, industry_code, industry_name, priority FROM merchant_industries").fetchall()
+        else:
+            temp_industries_rows = []
+    finally:
+        temp_conn.close()
+
+    # 2. 規範化 temp 資料 (Python 處理全形空白 \u3000 與空字串 -> None)
+    normalized_temp_merchants = []
+    for r in temp_merchants_rows:
+        tid = normalize_tax_id(r["tax_id"])
+        normalized_temp_merchants.append({
+            "name": r["name"],
+            "address": r["address"],
+            "zip_code": r["zip_code"],
+            "tax_id": tid,
+            "website": r["website"],
+            "lat": r["lat"],
+            "lon": r["lon"]
+        })
+
+    normalized_temp_industries = []
+    for r in temp_industries_rows:
+        tid = normalize_tax_id(r["tax_id"])
+        if tid:
+            normalized_temp_industries.append({
+                "tax_id": tid,
+                "industry_code": r["industry_code"],
+                "industry_name": r["industry_name"],
+                "priority": r["priority"]
+            })
+
+    # 3. 連接 target_db 並在單一 BEGIN IMMEDIATE 交易中完成同步
+    target_conn = sqlite3.connect(target_db_path, isolation_level=None, timeout=10.0)
+    target_conn.execute("PRAGMA journal_mode = WAL;")
+    target_conn.execute("PRAGMA busy_timeout = 5000;")
+    target_conn.execute("PRAGMA foreign_keys = ON;")
+    target_conn.execute("PRAGMA synchronous = NORMAL;")
+    
+    # 僅在資料庫尚未初始化時才執行 init_db，避免每次同步皆執行 DDL 導致 schema 鎖定與 Lock 衝突
+    table_exists = target_conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='merchants'").fetchone()
+    if not table_exists:
+        init_db(target_conn)
+
+    try:
+        cursor = target_conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+
+        # 0. 規範化 target_db 既有資料的 tax_id
+        cursor.execute("UPDATE merchants SET tax_id = NULLIF(TRIM(REPLACE(REPLACE(tax_id, CHAR(12288), ''), ' ', '')), '');")
+
+        # 1. 有 tax_id 商家 UPSERT
+        valid_tax_merchants = [m for m in normalized_temp_merchants if m["tax_id"] is not None]
+        new_tax_ids = {m["tax_id"] for m in valid_tax_merchants}
+
+        cursor.executemany("""
+            INSERT INTO merchants (name, address, zip_code, tax_id, website, lat, lon)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(tax_id) DO UPDATE SET
+                name = excluded.name,
+                address = excluded.address,
+                zip_code = excluded.zip_code,
+                website = excluded.website,
+                lat = COALESCE(excluded.lat, merchants.lat),
+                lon = COALESCE(excluded.lon, merchants.lon);
+        """, [
+            (m["name"], m["address"], m["zip_code"], m["tax_id"], m["website"], m["lat"], m["lon"])
+            for m in valid_tax_merchants
+        ])
+
+        # 2. 無 tax_id 商家更新與新增
+        no_tax_merchants = [m for m in normalized_temp_merchants if m["tax_id"] is None]
+        seen_keys = set()
+        unique_no_tax_merchants = []
+        for m in no_tax_merchants:
+            key = (m["name"], m["address"] or "")
+            if key not in seen_keys:
+                seen_keys.add(key)
+                unique_no_tax_merchants.append(m)
+
+        for m in unique_no_tax_merchants:
+            updated = cursor.execute("""
+                UPDATE merchants
+                SET zip_code = ?, website = ?,
+                    lat = COALESCE(?, lat), lon = COALESCE(?, lon)
+                WHERE tax_id IS NULL AND name = ? AND COALESCE(address, '') = COALESCE(?, '')
+            """, (m["zip_code"], m["website"], m["lat"], m["lon"], m["name"], m["address"])).rowcount
+
+            if updated == 0:
+                cursor.execute("""
+                    INSERT INTO merchants (name, address, zip_code, tax_id, website, lat, lon)
+                    VALUES (?, ?, ?, NULL, ?, ?, ?)
+                """, (m["name"], m["address"], m["zip_code"], m["website"], m["lat"], m["lon"]))
+
+        # 3. 刪除下架商家
+        if new_tax_ids:
+            placeholders = ",".join("?" for _ in new_tax_ids)
+            cursor.execute(f"DELETE FROM merchants WHERE tax_id IS NOT NULL AND tax_id NOT IN ({placeholders})", list(new_tax_ids))
+        else:
+            cursor.execute("DELETE FROM merchants WHERE tax_id IS NOT NULL")
+
+        no_tax_keys = {(m["name"], m["address"] or "") for m in unique_no_tax_merchants}
+        existing_no_tax = cursor.execute("SELECT id, name, address FROM merchants WHERE tax_id IS NULL").fetchall()
+        for eid, ename, eaddr in existing_no_tax:
+            if (ename, eaddr or "") not in no_tax_keys:
+                cursor.execute("DELETE FROM merchants WHERE id = ?", (eid,))
+
+        # 4. 同步 merchant_industries
+        cursor.execute("DELETE FROM merchant_industries;")
+        target_tax_ids = {row[0] for row in cursor.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL").fetchall()}
+        
+        valid_industries = [
+            (ind["tax_id"], ind["industry_code"], ind["industry_name"], ind["priority"])
+            for ind in normalized_temp_industries
+            if ind["tax_id"] in target_tax_ids
+        ]
+        if valid_industries:
+            cursor.executemany("""
+                INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority)
+                VALUES (?, ?, ?, ?);
+            """, valid_industries)
+
+        # 5. 重建 merchants_fts
+        cursor.execute("DELETE FROM merchants_fts;")
+        merchant_rows = cursor.execute("SELECT id, name, address FROM merchants;").fetchall()
+        fts_batch = [(r[0], space_segment(r[1]), space_segment(r[2])) for r in merchant_rows]
+        cursor.executemany("INSERT INTO merchants_fts (rowid, name, address) VALUES (?, ?, ?);", fts_batch)
+
+        cursor.execute("COMMIT")
+        log.info(f"✅ 交易式同步 DB 成功：{target_db_path}")
+
+    except Exception as e:
+        try:
+            cursor.execute("ROLLBACK")
+        except Exception:
+            pass
+        log.error(f"❌ 交易式同步 DB 失敗，已 Rollback：{e}")
+        raise e
+    finally:
+        target_conn.close()
 
 
 def atomic_swap_db(temp_db_path: str, target_db_path: str) -> None:
@@ -795,9 +984,10 @@ def main():
         # 6. 填補缺失座標
         fill_missing_coords(new_db)
         
-        # 7. 原子性替換生產 DB
-        atomic_swap_db(new_db, DB_PATH)
+        # 7. 交易式同步至生產 DB（保護 5 張使用者資料表）
+        transactional_sync_db(new_db, DB_PATH)
         log.info(f"✅ DB 已更新：{DB_PATH}")
+
 
     # 8. 記錄 hash
     with open(HASH_FILE, "w") as f:

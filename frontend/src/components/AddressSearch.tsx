@@ -31,10 +31,14 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (!query.trim() && (results.length > 0 || showDropdown)) {
-    setResults([]);
-    setShowDropdown(false);
-  }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setQuery(val);
+    if (!val.trim()) {
+      setResults([]);
+      setShowDropdown(false);
+    }
+  };
 
   useEffect(() => {
     if (!query.trim()) return;
@@ -87,7 +91,7 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={handleInputChange}
           onFocus={() => { if (results.length > 0) setShowDropdown(true); }}
           placeholder="輸入地址輔助定位..."
           className="w-full pl-9 pr-8 py-2 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all text-sm"

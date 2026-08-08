@@ -4,7 +4,18 @@ import { useState, useEffect, useCallback, Suspense, useRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { MapPinIcon, PaperAirplaneIcon, ArrowLeftIcon, ChevronRightIcon, GlobeAltIcon, AdjustmentsHorizontalIcon, MagnifyingGlassIcon, MapIcon } from "@heroicons/react/24/outline";
+import {
+  MapPinIcon,
+  PaperAirplaneIcon,
+  ArrowLeftIcon,
+  ChevronRightIcon,
+  GlobeAltIcon,
+  AdjustmentsHorizontalIcon,
+  MagnifyingGlassIcon,
+  MapIcon,
+  ExclamationTriangleIcon,
+  ArrowPathIcon
+} from "@heroicons/react/24/outline";
 import AddressSearch from "@/components/AddressSearch";
 import FilterSheet, { FilterState, DEFAULT_FILTER_STATE } from "@/components/FilterSheet";
 import { getPublicApiUrl } from "@/utils/env";
@@ -41,7 +52,8 @@ function MapContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const abortControllerRef = useRef<AbortController | null>(null);
-  const isFirstLoadRef = useRef(true);
+  const lastFetchedRef = useRef<string>("");
+  const merchantRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   useEffect(() => {
     return () => {
@@ -64,6 +76,7 @@ function MapContent() {
   const [filterState, setFilterState] = useState<FilterState>(DEFAULT_FILTER_STATE);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationGeoError, setLocationGeoError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // Sync state to URL
   const updateURL = useCallback((lat: number, lon: number, r: number, q: string, indCode: string = "") => {
@@ -73,7 +86,6 @@ function MapContent() {
     const currentQ = searchParams.get("q") || "";
     const currentIndCode = searchParams.get("industry_code") || "";
 
-    // Check if URL query params match the new values to avoid infinite routing loop
     if (
       currentLat && parseFloat(currentLat).toFixed(5) === lat.toFixed(5) &&
       currentLon && parseFloat(currentLon).toFixed(5) === lon.toFixed(5) &&
@@ -94,6 +106,9 @@ function MapContent() {
   }, [router, searchParams]);
 
   const fetchNearby = useCallback(async (lat: number, lon: number, r: number, q: string, indCode: string = "") => {
+    const fetchKey = `${lat.toFixed(5)},${lon.toFixed(5)},${r},${q},${indCode}`;
+    lastFetchedRef.current = fetchKey;
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -101,6 +116,7 @@ function MapContent() {
     abortControllerRef.current = controller;
 
     setLoading(true);
+    setApiError(null);
     updateURL(lat, lon, r, q, indCode);
     try {
       const qParam = q ? `&q=${encodeURIComponent(q)}` : "";
@@ -115,10 +131,12 @@ function MapContent() {
         setLocationStatus(`找到 ${data.length} 間商店（半徑 ${r} km 內）`);
       } else {
         setLocationStatus("查詢失敗，請稍後再試");
+        setApiError(`後端 API 回應錯誤 (${res.status})`);
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'AbortError') return;
       setLocationStatus("無法連線後端 API");
+      setApiError("無法連線後端 API，請確認網路連線或後端服務狀態");
     } finally {
       if (abortControllerRef.current === controller) {
         setLoading(false);
@@ -126,63 +144,69 @@ function MapContent() {
     }
   }, [updateURL]);
 
-  const lat = searchParams.get("lat");
-  const lon = searchParams.get("lon");
-  const r = searchParams.get("radius");
-  const q = searchParams.get("q");
-  const indCode = searchParams.get("industry_code");
+  // Parse URL query params
+  const latParam = searchParams.get("lat");
+  const lonParam = searchParams.get("lon");
+  const radiusParam = searchParams.get("radius");
+  const qParam = searchParams.get("q");
+  const indCodeParam = searchParams.get("industry_code");
 
-  const parsedLat = lat ? parseFloat(lat) : DEFAULT_CENTER[0];
-  const parsedLon = lon ? parseFloat(lon) : DEFAULT_CENTER[1];
-  const parsedRadius = r ? parseFloat(r) : 2;
+  const parsedLat = latParam ? parseFloat(latParam) : DEFAULT_CENTER[0];
+  const parsedLon = lonParam ? parseFloat(lonParam) : DEFAULT_CENTER[1];
+  const parsedRadius = radiusParam ? parseFloat(radiusParam) : 2;
 
-  const currentLat = isNaN(parsedLat) ? DEFAULT_CENTER[0] : parsedLat;
-  const currentLon = isNaN(parsedLon) ? DEFAULT_CENTER[1] : parsedLon;
-  const currentRadius = isNaN(parsedRadius) || parsedRadius <= 0 ? 2 : parsedRadius;
-  const currentKeyword = q || "";
-  const currentIndCode = indCode || "";
+  const targetLat = isNaN(parsedLat) ? DEFAULT_CENTER[0] : parsedLat;
+  const targetLon = isNaN(parsedLon) ? DEFAULT_CENTER[1] : parsedLon;
+  const targetRadius = isNaN(parsedRadius) || parsedRadius <= 0 ? 2 : parsedRadius;
+  const targetKeyword = qParam || "";
+  const targetIndCode = indCodeParam || "";
 
-  if (center[0].toFixed(5) !== currentLat.toFixed(5) || center[1].toFixed(5) !== currentLon.toFixed(5)) {
-    setCenter([currentLat, currentLon]);
-  }
-  if (radius !== currentRadius) {
-    setRadius(currentRadius);
-  }
-  if (tempRadius !== currentRadius) {
-    setTempRadius(currentRadius);
-  }
-  if (keyword !== currentKeyword) {
-    setKeyword(currentKeyword);
-  }
-  if (filterState.industryCode !== currentIndCode) {
-    setFilterState(prev => ({ ...prev, industryCode: currentIndCode }));
+  const [prevParamsKey, setPrevParamsKey] = useState<string>("");
+  const currentParamsKey = `${targetLat.toFixed(5)},${targetLon.toFixed(5)},${targetRadius},${targetKeyword},${targetIndCode}`;
+
+  if (currentParamsKey !== prevParamsKey) {
+    setPrevParamsKey(currentParamsKey);
+    setCenter([targetLat, targetLon]);
+    setRadius(targetRadius);
+    setTempRadius(targetRadius);
+    setKeyword(targetKeyword);
+    setFilterState(prev => prev.industryCode === targetIndCode ? prev : { ...prev, industryCode: targetIndCode });
   }
 
+  // Trigger fetch when URL parameters change or initial load
   useEffect(() => {
-    const isStateSynced =
-      center[0].toFixed(5) === currentLat.toFixed(5) &&
-      center[1].toFixed(5) === currentLon.toFixed(5) &&
-      radius === currentRadius &&
-      keyword === currentKeyword &&
-      filterState.industryCode === currentIndCode;
+    let isCancelled = false;
+    Promise.resolve().then(() => {
+      if (!isCancelled) {
+        fetchNearby(targetLat, targetLon, targetRadius, targetKeyword, targetIndCode);
+      }
+    });
+    return () => {
+      isCancelled = true;
+    };
+  }, [fetchNearby, targetLat, targetLon, targetRadius, targetKeyword, targetIndCode]);
 
-    if (lat && lon && (isFirstLoadRef.current || !isStateSynced)) {
-      fetchNearby(currentLat, currentLon, currentRadius, currentKeyword, currentIndCode);
-    }
-    isFirstLoadRef.current = false;
-  }, [searchParams, fetchNearby, center, radius, keyword, filterState.industryCode, lat, lon, currentLat, currentLon, currentRadius, currentKeyword, currentIndCode]);
-
+  // Debounced radius slider effect
   useEffect(() => {
     if (tempRadius === radius) return;
-    
+
     const timer = setTimeout(() => {
       setRadius(tempRadius);
       fetchNearby(center[0], center[1], tempRadius, keyword, filterState.industryCode || "");
     }, 300);
-    
+
     return () => clearTimeout(timer);
   }, [tempRadius, radius, center, keyword, filterState.industryCode, fetchNearby]);
 
+  // Scroll active merchant item into view in sidebar
+  useEffect(() => {
+    if (selectedMerchant && merchantRefs.current[selectedMerchant.id]) {
+      merchantRefs.current[selectedMerchant.id]?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [selectedMerchant]);
 
   const handleLocate = useCallback(() => {
     if (!navigator.geolocation) {
@@ -231,35 +255,41 @@ function MapContent() {
   const handleFilterChange = useCallback(
     (newFilters: FilterState) => {
       setFilterState(newFilters);
-      // Apply radius if set and we have a location
       const newRadius = newFilters.radiusKm ?? radius;
       if (newFilters.radiusKm !== null) {
         setRadius(newFilters.radiusKm);
         setTempRadius(newFilters.radiusKm);
       }
-      // Re-fetch with updated filters
       fetchNearby(center[0], center[1], newRadius, keyword, newFilters.industryCode || "");
     },
     [fetchNearby, center, radius, keyword]
   );
 
-  const handleMapClick = useCallback((lat: number, lon: number) => {
+  const handleMapClick = useCallback((clickLat: number, clickLon: number) => {
     setUserLocation(null);
-    setCenter([lat, lon]);
-    fetchNearby(lat, lon, radius, keyword, filterState.industryCode || "");
-    setLocationStatus(`已選擇地點：${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+    setCenter([clickLat, clickLon]);
+    fetchNearby(clickLat, clickLon, radius, keyword, filterState.industryCode || "");
+    setLocationStatus(`已選擇地點：${clickLat.toFixed(4)}, ${clickLon.toFixed(4)}`);
   }, [fetchNearby, radius, keyword, filterState.industryCode]);
 
-  const handleAddressSelect = useCallback((lat: number, lon: number) => {
+  const handleAddressSelect = useCallback((selectLat: number, selectLon: number) => {
     setUserLocation(null);
-    setCenter([lat, lon]);
-    fetchNearby(lat, lon, radius, keyword, filterState.industryCode || "");
+    setCenter([selectLat, selectLon]);
+    fetchNearby(selectLat, selectLon, radius, keyword, filterState.industryCode || "");
     setLocationStatus(`已切換至搜尋地址`);
   }, [fetchNearby, radius, keyword, filterState.industryCode]);
 
   const handleKeywordSearch = useCallback(() => {
     fetchNearby(center[0], center[1], radius, keyword, filterState.industryCode || "");
   }, [center, radius, keyword, filterState.industryCode, fetchNearby]);
+
+  const handleResetFilters = useCallback(() => {
+    setKeyword("");
+    setTempRadius(2);
+    setRadius(2);
+    setFilterState(DEFAULT_FILTER_STATE);
+    fetchNearby(DEFAULT_CENTER[0], DEFAULT_CENTER[1], 2, "", "");
+  }, [fetchNearby]);
 
   return (
     <div className="flex flex-col gap-4 h-full -mx-2">
@@ -277,18 +307,18 @@ function MapContent() {
 
       {/* Controls */}
       <div className="bg-card border border-border/60 rounded-xl p-4 flex flex-col gap-4 shadow-sm mx-2">
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full">
           <AddressSearch onSelect={handleAddressSelect} />
-          
+
           <button
             onClick={handleLocate}
-            className="inline-flex items-center gap-2 bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium shrink-0 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium shrink-0 cursor-pointer"
           >
             <PaperAirplaneIcon className="w-4 h-4 -rotate-45" /> 定位我的位置
           </button>
         </div>
 
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full">
           {/* Keyword filter */}
           <div className="flex items-center gap-2 flex-1 relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
@@ -322,7 +352,7 @@ function MapContent() {
           </div>
 
           {/* Radius control */}
-          <div className="flex items-center gap-3 flex-1">
+          <div className="flex items-center gap-3 flex-1 bg-muted-bg/50 px-3 py-1.5 rounded-lg border border-border/40">
             <AdjustmentsHorizontalIcon className="w-4 h-4 text-muted shrink-0" />
             <span className="text-sm text-muted shrink-0">半徑</span>
             <input
@@ -332,7 +362,7 @@ function MapContent() {
               step={0.5}
               value={tempRadius}
               onChange={(e) => setTempRadius(parseFloat(e.target.value))}
-              className="flex-1 accent-accent"
+              className="flex-1 accent-accent cursor-pointer"
               aria-label="搜尋半徑"
             />
             <span className="text-sm font-medium text-foreground w-16 text-right shrink-0">{tempRadius} km</span>
@@ -341,21 +371,37 @@ function MapContent() {
 
         {/* Status */}
         <div className="text-sm text-muted flex items-center gap-2">
-          {loading && <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>}
+          {loading && <div className="w-3.5 h-3.5 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>}
           <span>{locationStatus}</span>
         </div>
       </div>
 
       {geoError && (
-        <div className="mx-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg">
-          ⚠️ {geoError}
+        <div className="mx-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg flex items-center justify-between">
+          <span>⚠️ {geoError}</span>
+          <button onClick={() => setGeoError(null)} className="text-xs underline cursor-pointer">關閉</button>
+        </div>
+      )}
+
+      {apiError && (
+        <div className="mx-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <ExclamationTriangleIcon className="w-5 h-5 shrink-0 text-red-500" />
+            <span>{apiError}</span>
+          </div>
+          <button
+            onClick={() => fetchNearby(center[0], center[1], radius, keyword, filterState.industryCode || "")}
+            className="inline-flex items-center gap-1 text-xs bg-red-100 hover:bg-red-200 text-red-800 px-2.5 py-1 rounded transition-colors cursor-pointer font-medium"
+          >
+            <ArrowPathIcon className="w-3.5 h-3.5" /> 重試
+          </button>
         </div>
       )}
 
       {/* Map + Sidebar */}
       <div className="flex gap-4 flex-col lg:flex-row px-2" style={{ minHeight: "520px" }}>
         {/* Map */}
-        <div className="flex-1 relative rounded-xl overflow-hidden border border-border/50 shadow-sm" style={{ minHeight: "480px" }}>
+        <div className="flex-1 relative rounded-xl overflow-hidden border border-border/50 shadow-sm min-h-[380px] lg:min-h-[480px]">
           <MapView
             merchants={merchants}
             center={center}
@@ -370,19 +416,40 @@ function MapContent() {
 
         {/* Sidebar merchant list */}
         <div className="lg:w-80 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "520px" }}>
-          {merchants.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-muted bg-card rounded-xl border border-border/50">
-              <MapPinIcon className="w-10 h-10 mb-3 opacity-30" />
-              <p className="text-sm">尚未搜尋到商店</p>
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-card rounded-xl border border-border/50 p-4 animate-pulse space-y-2.5">
+                <div className="h-4 bg-muted-bg rounded w-3/4"></div>
+                <div className="h-3 bg-muted-bg rounded w-5/6"></div>
+                <div className="flex justify-between items-center pt-1">
+                  <div className="h-3 bg-muted-bg rounded w-1/4"></div>
+                  <div className="h-6 bg-muted-bg rounded w-6"></div>
+                </div>
+              </div>
+            ))
+          ) : merchants.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center text-muted bg-card rounded-xl border border-border/50 gap-3">
+              <MapPinIcon className="w-12 h-12 text-muted/30" />
+              <div>
+                <p className="font-medium text-foreground text-sm">尚未搜尋到商店</p>
+                <p className="text-xs text-muted mt-1">半徑 {radius} km 內未找到相關商店</p>
+              </div>
+              <button
+                onClick={handleResetFilters}
+                className="mt-2 text-xs bg-accent/10 text-accent hover:bg-accent hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium cursor-pointer"
+              >
+                重設搜尋條件
+              </button>
             </div>
           ) : (
             merchants.map((m) => (
               <div
                 key={m.id}
+                ref={(el) => { merchantRefs.current[m.id] = el; }}
                 onClick={() => setSelectedMerchant(m)}
                 className={`bg-card rounded-xl border p-4 cursor-pointer transition-all duration-150 hover:shadow-md ${
                   selectedMerchant?.id === m.id
-                    ? "border-accent/60 shadow-md"
+                    ? "border-accent/80 ring-2 ring-accent/20 bg-accent/5 shadow-md"
                     : "border-border/50"
                 }`}
               >
@@ -392,7 +459,7 @@ function MapContent() {
                     <p className="text-xs text-muted mt-1 truncate">{m.address}</p>
                     <div className="flex items-center gap-3 mt-2">
                       {m.distance_km !== undefined && (
-                         <span className="text-xs text-accent font-medium">{m.distance_km.toFixed(2)} km</span>
+                        <span className="text-xs text-accent font-medium">{m.distance_km.toFixed(2)} km</span>
                       )}
                       {m.website && <GlobeAltIcon className="w-3 h-3 text-muted opacity-70" title="有專屬網站" />}
                     </div>
