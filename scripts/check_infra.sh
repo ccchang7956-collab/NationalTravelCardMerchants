@@ -57,6 +57,24 @@ else
   fail "/data 權限未處理（需要 entrypoint chown /data）"
 fi
 
+# 8. CI：.github/workflows/build.yml 存在且含 pytest + jest + compose build
+ci_file=".github/workflows/build.yml"
+if [ -f "$ci_file" ] \
+  && grep -q "pytest" "$ci_file" \
+  && grep -q "jest" "$ci_file" \
+  && grep -q "compose.*build" "$ci_file"; then
+  ok "CI build.yml 含 pytest + jest + compose build"
+else
+  fail "CI 缺少 .github/workflows/build.yml 或未含 pytest/jest/compose build"
+fi
+
+# 9. scheduler 更新失敗通知鉤子：update_data.py 含 NOTIFY_WEBHOOK_URL 環境鉤子
+if grep -q "NOTIFY_WEBHOOK_URL" scheduler/update_data.py 2>/dev/null; then
+  ok "scheduler 含 NOTIFY_WEBHOOK_URL 失敗通知鉤子"
+else
+  fail "scheduler 缺少 NOTIFY_WEBHOOK_URL 失敗通知鉤子"
+fi
+
 echo "---"
 echo "PASS=$PASS FAIL=$FAIL"
 if [ "$FAIL" -ne 0 ]; then

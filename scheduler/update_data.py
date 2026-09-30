@@ -62,6 +62,18 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ── 失敗通知鉤子 ──────────────────────────────────────────────────────────────
+# 設定 NOTIFY_WEBHOOK_URL（如 Slack Incoming Webhook）後，更新中止時會 POST 通知；
+# 未設定則僅寫 log，不影響流程。
+NOTIFY_URL = os.environ.get("NOTIFY_WEBHOOK_URL", "")
+
+def notify(msg: str) -> None:
+    if NOTIFY_URL:
+        try:
+            requests.post(NOTIFY_URL, json={"text": msg}, timeout=10)
+        except Exception as e:
+            log.warning(f"notify failed: {e}")
+
 # ── 台灣郵遞區號 → (lat, lon, radius_km) ───────────────────────────────────
 TAIWAN_ZIPCODES: dict[str, tuple[float, float, float]] = {
     "100": (25.0413, 121.5226, 1.2), "103": (25.0628, 121.5098, 1.0),
@@ -1084,11 +1096,13 @@ def main():
         # 1. 下載
         if not download_zip(zip_path):
             log.error("❌ 更新中止（下載失敗）")
+            notify("❌ 國旅卡更新中止（下載失敗）")
             sys.exit(1)
 
         # 2. 解壓
         if not extract_pdf(zip_path, pdf_path):
             log.error("❌ 更新中止（解壓失敗）")
+            notify("❌ 國旅卡更新中止（解壓失敗）")
             sys.exit(1)
 
         # 3. 比對 hash
@@ -1125,9 +1139,11 @@ def main():
         new_count = parse_pdf_to_db(pdf_path, new_db)
         if new_count < 0:
             log.error("❌ 更新中止（PDF 解析失敗）")
+            notify("❌ 國旅卡更新中止（PDF 解析失敗）")
             sys.exit(1)
         if not validate_records([], new_count):
             log.error("❌ 更新中止（解析筆數過少）")
+            notify(f"❌ 國旅卡更新中止（解析筆數過少：{new_count}）")
             sys.exit(1)
 
         # 讀取新的商家集合（用於統計）
@@ -1156,7 +1172,12 @@ def main():
         fill_missing_coords(new_db)
         
         # 7. 交易式同步至生產 DB（保護 5 張使用者資料表）
-        removed_favorites = transactional_sync_db(new_db, DB_PATH)
+        try:
+            removed_favorites = transactional_sync_db(new_db, DB_PATH)
+        except Exception as e:
+            log.error(f"❌ 更新中止（同步失敗）：{e}")
+            notify(f"❌ 國旅卡更新中止（同步失敗）：{e}")
+            sys.exit(1)
         log.info(f"✅ DB 已更新：{DB_PATH}")
 
 
