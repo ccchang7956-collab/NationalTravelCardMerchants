@@ -79,15 +79,16 @@ def get_merchants(
         where_clauses.append("(m.website IS NULL OR m.website = '')")
 
     if industry_code:
+        safe_ind = industry_code.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         where_clauses.append("""
             EXISTS (
                 SELECT 1 FROM merchant_industries mi 
                 WHERE mi.tax_id = m.tax_id 
-                  AND mi.industry_code LIKE ?
+                  AND mi.industry_code LIKE ? ESCAPE '\\'
                   AND mi.priority = 1
             )
         """)
-        params.append(f"{industry_code}%")
+        params.append(f"{safe_ind}%")
 
     # 拼接 JOIN
     if joins:
@@ -108,7 +109,7 @@ def get_merchants(
         total_pages = math.ceil(total / per_page) if total > 0 else 1
         offset = (page - 1) * per_page
 
-        query += " LIMIT ? OFFSET ?"
+        query += " ORDER BY m.id ASC LIMIT ? OFFSET ?"
         # 為了不影響 params 陣列，另外拷貝分頁參數
         query_params = list(params)
         query_params.extend([per_page, offset])
@@ -192,15 +193,16 @@ def get_nearby_merchants(
         params.append(fts_query)
 
     if industry_code:
+        safe_ind = industry_code.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         where_clauses.append("""
             EXISTS (
                 SELECT 1 FROM merchant_industries mi 
                 WHERE mi.tax_id = m.tax_id 
-                  AND mi.industry_code LIKE ?
+                  AND mi.industry_code LIKE ? ESCAPE '\\'
                   AND mi.priority = 1
             )
         """)
-        params.append(f"{industry_code}%")
+        params.append(f"{safe_ind}%")
 
     if joins:
         query += " " + " ".join(joins)
@@ -233,8 +235,17 @@ def get_nearby_merchants(
 @router.get("/merchants/{merchant_id_or_tax_id}", response_model=MerchantDetail)
 def get_merchant(merchant_id_or_tax_id: str, db: sqlite3.Connection = Depends(get_db)):
     cursor = db.cursor()
-    cursor.execute("SELECT * FROM merchants WHERE tax_id = ? OR id = ?", (merchant_id_or_tax_id, merchant_id_or_tax_id))
-    row = cursor.fetchone()
+    row = None
+    if merchant_id_or_tax_id.isdigit():
+        cursor.execute("SELECT * FROM merchants WHERE id = ?", (int(merchant_id_or_tax_id),))
+        row = cursor.fetchone()
+        if row is None:
+            # 純數字亦可能是 tax_id（本國統編為 8 位數字），fallback 查 tax_id
+            cursor.execute("SELECT * FROM merchants WHERE tax_id = ?", (merchant_id_or_tax_id,))
+            row = cursor.fetchone()
+    else:
+        cursor.execute("SELECT * FROM merchants WHERE tax_id = ?", (merchant_id_or_tax_id,))
+        row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Merchant not found")
     

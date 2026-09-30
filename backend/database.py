@@ -8,7 +8,7 @@ _default_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "merchant
 DB_PATH = os.environ.get("DB_PATH", _default_db)
 
 def get_db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10.0)
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA busy_timeout = 5000;")
     conn.execute("PRAGMA journal_mode=WAL;")
@@ -20,6 +20,9 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
     conn = get_db_connection()
     try:
         yield conn
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 

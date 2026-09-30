@@ -23,7 +23,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import sqlite3
 from backend.database import get_db
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "national-travel-card-secret-key-change-in-prod")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY must be set in production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 
