@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Form from "next/form";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
@@ -37,6 +37,7 @@ export default function HomeSearchSection({
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const qRef = useRef<HTMLInputElement>(null);
 
 
   const handleRequestLocation = useCallback(() => {
@@ -65,9 +66,8 @@ export default function HomeSearchSection({
     (newFilters: FilterState) => {
       setFilters(newFilters);
 
-      // Build new URL with filter params (preserve existing q)
-      const currentSearch = new URLSearchParams(window.location.search);
-      const q = currentSearch.get("q") || "";
+      // 用 ref 持有目前輸入框的 q，避免 URL 舊 q 凍結
+      const q = qRef.current?.value || "";
 
       const params = new URLSearchParams();
       if (q) params.set("q", q);
@@ -95,9 +95,12 @@ export default function HomeSearchSection({
         <div className="flex-1 relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
           <input
+            key={initialQ}
+            ref={qRef}
             type="text"
             name="q"
             defaultValue={initialQ}
+            maxLength={100}
             placeholder="搜尋店名 or 地址..."
             className="w-full pl-10 pr-4 py-2.5 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
           />

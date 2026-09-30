@@ -48,12 +48,27 @@ interface Merchant {
 const DEFAULT_CENTER: [number, number] = [25.0339, 121.5645];
 const API_URL = getPublicApiUrl();
 
+export function clampLat(v: number): number {
+  if (!Number.isFinite(v)) return DEFAULT_CENTER[0];
+  return Math.min(90, Math.max(-90, v));
+}
+
+export function clampLon(v: number): number {
+  if (!Number.isFinite(v)) return DEFAULT_CENTER[1];
+  return Math.min(180, Math.max(-180, v));
+}
+
+export function clampRadiusKm(v: number): number {
+  if (!Number.isFinite(v) || v <= 0) return 2;
+  return Math.min(10, v);
+}
+
 function MapContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastFetchedRef = useRef<string>("");
-  const merchantRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const merchantRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
   useEffect(() => {
     return () => {
@@ -155,23 +170,27 @@ function MapContent() {
   const parsedLon = lonParam ? parseFloat(lonParam) : DEFAULT_CENTER[1];
   const parsedRadius = radiusParam ? parseFloat(radiusParam) : 2;
 
-  const targetLat = isNaN(parsedLat) ? DEFAULT_CENTER[0] : parsedLat;
-  const targetLon = isNaN(parsedLon) ? DEFAULT_CENTER[1] : parsedLon;
-  const targetRadius = isNaN(parsedRadius) || parsedRadius <= 0 ? 2 : parsedRadius;
+  const targetLat = clampLat(parsedLat);
+  const targetLon = clampLon(parsedLon);
+  const targetRadius = clampRadiusKm(parsedRadius);
   const targetKeyword = qParam || "";
   const targetIndCode = indCodeParam || "";
 
   const [prevParamsKey, setPrevParamsKey] = useState<string>("");
   const currentParamsKey = `${targetLat.toFixed(5)},${targetLon.toFixed(5)},${targetRadius},${targetKeyword},${targetIndCode}`;
 
-  if (currentParamsKey !== prevParamsKey) {
+  // URL 參數同步至 state：必須在 useEffect 內執行，避免 render 期 setState
+  /* eslint-disable react-hooks/set-state-in-effect -- URL query params → state 單向同步 */
+  useEffect(() => {
+    if (prevParamsKey === currentParamsKey) return;
     setPrevParamsKey(currentParamsKey);
     setCenter([targetLat, targetLon]);
     setRadius(targetRadius);
     setTempRadius(targetRadius);
     setKeyword(targetKeyword);
     setFilterState(prev => prev.industryCode === targetIndCode ? prev : { ...prev, industryCode: targetIndCode });
-  }
+  }, [currentParamsKey, prevParamsKey, targetLat, targetLon, targetRadius, targetKeyword, targetIndCode]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Trigger fetch when URL parameters change or initial load
   useEffect(() => {
@@ -444,11 +463,13 @@ function MapContent() {
             </div>
           ) : (
             merchants.map((m) => (
-              <div
+              <button
                 key={m.id}
+                type="button"
+                aria-label={`查看 ${m.name}`}
                 ref={(el) => { merchantRefs.current[m.id] = el; }}
                 onClick={() => setSelectedMerchant(m)}
-                className={`bg-card rounded-xl border p-4 cursor-pointer transition-all duration-150 hover:shadow-md ${
+                className={`bg-card rounded-xl border p-4 cursor-pointer transition-all duration-150 hover:shadow-md text-left w-full ${
                   selectedMerchant?.id === m.id
                     ? "border-accent/80 ring-2 ring-accent/20 bg-accent/5 shadow-md"
                     : "border-border/50"
@@ -490,7 +511,7 @@ function MapContent() {
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
             ))
           )}
         </div>
