@@ -65,12 +65,14 @@ log = logging.getLogger(__name__)
 # ── 失敗通知鉤子 ──────────────────────────────────────────────────────────────
 # 設定 NOTIFY_WEBHOOK_URL（如 Slack Incoming Webhook）後，更新中止時會 POST 通知；
 # 未設定則僅寫 log，不影響流程。
-NOTIFY_URL = os.environ.get("NOTIFY_WEBHOOK_URL", "")
+# 注意：必須在 notify() 內即時讀取環境變數，不可在模組頂層快取，
+# 否則測試／容器啟動後變更 env 不會生效。
 
 def notify(msg: str) -> None:
-    if NOTIFY_URL:
+    notify_url = os.environ.get("NOTIFY_WEBHOOK_URL", "")
+    if notify_url:
         try:
-            requests.post(NOTIFY_URL, json={"text": msg}, timeout=10)
+            requests.post(notify_url, json={"text": msg}, timeout=10)
         except Exception as e:
             log.warning(f"notify failed: {e}")
 

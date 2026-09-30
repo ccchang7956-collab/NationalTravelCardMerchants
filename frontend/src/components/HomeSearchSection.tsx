@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Form from "next/form";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
@@ -25,15 +25,20 @@ export default function HomeSearchSection({
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [prevInitialFilters, setPrevInitialFilters] = useState<FilterState>(initialFilters);
 
-  if (
-    initialFilters.city !== prevInitialFilters.city ||
-    initialFilters.hasWebsite !== prevInitialFilters.hasWebsite ||
-    initialFilters.radiusKm !== prevInitialFilters.radiusKm ||
-    initialFilters.industryCode !== prevInitialFilters.industryCode
-  ) {
-    setPrevInitialFilters(initialFilters);
-    setFilters(initialFilters);
-  }
+  // initialFilters 同步至 state：必須在 useEffect 內執行，避免 render 期 setState
+  /* eslint-disable react-hooks/set-state-in-effect -- props → state 單向同步 */
+  useEffect(() => {
+    if (
+      initialFilters.city !== prevInitialFilters.city ||
+      initialFilters.hasWebsite !== prevInitialFilters.hasWebsite ||
+      initialFilters.radiusKm !== prevInitialFilters.radiusKm ||
+      initialFilters.industryCode !== prevInitialFilters.industryCode
+    ) {
+      setPrevInitialFilters(initialFilters);
+      setFilters(initialFilters);
+    }
+  }, [initialFilters, prevInitialFilters]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);

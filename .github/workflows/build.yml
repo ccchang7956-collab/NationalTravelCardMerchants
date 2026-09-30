@@ -11,6 +11,8 @@ jobs:
           python-version: "3.12"
       - run: pip install -r backend/requirements.txt
       - run: ./.venv/bin/pytest backend/tests -q || python -m pytest backend/tests -q
+        env:
+          JWT_SECRET_KEY: dummy-ci-secret
 
       - uses: actions/setup-node@v4
         with:

@@ -1,1 +1,2 @@
+# 容器 TZ=Asia/Taipei：下行「0 3」即台灣時間每日 03:00 執行
 0 3 * * * python3 /app/update_data.py

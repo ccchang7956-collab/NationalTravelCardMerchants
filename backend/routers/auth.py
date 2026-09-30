@@ -14,7 +14,10 @@ def register(user_in: UserCreate, db: sqlite3.Connection = Depends(get_db)):
     if cursor.fetchone():
         raise HTTPException(status_code=400, detail="Email is already registered")
 
-    hashed_pwd = hash_password(user_in.password)
+    try:
+        hashed_pwd = hash_password(user_in.password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     try:
         cursor.execute(
             "INSERT INTO users (email, hashed_password, name) VALUES (?, ?, ?)",

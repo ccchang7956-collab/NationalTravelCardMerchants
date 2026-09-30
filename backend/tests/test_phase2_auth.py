@@ -43,6 +43,14 @@ def test_password_over_72B_rejected():
         hash_password("x" * 100)
 
 
+def test_register_overlong_password_returns_400(client):
+    r = client.post(
+        "/api/auth/register",
+        json={"email": "longpwd@test.com", "password": "x" * 100, "name": "L"},
+    )
+    assert r.status_code == 400
+
+
 def test_jwt_expiry_env_default_24h():
     from backend import auth_utils
     assert hasattr(auth_utils, "ACCESS_TOKEN_EXPIRE_HOURS")
