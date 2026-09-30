@@ -44,6 +44,10 @@ DATA_DIR     = str(Path(DB_PATH).parent)
 HASH_FILE    = os.path.join(DATA_DIR, "pdf_hash.txt")
 META_FILE    = os.path.join(DATA_DIR, "update_meta.json")
 
+# 大量刪除安全閘門（可用環境變數覆寫）
+MASS_MIN_OLD = int(os.environ.get("MASS_DELETE_MIN_OLD", "100"))
+MASS_RATIO = float(os.environ.get("MASS_DELETE_RATIO", "0.5"))
+
 TZ_TAIPEI = timezone(timedelta(hours=8))
 
 # ── 日誌設定 ────────────────────────────────────────────────────────────────
@@ -722,7 +726,24 @@ def fill_missing_coords(db_path: str) -> int:
             conn.close()
 
 
-def transactional_sync_db(temp_db_path: str, target_db_path: str) -> None:
+def prune_backups(target_db_path: str, keep: int = 7) -> int:
+    """僅保留最新的 keep 份 timestamped .bak，刪除多餘舊備份。回傳刪除筆數。"""
+    import glob
+    baks = sorted(glob.glob(target_db_path + ".*.bak"))
+    doomed = baks[:-keep] if keep > 0 and len(baks) > keep else []
+    removed = 0
+    for old in doomed:
+        try:
+            os.remove(old)
+            removed += 1
+        except Exception as e:
+            log.warning(f"⚠️ 刪除舊備份失敗 {old}: {e}")
+    if removed:
+        log.info(f"🧹 已清理 {removed} 份舊備份（保留 {keep} 份）")
+    return removed
+
+
+def transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
     """
     將剛解析建好的 temp_db_path 資料以 SQLite 交易與 UPSERT 方式同步更新至 target_db_path。
     此方式可完整保留 target_db_path 中 users, user_expenses, user_favorites,
@@ -796,9 +817,18 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> None:
     new_count = len(normalized_temp_merchants)
 
     # 0. 安全閘門：筆數驟降 abort（避免壞解析清空生產資料）
-    if old_count > 100 and new_count < old_count * 0.5:
+    # 閾值由環境變數 MASS_DELETE_MIN_OLD / MASS_DELETE_RATIO 控制
+    try:
+        _min_old = int(os.environ.get("MASS_DELETE_MIN_OLD", str(MASS_MIN_OLD)))
+    except (ValueError, TypeError):
+        _min_old = MASS_MIN_OLD
+    try:
+        _ratio = float(os.environ.get("MASS_DELETE_RATIO", str(MASS_RATIO)))
+    except (ValueError, TypeError):
+        _ratio = MASS_RATIO
+    if old_count > _min_old and new_count < old_count * _ratio:
         target_conn.close()
-        raise RuntimeError(f"Abort: new={new_count} < 50% of old={old_count}, refuse mass delete")
+        raise RuntimeError(f"Abort: new={new_count} < {_ratio*100:.0f}% of old={old_count}, refuse mass delete")
 
     # 0. 同步前 timestamped 備份
     if os.path.exists(target_db_path):
@@ -812,6 +842,7 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> None:
     try:
         cursor = target_conn.cursor()
         cursor.execute("BEGIN IMMEDIATE")
+        removed_favorites = 0
 
         # 0. 規範化 target_db 既有資料的 tax_id
         cursor.execute("UPDATE merchants SET tax_id = NULLIF(TRIM(REPLACE(REPLACE(tax_id, CHAR(12288), ''), ' ', '')), '');")
@@ -881,11 +912,15 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> None:
                     f"SELECT COUNT(*) FROM user_favorites WHERE merchant_id IN ({qmarks})",
                     ids,
                 ).fetchone()[0]
+                removed_favorites = fav_count
                 log.warning(
                     f"⚠️ 將刪除 {len(ids)} 間下架商家，影響 {fav_count} 筆 user_favorites 收藏（CASCADE 連帶刪除）"
                 )
             else:
+                removed_favorites = 0
                 log.info("ℹ️ 無下架商家，無 favorites 受影響")
+        else:
+            removed_favorites = 0
 
         if new_tax_ids:
             placeholders = ",".join("?" for _ in new_tax_ids)
@@ -936,6 +971,13 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> None:
     finally:
         target_conn.close()
 
+    # 同步成功後清理舊備份，僅保留最近 7 份
+    try:
+        prune_backups(target_db_path, keep=7)
+    except Exception as e:
+        log.warning(f"⚠️ 清理舊備份失敗: {e}")
+    return removed_favorites
+
 
 def atomic_swap_db(temp_db_path: str, target_db_path: str) -> None:
     """
@@ -972,6 +1014,7 @@ def atomic_swap_db(temp_db_path: str, target_db_path: str) -> None:
 
 def main():
     start_time = datetime.now(TZ_TAIPEI)
+    removed_favorites = 0
     log.info("=" * 60)
     log.info(f"🚀 開始更新資料 — {start_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     log.info("=" * 60)
@@ -1055,7 +1098,7 @@ def main():
         fill_missing_coords(new_db)
         
         # 7. 交易式同步至生產 DB（保護 5 張使用者資料表）
-        transactional_sync_db(new_db, DB_PATH)
+        removed_favorites = transactional_sync_db(new_db, DB_PATH)
         log.info(f"✅ DB 已更新：{DB_PATH}")
 
 
@@ -1070,6 +1113,7 @@ def main():
         "total_merchants": new_count,
         "new_merchants": added_count,
         "removed_merchants": removed_count,
+        "removed_favorites": removed_favorites,
         "duration_seconds": round((end_time - start_time).total_seconds(), 1),
     }
     atomic_write_text(META_FILE, json.dumps(meta, ensure_ascii=False, indent=2))

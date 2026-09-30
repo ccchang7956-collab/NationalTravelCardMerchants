@@ -22,21 +22,26 @@ def get_itineraries(
         ORDER BY updated_at DESC
     """, (current_user["id"],))
     rows = cursor.fetchall()
-    
+    if not rows:
+        return []
+
+    ids = [row["id"] for row in rows]
+    placeholders = ",".join("?" for _ in ids)
+    cursor.execute(f"""
+        SELECT id, itinerary_id, merchant_id, custom_name, address, lat, lon, order_index, estimated_cost, quota_category, stay_minutes
+        FROM itinerary_items
+        WHERE itinerary_id IN ({placeholders})
+        ORDER BY order_index ASC
+    """, ids)
+    grouped: dict = {i: [] for i in ids}
+    for item in cursor.fetchall():
+        grouped[item["itinerary_id"]].append(dict(item))
+
     result = []
     for row in rows:
-        itin_id = row["id"]
-        cursor.execute("""
-            SELECT id, itinerary_id, merchant_id, custom_name, address, lat, lon, order_index, estimated_cost, quota_category, stay_minutes
-            FROM itinerary_items
-            WHERE itinerary_id = ?
-            ORDER BY order_index ASC
-        """, (itin_id,))
-        items = [dict(i) for i in cursor.fetchall()]
-        
+        items = grouped.get(row["id"], [])
         tourist_quota = sum(i["estimated_cost"] for i in items if i["quota_category"] == "觀光旅遊")
         general_quota = sum(i["estimated_cost"] for i in items if i["quota_category"] in ("自行運用", "一般消費"))
-        
         result.append({
             **dict(row),
             "items": items,

@@ -156,6 +156,15 @@ def init_db(conn: sqlite3.Connection = None):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_itinerary_items_itinerary ON itinerary_items(itinerary_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_itinerary_items_merchant ON itinerary_items(merchant_id);")
 
+    # FTS 數量一致檢查：merchants 與 merchants_fts 筆數不一致時告警（需重建）
+    try:
+        c = cursor.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
+        f = cursor.execute("SELECT COUNT(*) FROM merchants_fts").fetchone()[0]
+        if c != f:
+            import logging; logging.warning(f"FTS mismatch merchants={c} fts={f}, rebuild needed")
+    except Exception:
+        pass
+
     conn.commit()
     if close_after:
         conn.close()

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from typing import List
 import sqlite3
 from backend.database import get_db
@@ -56,6 +56,8 @@ def get_assistant_summary(
 
 @router.get("/assistant/expenses", response_model=List[ExpenseResponse])
 def get_expenses(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     current_user: dict = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db)
 ):
@@ -65,7 +67,8 @@ def get_expenses(
         FROM user_expenses
         WHERE user_id = ?
         ORDER BY expense_date DESC, id DESC
-    """, (current_user["id"],))
+        LIMIT ? OFFSET ?
+    """, (current_user["id"], limit, offset))
     return [dict(row) for row in cursor.fetchall()]
 
 @router.post("/assistant/expenses", response_model=ExpenseResponse)
@@ -75,6 +78,7 @@ def create_expense(
     db: sqlite3.Connection = Depends(get_db)
 ):
     cursor = db.cursor()
+    expense_date = expense_in.expense_date.isoformat() if hasattr(expense_in.expense_date, "isoformat") else expense_in.expense_date
     cursor.execute("""
         INSERT INTO user_expenses (user_id, merchant_id, merchant_name, amount, category, expense_date, note)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -84,7 +88,7 @@ def create_expense(
         expense_in.merchant_name,
         expense_in.amount,
         expense_in.category,
-        expense_in.expense_date,
+        expense_date,
         expense_in.note
     ))
     db.commit()

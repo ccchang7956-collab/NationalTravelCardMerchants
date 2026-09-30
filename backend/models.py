@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
+from datetime import date
 
 class MerchantIndustry(BaseModel):
     industry_code: str
@@ -66,7 +67,7 @@ class ExpenseCreate(BaseModel):
     merchant_name: str
     amount: int = Field(..., gt=0)
     category: str = Field(..., pattern="^(觀光旅遊|自行運用)$")
-    expense_date: str
+    expense_date: date
     note: Optional[str] = None
 
 class ExpenseResponse(BaseModel):
@@ -97,12 +98,12 @@ class ItineraryItemCreate(BaseModel):
     merchant_id: Optional[int] = None
     custom_name: str
     address: Optional[str] = None
-    lat: Optional[float] = None
-    lon: Optional[float] = None
+    lat: Optional[float] = Field(default=None, ge=-90, le=90)
+    lon: Optional[float] = Field(default=None, ge=-180, le=180)
     order_index: int = 0
-    estimated_cost: float = 0.0
-    quota_category: str = "一般消費"
-    stay_minutes: int = 60
+    estimated_cost: float = Field(default=0.0, ge=0)
+    quota_category: str = Field(default="一般消費", pattern="^(觀光旅遊|自行運用|一般消費)$")
+    stay_minutes: int = Field(default=60, ge=0)
 
 class ItineraryItemResponse(ItineraryItemCreate):
     id: int
