@@ -16,6 +16,23 @@ const TAIWAN_CITIES = [
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
+interface CityStat {
+  city: string;
+  count: number;
+}
+
+interface Merchant {
+  id: number;
+  name: string;
+  address: string | null;
+  zip_code: string | null;
+  tax_id: string | null;
+  website: string | null;
+  lat: number | null;
+  lon: number | null;
+  distance_km?: number;
+}
+
 // 動態 metadata：有篩選條件時不索引（避免重複內容），並設定 canonical
 export async function generateMetadata({
   searchParams,
@@ -23,7 +40,7 @@ export async function generateMetadata({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }): Promise<Metadata> {
   const resolved = await searchParams;
-  const q = typeof resolved.q === "string" ? resolved.q : "";
+  const q = typeof resolved.q === "string" ? resolved.q.slice(0, 50) : "";
   const city = typeof resolved.city === "string" ? resolved.city : "";
 
   // 有搜尋條件或翻頁時不索引，避免搜尋結果頁稀釋首頁
@@ -49,7 +66,7 @@ export default async function Home({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const resolvedParams = await searchParams;
-  const q = typeof resolvedParams.q === "string" ? resolvedParams.q : "";
+  const q = typeof resolvedParams.q === "string" ? resolvedParams.q.slice(0, 50) : "";
   const parsedPage = typeof resolvedParams.page === "string" ? parseInt(resolvedParams.page, 10) : 1;
   const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
   const city = typeof resolvedParams.city === "string" ? resolvedParams.city : "";
@@ -130,23 +147,6 @@ export default async function Home({
     return `/?${params.toString()}`;
   };
 
-interface CityStat {
-  city: string;
-  count: number;
-}
-
-interface Merchant {
-  id: number;
-  name: string;
-  address: string | null;
-  zip_code: string | null;
-  tax_id: string | null;
-  website: string | null;
-  lat: number | null;
-  lon: number | null;
-  distance_km?: number;
-}
-
   let sortedCities: CityStat[] = stats?.cities || [];
   if (sortedCities.length > 0) {
     sortedCities = [...sortedCities].sort((a: CityStat, b: CityStat) => {
@@ -166,7 +166,7 @@ interface Merchant {
         </h1>
         {stats && (
           <span className="text-muted text-sm">
-            收錄 {stats.total_merchants.toLocaleString()} 間全台特約商店
+            收錄 {Number(stats?.total_merchants ?? 0).toLocaleString()} 間全台特約商店
           </span>
         )}
       </div>
@@ -217,7 +217,7 @@ interface Merchant {
                       <div className="space-y-2 text-sm text-muted">
                         <div className="flex items-start gap-2">
                           <MapPinIcon className="w-4 h-4 mt-0.5 shrink-0 opacity-70" />
-                          <span>{m.zip_code} {m.address}</span>
+                          <span>{String(m.zip_code ?? "")} {String(m.address ?? "")}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <BuildingStorefrontIcon className="w-4 h-4 shrink-0 opacity-70" />
@@ -280,6 +280,7 @@ interface Merchant {
             {page > 1 ? (
               <Link
                 href={buildPageUrl(page - 1)}
+                aria-label="上一頁"
                 className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm"
               >
                 ←
@@ -352,6 +353,7 @@ interface Merchant {
             {page < totalPages ? (
               <Link
                 href={buildPageUrl(page + 1)}
+                aria-label="下一頁"
                 className="px-3 py-2 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors text-sm"
               >
                 →
@@ -409,7 +411,7 @@ interface Merchant {
             <p>
               <strong>國民旅遊卡（National Travel Card）</strong>
               為行政院人事行政總處推動之國內旅遊補助方案，全體公務人員及其眷屬可持國旅卡於全台超過
-              {stats ? ` ${stats.total_merchants.toLocaleString()} ` : " 55,000 "}
+              {stats ? ` ${Number(stats?.total_merchants ?? 0).toLocaleString()} ` : " 55,000 "}
               間特約商店消費。
             </p>
             <p>
@@ -446,7 +448,7 @@ interface Merchant {
                 </summary>
                 <p className="mt-2 ml-4">
                   國民旅遊卡（國旅卡）可在全台超過
-                  {stats ? ` ${stats.total_merchants.toLocaleString()} ` : " 55,000 "}
+                  {stats ? ` ${Number(stats?.total_merchants ?? 0).toLocaleString()} ` : " 55,000 "}
                   間特約商店使用，涵蓋住宿、餐飲、休閒遊樂、文化體育、交通運輸等類別。本系統提供即時查詢服務，支援縣市篩選與店名搜尋。
                 </p>
               </details>
@@ -500,7 +502,7 @@ interface Merchant {
                     name: "國民旅遊卡可以在哪裡使用？",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: `國民旅遊卡（國旅卡）可在全台超過${stats ? ` ${stats.total_merchants.toLocaleString()} ` : " 55,000 "}間特約商店使用，涵蓋住宿、餐飲、休閒遊樂、文化體育、交通運輸等類別。本系統提供即時查詢服務，支援縣市篩選與店名搜尋。`,
+                      text: `國民旅遊卡（國旅卡）可在全台超過${stats ? ` ${Number(stats?.total_merchants ?? 0).toLocaleString()} ` : " 55,000 "}間特約商店使用，涵蓋住宿、餐飲、休閒遊樂、文化體育、交通運輸等類別。本系統提供即時查詢服務，支援縣市篩選與店名搜尋。`,
                     },
                   },
                   {
