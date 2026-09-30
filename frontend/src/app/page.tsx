@@ -79,11 +79,12 @@ export default async function Home({
   let data = null;
   let stats = null;
   try {
-    const res = await fetch(`${API_URL}/api/merchants?${query.toString()}`, { next: { revalidate: 300 } });
-    if (res.ok) data = await res.json();
-    
-    const statsRes = await fetch(`${API_URL}/api/stats`, { next: { revalidate: 3600 } });
-    if (statsRes.ok) stats = await statsRes.json();
+    const [mRes, sRes] = await Promise.all([
+      fetch(`${API_URL}/api/merchants?${query.toString()}`, { next: { revalidate: 300 } }),
+      fetch(`${API_URL}/api/stats`, { next: { revalidate: 3600 } }),
+    ]);
+    if (mRes.ok) data = await mRes.json();
+    if (sRes.ok) stats = await sRes.json();
   } catch (e) {
     console.error("Backend fetch error", e);
   }
@@ -175,6 +176,8 @@ interface Merchant {
         initialQ={q}
         initialFilters={initialFilters}
         cities={TAIWAN_CITIES}
+        initialLat={isNaN(latParam) ? undefined : latParam}
+        initialLon={isNaN(lonParam) ? undefined : lonParam}
       />
 
       {/* Results Meta */}

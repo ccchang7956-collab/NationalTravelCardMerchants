@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { fetchWithAuth } from '@/utils/api';
 
 export interface User {
@@ -86,12 +86,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     refreshFavorites();
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('ntc_token');
     setToken(null);
     setUser(null);
     setFavoriteIds([]);
-  };
+  }, []);
+
+  useEffect(() => {
+    const h = () => logout();
+    window.addEventListener('ntc:unauthorized', h);
+    return () => window.removeEventListener('ntc:unauthorized', h);
+  }, [logout]);
 
   const toggleFavorite = async (merchantId: number): Promise<boolean> => {
     if (!user) return false;

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import GlobalRadar from "@/components/GlobalRadar";
@@ -29,7 +29,6 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "國旅卡商店檢索系統" }],
   manifest: "/manifest.json",
-  themeColor: "#2563eb",
   alternates: {
     canonical: "/",
   },
@@ -57,6 +56,10 @@ export const metadata: Metadata = {
       "max-image-preview": "large",
     },
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#2563eb",
 };
 
 export default function RootLayout({

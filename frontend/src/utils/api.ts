@@ -13,6 +13,7 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
   if (res.status === 401) {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('ntc_token');
+      window.dispatchEvent(new Event('ntc:unauthorized'));
     }
   }
   return res;

@@ -287,6 +287,7 @@ function MapContent() {
     setKeyword("");
     setTempRadius(2);
     setRadius(2);
+    setCenter(DEFAULT_CENTER);
     setFilterState(DEFAULT_FILTER_STATE);
     fetchNearby(DEFAULT_CENTER[0], DEFAULT_CENTER[1], 2, "", "");
   }, [fetchNearby]);
@@ -468,6 +469,7 @@ function MapContent() {
                     <Link
                       href={`/merchant/${m.tax_id || m.id}`}
                       target="_blank"
+                      rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
                       title="查看商店詳情"
                       className="p-1.5 bg-muted-bg rounded-lg hover:bg-accent/10 hover:text-accent transition-colors text-muted flex items-center justify-center"
@@ -478,6 +480,7 @@ function MapContent() {
                       <Link
                         href={`https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lon}`}
                         target="_blank"
+                        rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         title="Google 地圖導航"
                         className="p-1.5 bg-muted-bg rounded-lg hover:bg-blue-500/10 hover:text-blue-500 transition-colors text-muted flex items-center justify-center"

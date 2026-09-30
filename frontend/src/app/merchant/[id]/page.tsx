@@ -11,7 +11,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 // Fetch merchant data
 async function getMerchant(id: string) {
-  const res = await fetch(`${API_URL}/api/merchants/${id}`, { next: { revalidate: 3600 } });
+  const res = await fetch(`${API_URL}/api/merchants/${encodeURIComponent(id)}`, { next: { revalidate: 3600 } });
   if (!res.ok) return null;
   return res.json();
 }

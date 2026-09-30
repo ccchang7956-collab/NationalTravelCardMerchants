@@ -10,12 +10,16 @@ interface HomeSearchSectionProps {
   initialQ: string;
   initialFilters: FilterState;
   cities: string[];
+  initialLat?: number;
+  initialLon?: number;
 }
 
 export default function HomeSearchSection({
   initialQ,
   initialFilters,
   cities,
+  initialLat,
+  initialLon,
 }: HomeSearchSectionProps) {
   const router = useRouter();
   const [filters, setFilters] = useState<FilterState>(initialFilters);
@@ -107,11 +111,11 @@ export default function HomeSearchSection({
         {filters.industryCode && (
           <input type="hidden" name="industry_code" value={filters.industryCode} />
         )}
-        {filters.radiusKm !== null && userLocation && (
+        {filters.radiusKm !== null && (userLocation || initialLat !== undefined || initialLon !== undefined) && (
           <>
             <input type="hidden" name="radius_km" value={String(filters.radiusKm)} />
-            <input type="hidden" name="lat" value={userLocation.lat.toFixed(5)} />
-            <input type="hidden" name="lon" value={userLocation.lon.toFixed(5)} />
+            <input type="hidden" name="lat" value={userLocation ? userLocation.lat.toFixed(5) : (initialLat ?? "")} />
+            <input type="hidden" name="lon" value={userLocation ? userLocation.lon.toFixed(5) : (initialLon ?? "")} />
           </>
         )}
 
