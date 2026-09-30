@@ -8,29 +8,35 @@ router = APIRouter()
 
 @router.post("/auth/register", response_model=Token)
 def register(user_in: UserCreate, db: sqlite3.Connection = Depends(get_db)):
+    email_norm = user_in.email.strip().lower()
     cursor = db.cursor()
-    cursor.execute("SELECT id FROM users WHERE email = ?", (user_in.email,))
+    cursor.execute("SELECT id FROM users WHERE email = ?", (email_norm,))
     if cursor.fetchone():
         raise HTTPException(status_code=400, detail="Email is already registered")
-    
+
     hashed_pwd = hash_password(user_in.password)
-    cursor.execute(
-        "INSERT INTO users (email, hashed_password, name) VALUES (?, ?, ?)",
-        (user_in.email, hashed_pwd, user_in.name)
-    )
+    try:
+        cursor.execute(
+            "INSERT INTO users (email, hashed_password, name) VALUES (?, ?, ?)",
+            (email_norm, hashed_pwd, user_in.name)
+        )
+    except sqlite3.IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Email already registered")
     db.commit()
     user_id = cursor.lastrowid
-    token = create_access_token(user_id, user_in.email)
+    token = create_access_token(user_id, email_norm)
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": user_id, "email": user_in.email, "name": user_in.name}
+        "user": {"id": user_id, "email": email_norm, "name": user_in.name}
     }
 
 @router.post("/auth/login", response_model=Token)
 def login(user_in: UserLogin, db: sqlite3.Connection = Depends(get_db)):
+    email_norm = user_in.email.strip().lower()
     cursor = db.cursor()
-    cursor.execute("SELECT id, email, hashed_password, name FROM users WHERE email = ?", (user_in.email,))
+    cursor.execute("SELECT id, email, hashed_password, name FROM users WHERE email = ?", (email_norm,))
     user = cursor.fetchone()
     if not user or not verify_password(user_in.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Incorrect email or password")

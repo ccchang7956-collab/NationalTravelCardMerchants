@@ -20,12 +20,15 @@ app = FastAPI(
 _cors_origins_env = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
 CORS_ORIGINS = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
 
+if "*" in CORS_ORIGINS:
+    raise RuntimeError("CORS_ORIGINS=* with credentials is forbidden")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(merchants.router, prefix="/api", tags=["merchants"])

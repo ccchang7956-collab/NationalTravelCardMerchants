@@ -1,6 +1,13 @@
 import bcrypt
 
-# Passlib compatibility patch for bcrypt >= 4.0.0
+# Passlib compatibility shim for bcrypt >= 4.0.0:
+# 1. `__about__` attribute was removed in bcrypt 4; passlib reads it for
+#    version detection, so restore it.
+# 2. passlib's backend self-test (`detect_wrap_bug`) hashes a >72B probe
+#    secret; bcrypt>=4 raises ValueError instead of wrapping, which would
+#    break backend init. Truncate here ONLY for that internal probe path.
+# Public API enforces the 72B limit explicitly (fail-fast, no silent
+# truncation): see hash_password / verify_password below.
 if not hasattr(bcrypt, "__about__"):
     bcrypt.__about__ = type("about", (), {"__version__": getattr(bcrypt, "__version__", "4.0.0")})
 
@@ -27,19 +34,29 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY must be set in production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS = 7
+
+MAX_PASSWORD_BYTES = 72
+
+try:
+    ACCESS_TOKEN_EXPIRE_HOURS = float(os.environ.get("JWT_EXPIRE_HOURS", "24"))
+except (ValueError, TypeError):
+    ACCESS_TOKEN_EXPIRE_HOURS = 24.0
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
 def hash_password(password: str) -> str:
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise ValueError("Password too long (max 72 bytes)")
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if len(plain_password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        return False
     return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(user_id: int, email: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     payload = {"sub": str(user_id), "email": email, "exp": expire}
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
