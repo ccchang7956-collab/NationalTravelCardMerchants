@@ -1,6 +1,6 @@
 {
-  "name": "國民旅遊卡特約商店導航秘書",
-  "short_name": "國旅卡秘書",
+  "name": "國民旅遊卡特約商店查詢",
+  "short_name": "國民旅遊卡特約商店查詢",
   "description": "全台國民旅遊卡特約商店查詢、雙額度補助統計與周邊地圖導航助手",
   "start_url": "/",
   "display": "standalone",

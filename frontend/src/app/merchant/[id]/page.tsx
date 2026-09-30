@@ -7,6 +7,12 @@ import MerchantActions from "@/components/MerchantActions";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
 
+const TAIWAN_CITIES = [
+  "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
+  "台中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "台南市",
+  "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣",
+];
+
 // Fetch merchant data
 async function getMerchant(id: string) {
   const API_URL = getBackendUrl();
@@ -48,7 +54,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       siteName: "國民旅遊卡特約商店查詢",
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title,
       description,
     },
@@ -70,20 +76,31 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
     ? `/map?lat=${merchant.lat}&lon=${merchant.lon}&radius=1`
     : null;
 
+  // 縣市正規化：city 欄位優先，其次地址前綴比對縣市表，取不到則省略
+  const city: string | undefined = (() => {
+    if (merchant.city && TAIWAN_CITIES.includes(merchant.city)) return merchant.city;
+    const addr: string = merchant.address || "";
+    return TAIWAN_CITIES.find((c) => addr.startsWith(c));
+  })();
+  const normalizeWebsite = (w: string) =>
+    w.startsWith("http") ? w : `http://${w}`;
+  const websiteUrl: string | undefined = merchant.website
+    ? normalizeWebsite(merchant.website)
+    : undefined;
+
   // 完整的 LocalBusiness 結構化資料
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
     "@id": pageUrl,
     name: merchant.name,
-    url: merchant.website
-      ? (merchant.website.startsWith("http") ? merchant.website : `http://${merchant.website}`)
-      : pageUrl,
+    url: pageUrl,
+    ...(websiteUrl ? { sameAs: [websiteUrl] } : {}),
     address: {
       "@type": "PostalAddress",
       streetAddress: merchant.address,
       postalCode: merchant.zip_code,
-      addressRegion: merchant.address ? merchant.address.substring(0, 3) : undefined,
+      ...(city ? { addressRegion: city } : {}),
       addressCountry: "TW",
     },
     ...(hasCoords && {
@@ -109,6 +126,34 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
         name: "行政院人事行政總處",
       },
     },
+  };
+
+  // 麵包屑結構化資料：首頁 > {city} > {店名}（固定 3 項）
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "首頁",
+        item: SITE_URL,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: city ? `${city}特約商店` : "特約商店",
+        item: city
+          ? `${SITE_URL}/?city=${encodeURIComponent(city)}`
+          : SITE_URL,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: merchant.name,
+        item: pageUrl,
+      },
+    ],
   };
 
   return (
@@ -201,6 +246,11 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      {/* BreadcrumbList 結構化資料 */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
     </div>
   );
