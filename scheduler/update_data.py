@@ -1193,7 +1193,8 @@ def main():
                 final_total = target_conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
             finally:
                 target_conn.close()
-        except Exception:
+        except Exception as e:
+            log.warning(f"查目標筆數失敗，fallback new_count={new_count}: {e}")
             final_total = new_count
 
 
