@@ -15,6 +15,7 @@ services:
       DB_PATH: /data/merchants.db
       TZ: Asia/Taipei
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?must set JWT_SECRET_KEY in .env}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s

@@ -7,6 +7,7 @@ TDD: these tests FAIL on pre-fix code, PASS after the fix.
 """
 import inspect
 import os
+import pathlib
 import sqlite3
 import subprocess
 import sys
@@ -131,9 +132,10 @@ def _client():
 def test_jwt_no_default_secret():
     env = dict(os.environ)
     env.pop("JWT_SECRET_KEY", None)
+    repo_root = str(pathlib.Path(__file__).resolve().parents[2])
     proc = subprocess.run(
         [sys.executable, "-c", "import backend.auth_utils"],
-        cwd="/Users/ccchang/Project/NationalTravelCardMerchants",
+        cwd=repo_root,
         env=env,
         capture_output=True,
         text=True,
