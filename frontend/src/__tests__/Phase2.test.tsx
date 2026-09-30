@@ -158,7 +158,7 @@ describe("Phase2 Task4: MapView/MiniMap 本地 marker", () => {
 });
 
 describe("Phase2 Task4: next.config 安全標頭", () => {
-  it("headers() 含 nosniff / referrer / SAMEORIGIN + CSP Report-Only", async () => {
+  it("headers() 含 nosniff / referrer / SAMEORIGIN + CSP enforcing", async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const cfg = require("../../next.config.ts") as unknown;
     const resolved = (cfg as { default?: unknown }).default ?? cfg;
@@ -174,7 +174,8 @@ describe("Phase2 Task4: next.config 安全標頭", () => {
     expect(find("X-Content-Type-Options")).toBe("nosniff");
     expect(find("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(find("X-Frame-Options")).toBe("SAMEORIGIN");
-    const csp = find("Content-Security-Policy-Report-Only");
+    const csp = find("Content-Security-Policy");
+    expect(find("Content-Security-Policy-Report-Only")).toBeUndefined();
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("img-src 'self' data: https:");
     expect(csp).toContain("script-src 'self'");

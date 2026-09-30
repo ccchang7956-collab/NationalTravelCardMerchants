@@ -68,7 +68,7 @@ function MapContent() {
   const searchParams = useSearchParams();
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastFetchedRef = useRef<string>("");
-  const merchantRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const merchantRefs = useRef<Record<number, HTMLElement | null>>({});
 
   useEffect(() => {
     return () => {
@@ -463,20 +463,23 @@ function MapContent() {
             </div>
           ) : (
             merchants.map((m) => (
-              <button
+              <article
                 key={m.id}
-                type="button"
-                aria-label={`查看 ${m.name}`}
+                aria-label={m.name}
                 ref={(el) => { merchantRefs.current[m.id] = el; }}
-                onClick={() => setSelectedMerchant(m)}
-                className={`bg-card rounded-xl border p-4 cursor-pointer transition-all duration-150 hover:shadow-md text-left w-full ${
+                className={`bg-card rounded-xl border p-4 transition-all duration-150 hover:shadow-md w-full ${
                   selectedMerchant?.id === m.id
                     ? "border-accent/80 ring-2 ring-accent/20 bg-accent/5 shadow-md"
                     : "border-border/50"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
+                  <button
+                    type="button"
+                    aria-label={`查看 ${m.name}`}
+                    onClick={() => setSelectedMerchant(m)}
+                    className="flex-1 min-w-0 cursor-pointer text-left rounded-md focus-visible:outline-2 focus-visible:outline-accent"
+                  >
                     <p className="font-medium text-sm text-foreground truncate">{m.name}</p>
                     <p className="text-xs text-muted mt-1 truncate">{m.address}</p>
                     <div className="flex items-center gap-3 mt-2">
@@ -485,14 +488,14 @@ function MapContent() {
                       )}
                       {m.website && <GlobeAltIcon className="w-3 h-3 text-muted opacity-70" title="有專屬網站" />}
                     </div>
-                  </div>
+                  </button>
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <Link
                       href={`/merchant/${m.tax_id || m.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
                       title="查看商店詳情"
+                      aria-label={`查看 ${m.name} 詳情`}
                       className="p-1.5 bg-muted-bg rounded-lg hover:bg-accent/10 hover:text-accent transition-colors text-muted flex items-center justify-center"
                     >
                       <ChevronRightIcon className="w-4 h-4" />
@@ -502,8 +505,8 @@ function MapContent() {
                         href={`https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lon}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
                         title="Google 地圖導航"
+                        aria-label={`導航至 ${m.name}`}
                         className="p-1.5 bg-muted-bg rounded-lg hover:bg-blue-500/10 hover:text-blue-500 transition-colors text-muted flex items-center justify-center"
                       >
                         <MapIcon className="w-4 h-4" />
@@ -511,7 +514,7 @@ function MapContent() {
                     )}
                   </div>
                 </div>
-              </button>
+              </article>
             ))
           )}
         </div>

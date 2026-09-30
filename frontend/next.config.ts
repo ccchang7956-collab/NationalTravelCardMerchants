@@ -24,9 +24,9 @@ const nextConfig: NextConfig = {
           },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           {
-            key: "Content-Security-Policy-Report-Only",
+            key: "Content-Security-Policy",
             value:
-              "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; connect-src 'self' http: https: ws: wss:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
           },
         ],
       },
