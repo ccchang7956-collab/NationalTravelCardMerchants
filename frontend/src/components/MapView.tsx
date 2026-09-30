@@ -36,6 +36,7 @@ export default function MapView({
   center,
   userLocation,
   onMapClick,
+  selectedMerchant,
   onSelectMerchant,
   radius,
   tempRadius,
@@ -44,6 +45,7 @@ export default function MapView({
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersLayerRef = useRef<L.MarkerClusterGroup | null>(null);
+  const markersRef = useRef<Record<number, L.Marker>>({});
   const userMarkerRef = useRef<L.Marker | null>(null);
   const centerMarkerRef = useRef<L.Marker | null>(null);
   const circleRef = useRef<L.Circle | null>(null);
@@ -130,6 +132,7 @@ export default function MapView({
     const markersLayer = markersLayerRef.current;
 
     markersLayer.clearLayers();
+    markersRef.current = {};
 
     const merchantIcon = L.divIcon({
       className: "",
@@ -192,8 +195,28 @@ export default function MapView({
 
       marker.on("click", () => onSelectMerchant(m));
       markersLayer.addLayer(marker);
+      markersRef.current[m.id] = marker;
     });
   }, [merchants, onSelectMerchant, mapReady, router]);
+
+  // 側欄選店連動：地圖 flyTo + 開對應 marker popup
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !selectedMerchant?.lat || !selectedMerchant?.lon) return;
+    const map = mapRef.current;
+    map.flyTo([selectedMerchant.lat, selectedMerchant.lon], Math.max(map.getZoom(), 15), { duration: 0.6 });
+    const marker = markersRef.current[selectedMerchant.id];
+    if (marker) {
+      // marker 可能被 cluster 收合，先展開再開 popup
+      const cluster = markersLayerRef.current as unknown as {
+        zoomToShowLayer?: (layer: L.Marker, cb: () => void) => void;
+      } | null;
+      if (cluster && typeof cluster.zoomToShowLayer === "function") {
+        cluster.zoomToShowLayer(marker, () => marker.openPopup());
+      } else {
+        marker.openPopup();
+      }
+    }
+  }, [selectedMerchant, mapReady]);
 
   // Update user location marker
   useEffect(() => {

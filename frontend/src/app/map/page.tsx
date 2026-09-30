@@ -46,7 +46,6 @@ interface Merchant {
 }
 
 const DEFAULT_CENTER: [number, number] = [25.0339, 121.5645];
-const API_URL = getPublicApiUrl();
 
 export function clampLat(v: number): number {
   if (!Number.isFinite(v)) return DEFAULT_CENTER[0];
@@ -134,6 +133,7 @@ function MapContent() {
     setApiError(null);
     updateURL(lat, lon, r, q, indCode);
     try {
+      const API_URL = getPublicApiUrl();
       const qParam = q ? `&q=${encodeURIComponent(q)}` : "";
       const indParam = indCode ? `&industry_code=${encodeURIComponent(indCode)}` : "";
       const res = await fetch(

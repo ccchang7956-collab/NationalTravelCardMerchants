@@ -6,11 +6,11 @@ import MerchantMapSection from "@/components/MerchantMapSection";
 import MerchantActions from "@/components/MerchantActions";
 import { getBackendUrl } from "@/utils/env";
 
-const API_URL = getBackendUrl();
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 // Fetch merchant data
 async function getMerchant(id: string) {
+  const API_URL = getBackendUrl();
   const res = await fetch(`${API_URL}/api/merchants/${encodeURIComponent(id)}`, { next: { revalidate: 3600 } });
   if (!res.ok) return null;
   return res.json();
