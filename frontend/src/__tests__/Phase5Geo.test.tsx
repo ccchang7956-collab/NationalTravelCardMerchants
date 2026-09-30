@@ -31,7 +31,7 @@ describe("Phase5 Task4: GEO 入口", () => {
   it("root layout 含 Organization 結構化資料（含 logo）", () => {
     const s = readSrc("../app/layout.tsx");
     expect(s).toContain("Organization");
-    expect(s).toContain("/icon.png");
+    expect(s).toContain("/icons/icon-512x512.png");
   });
 
   it("root layout footer 含 /llms.txt 連結（給 AI 的本站說明）", () => {

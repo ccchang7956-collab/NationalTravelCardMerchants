@@ -108,7 +108,7 @@ export default function RootLayout({
                   "@type": "Organization",
                   name: "國民旅遊卡特約商店查詢",
                   url: SITE_URL,
-                  logo: `${SITE_URL}/icon.png`,
+                  logo: `${SITE_URL}/icons/icon-512x512.png`,
                   sameAs: [],
                 }),
               }}
