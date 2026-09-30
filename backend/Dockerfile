@@ -13,10 +13,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 複製程式碼（保留目錄結構，uvicorn 執行 backend.main:app 需要）
 COPY backend/ ./backend/
+COPY backend/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # 建立非 root 使用者 (統一 UID/GID 1000 以避免 Volume 權限衝突)
-RUN groupadd -g 1000 ntcuser && useradd -u 1000 -g ntcuser -s /bin/sh ntcuser
-USER ntcuser
+# 注意：runtime 掛載的 named volume 會覆蓋 image 內的 /data 權限，
+# 真正的修復在 entrypoint.sh（以 root 起手 chown 後降權執行），見該檔案說明。
+RUN groupadd -g 1000 ntcuser && useradd -u 1000 -g ntcuser -s /bin/sh ntcuser \
+    && chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 EXPOSE 8000
 

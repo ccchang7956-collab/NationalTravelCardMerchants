@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import json
 import sqlite3
+from datetime import datetime, timezone, timedelta
 
 from backend.routers import merchants, auth, assistant, itineraries
 from backend.database import DB_PATH, get_db_connection, init_db
@@ -39,6 +40,48 @@ def root():
         "message": "Welcome to National Travel Card Merchants API",
         "database_ready": db_exists,
         "docs_url": "/docs"
+    }
+
+# 資料新鮮度告警門檻（小時）：update_meta.json 的 last_updated 超過此值視為 stale。
+# 可用 DATA_STALE_AFTER_HOURS 環境變數覆寫，預設 48h。
+STALE_AFTER_HOURS = float(os.environ.get("DATA_STALE_AFTER_HOURS", "48"))
+_TAIPEI_TZ = timezone(timedelta(hours=8))
+
+def _read_update_meta() -> dict:
+    meta_path = os.path.join(os.path.dirname(DB_PATH), "update_meta.json")
+    if not os.path.exists(meta_path):
+        return {}
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+@app.get("/api/health")
+def health():
+    """健康檢查 + 資料新鮮度：last_updated 超過 STALE_AFTER_HOURS 視為 stale 告警。"""
+    meta = _read_update_meta()
+    last_updated = meta.get("last_updated")
+    age_hours = None
+    stale = True
+    if isinstance(last_updated, str) and last_updated:
+        try:
+            ts = datetime.fromisoformat(last_updated)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=_TAIPEI_TZ)
+            age_hours = (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds() / 3600
+            age_hours = round(age_hours, 2)
+            stale = age_hours > STALE_AFTER_HOURS
+        except (ValueError, TypeError, OverflowError):
+            stale = True
+    return {
+        "status": "stale" if stale else "ok",
+        "database_ready": os.path.exists(DB_PATH),
+        "last_updated": last_updated,
+        "age_hours": age_hours,
+        "stale": stale,
+        "stale_after_hours": STALE_AFTER_HOURS,
     }
 
 @app.get("/api/data-info")
