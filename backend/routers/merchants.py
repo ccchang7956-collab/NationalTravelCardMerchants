@@ -1,7 +1,5 @@
 import sqlite3
 import math
-import re
-import unicodedata
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional, List, Tuple
 from backend.database import get_db
