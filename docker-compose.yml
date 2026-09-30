@@ -41,8 +41,8 @@ services:
   # ── Scheduler (supercronic) ──────────────────────────────────────────────
   scheduler:
     build:
-      context: ./scheduler
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: scheduler/Dockerfile
     image: ntc-scheduler
     restart: unless-stopped
     volumes:

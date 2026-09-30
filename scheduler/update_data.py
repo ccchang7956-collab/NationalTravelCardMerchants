@@ -710,7 +710,10 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> None:
     user_itineraries, itinerary_items 等 5 張使用者個人資料表，
     並且維持既有特約商店之 id 主鍵與外鍵關聯不變。
     """
-    from backend.database import init_db
+    try:
+        from backend.database import init_db
+    except ModuleNotFoundError:
+        from vendor_backend_database import init_db  # type: ignore
 
     target_dir = os.path.dirname(target_db_path)
     if target_dir:

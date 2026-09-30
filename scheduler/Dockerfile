@@ -19,12 +19,13 @@ RUN ARCH=$(dpkg --print-architecture) && \
 WORKDIR /app
 
 # 安裝 Python 套件
-COPY requirements.txt .
+COPY scheduler/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 複製腳本
-COPY update_data.py .
-COPY crontab /etc/supercronic/crontab
+# 複製腳本（build context 為 repo root，見 docker-compose.yml）
+COPY scheduler/update_data.py .
+COPY backend/database.py ./vendor_backend_database.py
+COPY scheduler/crontab /etc/supercronic/crontab
 
 # 建立非 root 使用者並給予 /data 權限 (統一 UID/GID 1000 以避免 Volume 權限衝突)
 RUN groupadd -g 1000 ntcuser && useradd -u 1000 -g ntcuser -s /bin/sh ntcuser \
