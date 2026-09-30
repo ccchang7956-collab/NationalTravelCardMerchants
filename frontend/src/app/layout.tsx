@@ -100,6 +100,19 @@ export default function RootLayout({
                 }),
               }}
             />
+            <script
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{
+                __html: JSON.stringify({
+                  "@context": "https://schema.org",
+                  "@type": "Organization",
+                  name: "國民旅遊卡特約商店查詢",
+                  url: SITE_URL,
+                  logo: `${SITE_URL}/icon.png`,
+                  sameAs: [],
+                }),
+              }}
+            />
             <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-200">
               <Navbar />
               <main className="flex-1 max-w-5xl w-full mx-auto p-6 md:py-10">
@@ -107,6 +120,11 @@ export default function RootLayout({
               </main>
               <footer className="border-t border-border py-8 text-center text-sm text-muted mt-10">
                 <p>資料來源：政府開放資料</p>
+                <p className="mt-2">
+                  <a href="/llms.txt" className="underline hover:text-foreground">
+                    給 AI 的本站說明
+                  </a>
+                </p>
               </footer>
               <GlobalRadar />
             </div>
