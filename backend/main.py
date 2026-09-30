@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import os
 import json
 import sqlite3
@@ -8,12 +9,18 @@ from datetime import datetime, timezone, timedelta
 from backend.routers import merchants, auth, assistant, itineraries
 from backend.database import DB_PATH, get_db_connection, init_db
 
-init_db()
+
+@asynccontextmanager
+async def lifespan(app):
+    init_db()
+    yield
+
 
 app = FastAPI(
     title="National Travel Card Merchants API",
     description="API for querying National Travel Card authorized stores in Taiwan",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS 設定：從環境變數讀取允許的來源，支援多個（逗號分隔）
@@ -128,4 +135,4 @@ def data_info():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=os.environ.get("UVICORN_RELOAD", "false").lower() == "true")
