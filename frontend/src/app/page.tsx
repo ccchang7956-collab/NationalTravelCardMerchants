@@ -14,8 +14,6 @@ const TAIWAN_CITIES = [
   "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"
 ];
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-
 interface CityStat {
   city: string;
   count: number;
@@ -39,6 +37,7 @@ export async function generateMetadata({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }): Promise<Metadata> {
+  const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
   const resolved = await searchParams;
   const q = typeof resolved.q === "string" ? resolved.q.slice(0, 50) : "";
   const city = typeof resolved.city === "string" ? resolved.city : "";
@@ -107,8 +106,10 @@ export default async function Home({
   }
 
   const merchants = data?.items || [];
-  const totalPages = data?.total_pages || 1;
-  const total = data?.total || 0;
+  const _total = Number(data?.total ?? 0);
+  const total = Number.isFinite(_total) && _total >= 0 ? Math.floor(_total) : 0;
+  const _tp = Number(data?.total_pages ?? 1);
+  const totalPages = Number.isFinite(_tp) && _tp >= 1 ? Math.floor(_tp) : 1;
 
   if (page > totalPages && totalPages > 0) {
     const redirectQuery = new URLSearchParams();

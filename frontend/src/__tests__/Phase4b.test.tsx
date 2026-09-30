@@ -54,4 +54,38 @@ describe("Phase4b Task5: page.tsx 型別上移 + 數字/字串防禦 + q 截斷 
     const s = readSrc("../components/HomeSearchSection.tsx");
     expect(s).toMatch(/maxLength=\{100\}/);
   });
+
+  it("total/total_pages 使用 Number() + Number.isFinite 防禦（後端回字串/異常不污染分頁）", () => {
+    const s = src();
+    expect(s).toContain("Number(data?.total");
+    expect(s).toContain("Number(data?.total_pages");
+    expect(s).toContain("Number.isFinite");
+    // 不得再有裸 data?.total || / data?.total_pages ||（無防禦寫法）
+    expect(s).not.toMatch(/data\?\.total_pages\s*\|\|/);
+    expect(s).not.toMatch(/data\?\.total\s*\|\|/);
+  });
+
+  it("SITE_URL 不在模組頂層凍結（page.tsx 於函式內取值）", () => {
+    const s = src();
+    const lines = s.split("\n");
+    const topLevelSiteUrl = lines.some(
+      (l) => /^const SITE_URL\s*=/.test(l) && !/^\s/.test(l)
+    );
+    expect(topLevelSiteUrl).toBe(false);
+    // generateMetadata 函式內取值
+    expect(s).toMatch(/generateMetadata[\s\S]*?const SITE_URL = process\.env\.NEXT_PUBLIC_SITE_URL/);
+  });
+
+  it("merchant page 與 opengraph-image 的 env 在函式內取值（無模組頂層凍結）", () => {
+    const m = readSrc("../app/merchant/[id]/page.tsx");
+    const og = readSrc("../app/merchant/[id]/opengraph-image.tsx");
+    for (const s of [m, og]) {
+      const topLevel = s.split("\n").some(
+        (l) => /^const (SITE_URL|API_URL)\s*=/.test(l) && !/^\s/.test(l)
+      );
+      expect(topLevel).toBe(false);
+    }
+    expect(m.match(/const SITE_URL = process\.env\.NEXT_PUBLIC_SITE_URL/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(og).toContain("process.env.INTERNAL_API_URL");
+  });
 });

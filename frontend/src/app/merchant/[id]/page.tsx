@@ -6,8 +6,6 @@ import MerchantMapSection from "@/components/MerchantMapSection";
 import MerchantActions from "@/components/MerchantActions";
 import { getBackendUrl } from "@/utils/env";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-
 // Fetch merchant data
 async function getMerchant(id: string) {
   const API_URL = getBackendUrl();
@@ -18,6 +16,7 @@ async function getMerchant(id: string) {
 
 // Generate dynamic metadata for SEO
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
   const resolvedParams = await params;
   const merchant = await getMerchant(resolvedParams.id);
   
@@ -56,6 +55,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default async function MerchantPage({ params }: { params: Promise<{ id: string }> }) {
+  const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
   const resolvedParams = await params;
   const merchant = await getMerchant(resolvedParams.id);
 

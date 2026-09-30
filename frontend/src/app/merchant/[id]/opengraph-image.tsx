@@ -4,16 +4,15 @@ export const runtime = "edge";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const API_URL =
-  process.env.INTERNAL_API_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://127.0.0.1:8000";
-
 export default async function OgImage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const API_URL =
+    process.env.INTERNAL_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    "http://127.0.0.1:8000";
   const { id } = await params;
 
   let name = "國民旅遊卡特約商店";
