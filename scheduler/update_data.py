@@ -1121,7 +1121,7 @@ def main():
 
         log.info("🆕 偵測到新版 PDF，開始更新...")
 
-        # 讀取舊的商家集合（用於統計）
+        # 讀取舊的商家集合（用於統計，兩側皆 normalize_tax_id）
         old_tax_ids = set()
         if os.path.exists(DB_PATH):
             old_conn = None
@@ -1130,7 +1130,9 @@ def main():
                 old_conn.execute("PRAGMA foreign_keys = ON;")
                 old_conn.execute("PRAGMA busy_timeout = 5000;")
                 for row in old_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
-                    old_tax_ids.add(row[0])
+                    tid = normalize_tax_id(row[0])
+                    if tid is not None:
+                        old_tax_ids.add(tid)
             except Exception:
                 pass
             finally:
@@ -1148,7 +1150,7 @@ def main():
             notify(f"❌ 國旅卡更新中止（解析筆數過少：{new_count}）")
             sys.exit(1)
 
-        # 讀取新的商家集合（用於統計）
+        # 讀取新的商家集合（用於統計，兩側皆 normalize_tax_id）
         new_tax_ids = set()
         tmp_conn = None
         try:
@@ -1156,7 +1158,9 @@ def main():
             tmp_conn.execute("PRAGMA foreign_keys = ON;")
             tmp_conn.execute("PRAGMA busy_timeout = 5000;")
             for row in tmp_conn.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL"):
-                new_tax_ids.add(row[0])
+                tid = normalize_tax_id(row[0])
+                if tid is not None:
+                    new_tax_ids.add(tid)
         except Exception:
             pass
         finally:
@@ -1182,6 +1186,16 @@ def main():
             sys.exit(1)
         log.info(f"✅ DB 已更新：{DB_PATH}")
 
+        # 同步後以目標庫實際筆數為準（meta 說真話，不用解析筆數 new_count）
+        try:
+            target_conn = sqlite3.connect(DB_PATH)
+            try:
+                final_total = target_conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
+            finally:
+                target_conn.close()
+        except Exception:
+            final_total = new_count
+
 
     # 8. 記錄 hash（原子寫入）
     atomic_write_text(HASH_FILE, new_hash)
@@ -1191,7 +1205,7 @@ def main():
     meta = {
         "last_updated": end_time.isoformat(),
         "pdf_hash": new_hash,
-        "total_merchants": new_count,
+        "total_merchants": final_total,
         "new_merchants": added_count,
         "removed_merchants": removed_count,
         "removed_favorites": removed_favorites,
@@ -1201,7 +1215,7 @@ def main():
 
     log.info("=" * 60)
     log.info(f"🎉 更新完成！耗時 {meta['duration_seconds']} 秒")
-    log.info(f"   商家總數：{new_count:,}（新增 {added_count:,} 筆，移除 {removed_count:,} 筆）")
+    log.info(f"   商家總數：{final_total:,}（新增 {added_count:,} 筆，移除 {removed_count:,} 筆）")
     log.info("=" * 60)
 
 
