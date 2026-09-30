@@ -48,6 +48,9 @@ META_FILE    = os.path.join(DATA_DIR, "update_meta.json")
 MASS_MIN_OLD = int(os.environ.get("MASS_DELETE_MIN_OLD", "100"))
 MASS_RATIO = float(os.environ.get("MASS_DELETE_RATIO", "0.5"))
 
+# 下載大小上限（MB）：超過即中止並刪除暫存檔，避免磁碟爆掉
+MAX_DOWNLOAD_MB = 200
+
 TZ_TAIPEI = timezone(timedelta(hours=8))
 
 # ── 日誌設定 ────────────────────────────────────────────────────────────────
@@ -359,7 +362,7 @@ def download_zip(dest: str) -> bool:
     retries = Retry(
         total=5,
         backoff_factor=1,  # 指數重試：1s, 2s, 4s...
-        status_forcelist=[500, 502, 503, 504],
+        status_forcelist=[429, 500, 502, 503, 504],
         raise_on_status=False
     )
     session.mount("https://", HTTPAdapter(max_retries=retries))
@@ -368,9 +371,44 @@ def download_zip(dest: str) -> bool:
     try:
         resp = session.get(DOWNLOAD_URL, headers=headers, timeout=60, stream=True)
         resp.raise_for_status()
+        max_bytes = MAX_DOWNLOAD_MB * 1024 * 1024
+        total = 0
         with open(dest, "wb") as f:
             for chunk in resp.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > max_bytes:
+                    log.error(f"❌ 下載超過上限 {MAX_DOWNLOAD_MB}MB，中止")
+                    try:
+                        f.close()
+                    except Exception:
+                        pass
+                    try:
+                        os.remove(dest)
+                    except Exception:
+                        pass
+                    return False
                 f.write(chunk)
+        # content-type 檢查：拒收 html 錯誤頁
+        content_type = resp.headers.get("Content-Type", "")
+        if "text/html" in content_type.lower():
+            log.error(f"❌ 下載內容為 HTML（Content-Type: {content_type}），疑似錯誤頁")
+            try:
+                os.remove(dest)
+            except Exception:
+                pass
+            return False
+        # ZIP 魔數校驗：前 4 bytes 須為 PK\x03\x04
+        with open(dest, "rb") as f:
+            magic = f.read(4)
+        if magic != b"PK\x03\x04":
+            log.error(f"❌ 下載檔案魔數不符（{magic!r}），非 ZIP")
+            try:
+                os.remove(dest)
+            except Exception:
+                pass
+            return False
         size_mb = os.path.getsize(dest) / 1024 / 1024
         log.info(f"✅ 下載完成：{size_mb:.1f} MB")
         return True
@@ -390,6 +428,16 @@ def extract_pdf(zip_path: str, dest: str) -> bool:
             log.info(f"   PDF 檔案：{pdf_names[0]}")
             with z.open(pdf_names[0]) as src, open(dest, "wb") as dst:
                 shutil.copyfileobj(src, dst)
+        # PDF 魔數校驗：前 5 bytes 須為 b"%PDF-"
+        with open(dest, "rb") as f:
+            pdf_magic = f.read(5)
+        if pdf_magic != b"%PDF-":
+            log.error(f"❌ 解壓出檔案魔數不符（{pdf_magic!r}），非 PDF")
+            try:
+                os.remove(dest)
+            except Exception:
+                pass
+            return False
         log.info("✅ 解壓縮完成")
         return True
     except Exception as e:
@@ -598,6 +646,13 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
     finally:
         if conn:
             conn.close()
+
+def validate_records(insert_data, count):
+    """解析筆數閘門：筆數過少（<1000）視為壞解析，拒絕進同步。"""
+    if count < 1000:
+        log.error(f"Parse too few: {count}")
+        return False
+    return True
 
 def migrate_coords(old_db: str, new_db: str) -> int:
     """從舊 DB 遷移 lat/lon 到新 DB（以 tax_id 對應），回傳遷移筆數。"""
@@ -1070,6 +1125,9 @@ def main():
         new_count = parse_pdf_to_db(pdf_path, new_db)
         if new_count < 0:
             log.error("❌ 更新中止（PDF 解析失敗）")
+            sys.exit(1)
+        if not validate_records([], new_count):
+            log.error("❌ 更新中止（解析筆數過少）")
             sys.exit(1)
 
         # 讀取新的商家集合（用於統計）
