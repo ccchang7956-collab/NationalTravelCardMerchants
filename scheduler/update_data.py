@@ -300,6 +300,25 @@ def sha256_file(path: str) -> str:
             h.update(chunk)
     return h.hexdigest()
 
+def atomic_write_text(path: str, data: str) -> None:
+    """原子寫入文字檔：mkstemp + fsync + os.replace，避免 meta/hash 半寫入。"""
+    import tempfile
+    d = os.path.dirname(path) or "."
+    os.makedirs(d, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=d)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        raise
+
 def random_jitter(clat: float, clon: float, radius_km: float) -> Tuple[float, float]:
     r_km = _rng.uniform(0, radius_km * 0.8)
     angle = _rng.uniform(0, 2 * math.pi)
@@ -771,6 +790,24 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> None:
     table_exists = target_conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='merchants'").fetchone()
     if not table_exists:
         init_db(target_conn)
+        old_count = 0
+    else:
+        old_count = target_conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
+    new_count = len(normalized_temp_merchants)
+
+    # 0. 安全閘門：筆數驟降 abort（避免壞解析清空生產資料）
+    if old_count > 100 and new_count < old_count * 0.5:
+        target_conn.close()
+        raise RuntimeError(f"Abort: new={new_count} < 50% of old={old_count}, refuse mass delete")
+
+    # 0. 同步前 timestamped 備份
+    if os.path.exists(target_db_path):
+        try:
+            bak = f"{target_db_path}.{datetime.now(TZ_TAIPEI).strftime('%Y%m%d-%H%M%S')}.bak"
+            shutil.copy2(target_db_path, bak)
+            log.info(f"💾 已備份同步前 DB → {bak}")
+        except Exception as e:
+            log.warning(f"⚠️ 同步前備份失敗: {e}")
 
     try:
         cursor = target_conn.cursor()
@@ -822,7 +859,34 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> None:
                     VALUES (?, ?, ?, NULL, ?, ?, ?)
                 """, (m["name"], m["address"], m["zip_code"], m["website"], m["lat"], m["lon"]))
 
-        # 3. 刪除下架商家
+        # 3. 刪除下架商家（先統計受影響 favorites，FK CASCADE 會連帶刪除）
+        fav_exists = cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='user_favorites'"
+        ).fetchone()
+        if fav_exists:
+            if new_tax_ids:
+                placeholders = ",".join("?" for _ in new_tax_ids)
+                doomed_ids = cursor.execute(
+                    f"SELECT id FROM merchants WHERE tax_id IS NOT NULL AND tax_id NOT IN ({placeholders})",
+                    list(new_tax_ids),
+                ).fetchall()
+            else:
+                doomed_ids = cursor.execute(
+                    "SELECT id FROM merchants WHERE tax_id IS NOT NULL"
+                ).fetchall()
+            if doomed_ids:
+                ids = [r[0] for r in doomed_ids]
+                qmarks = ",".join("?" for _ in ids)
+                fav_count = cursor.execute(
+                    f"SELECT COUNT(*) FROM user_favorites WHERE merchant_id IN ({qmarks})",
+                    ids,
+                ).fetchone()[0]
+                log.warning(
+                    f"⚠️ 將刪除 {len(ids)} 間下架商家，影響 {fav_count} 筆 user_favorites 收藏（CASCADE 連帶刪除）"
+                )
+            else:
+                log.info("ℹ️ 無下架商家，無 favorites 受影響")
+
         if new_tax_ids:
             placeholders = ",".join("?" for _ in new_tax_ids)
             cursor.execute(f"DELETE FROM merchants WHERE tax_id IS NOT NULL AND tax_id NOT IN ({placeholders})", list(new_tax_ids))
@@ -835,20 +899,23 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> None:
             if (ename, eaddr or "") not in no_tax_keys:
                 cursor.execute("DELETE FROM merchants WHERE id = ?", (eid,))
 
-        # 4. 同步 merchant_industries
-        cursor.execute("DELETE FROM merchant_industries;")
-        target_tax_ids = {row[0] for row in cursor.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL").fetchall()}
-        
-        valid_industries = [
-            (ind["tax_id"], ind["industry_code"], ind["industry_name"], ind["priority"])
-            for ind in normalized_temp_industries
-            if ind["tax_id"] in target_tax_ids
-        ]
-        if valid_industries:
-            cursor.executemany("""
-                INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority)
-                VALUES (?, ?, ?, ?);
-            """, valid_industries)
+        # 4. 同步 merchant_industries — temp 為空則跳過以保護現有資料
+        if normalized_temp_industries:
+            cursor.execute("DELETE FROM merchant_industries;")
+            target_tax_ids = {row[0] for row in cursor.execute("SELECT tax_id FROM merchants WHERE tax_id IS NOT NULL").fetchall()}
+            
+            valid_industries = [
+                (ind["tax_id"], ind["industry_code"], ind["industry_name"], ind["priority"])
+                for ind in normalized_temp_industries
+                if ind["tax_id"] in target_tax_ids
+            ]
+            if valid_industries:
+                cursor.executemany("""
+                    INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority)
+                    VALUES (?, ?, ?, ?);
+                """, valid_industries)
+        else:
+            log.warning("⚠️ temp 無行業別資料，跳過 industries 同步以保護現有資料")
 
         # 5. 重建 merchants_fts
         cursor.execute("DELETE FROM merchants_fts;")
@@ -992,11 +1059,10 @@ def main():
         log.info(f"✅ DB 已更新：{DB_PATH}")
 
 
-    # 8. 記錄 hash
-    with open(HASH_FILE, "w") as f:
-        f.write(new_hash)
+    # 8. 記錄 hash（原子寫入）
+    atomic_write_text(HASH_FILE, new_hash)
 
-    # 9. 寫入 metadata
+    # 9. 寫入 metadata（原子寫入）
     end_time = datetime.now(TZ_TAIPEI)
     meta = {
         "last_updated": end_time.isoformat(),
@@ -1006,8 +1072,7 @@ def main():
         "removed_merchants": removed_count,
         "duration_seconds": round((end_time - start_time).total_seconds(), 1),
     }
-    with open(META_FILE, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
+    atomic_write_text(META_FILE, json.dumps(meta, ensure_ascii=False, indent=2))
 
     log.info("=" * 60)
     log.info(f"🎉 更新完成！耗時 {meta['duration_seconds']} 秒")
