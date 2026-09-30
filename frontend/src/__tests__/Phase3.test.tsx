@@ -72,13 +72,18 @@ describe("Phase3: merchant card 語意（article + 內部 button，Link 為 sibl
     expect(card).toBeDefined();
   });
 
-  it("內部 button 保留 type/aria-label/onClick，Link 保留 target=_blank rel=noopener 且無 stopPropagation", () => {
+  it("內部 button 保留 type/aria-label/onClick，Link 保留 target=_blank rel=noopener 且卡片 article 內無 stopPropagation", () => {
     const s = src();
     expect(s).toMatch(/<button[^>]*type="button"[^>]*aria-label/);
     expect(s).toMatch(/onClick=\{\(\) => setSelectedMerchant\(m\)\}/);
     expect(s).toContain('target="_blank"');
     expect(s).toContain("noopener");
-    expect(s).not.toContain("stopPropagation");
+    // 僅斷言卡片 article 區塊：他處（如 dialog/popover）合法使用 stopPropagation 不應被此測試擋下
+    const articles = s.match(/<article[\s\S]*?<\/article>/g) ?? [];
+    expect(articles.length).toBeGreaterThan(0);
+    for (const a of articles) {
+      expect(a).not.toContain("stopPropagation");
+    }
   });
 
   it("merchantRefs 型別相容（HTMLElement 或 HTMLButtonElement）", () => {

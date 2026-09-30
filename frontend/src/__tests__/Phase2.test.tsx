@@ -197,12 +197,19 @@ describe("Phase2 Task4: map/page 箝制 + a11y + useEffect", () => {
     expect(mod.clampRadiusKm(0)).toBe(2);
   });
 
-  it("商店卡用 button + aria-label，源碼無 render 期 setState", () => {
+  it("商店卡用 article（內含可聚焦 button）+ aria-label，源碼無 render 期 setState", () => {
     const src = fs.readFileSync(
       path.join(__dirname, "../app/map/page.tsx"),
       "utf8"
     );
-    expect(src).toMatch(/<button[^>]*aria-label/);
+    // 卡片語意為 article，外層 article 具 aria-label，內含可聚焦 button（選取）作 sibling 而非 button 包 Link
+    expect(src).toMatch(/<article[^>]*aria-label/);
+    const articles = src.match(/<article[\s\S]*?<\/article>/g) ?? [];
+    expect(articles.length).toBeGreaterThan(0);
+    const card = articles.find(
+      (a) => a.includes("<button") && a.includes("aria-label")
+    );
+    expect(card).toBeDefined();
     // render 期直接 setState 已移入 useEffect（不應出現 if (currentParamsKey !== prevParamsKey) { set... })
     expect(src).not.toMatch(
       /if\s*\(\s*currentParamsKey\s*!==\s*prevParamsKey\s*\)/
