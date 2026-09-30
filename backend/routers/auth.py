@@ -1,14 +1,28 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 import sqlite3
+import time
 from backend.database import get_db
 from backend.models import UserCreate, UserLogin, Token, UserResponse
 from backend.auth_utils import hash_password, verify_password, create_access_token, get_current_user
 
 router = APIRouter()
 
+_FAILS: dict[str, list[float]] = {}
+
+
+def _throttle(key: str, limit: int = 5, window: int = 60):
+    now = time.time()
+    hits = [t for t in _FAILS.get(key, []) if now - t < window]
+    if len(hits) >= limit:
+        raise HTTPException(status_code=429, detail="Too many attempts")
+    hits.append(now)
+    _FAILS[key] = hits
+
 @router.post("/auth/register", response_model=Token)
 def register(user_in: UserCreate, db: sqlite3.Connection = Depends(get_db)):
     email_norm = user_in.email.strip().lower()
+    key = "register:" + email_norm
+    _throttle(key)
     cursor = db.cursor()
     cursor.execute("SELECT id FROM users WHERE email = ?", (email_norm,))
     if cursor.fetchone():
@@ -28,6 +42,7 @@ def register(user_in: UserCreate, db: sqlite3.Connection = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already registered")
     db.commit()
     user_id = cursor.lastrowid
+    _FAILS.pop(key, None)
     token = create_access_token(user_id, email_norm)
     return {
         "access_token": token,
@@ -38,12 +53,15 @@ def register(user_in: UserCreate, db: sqlite3.Connection = Depends(get_db)):
 @router.post("/auth/login", response_model=Token)
 def login(user_in: UserLogin, db: sqlite3.Connection = Depends(get_db)):
     email_norm = user_in.email.strip().lower()
+    key = "login:" + email_norm
+    _throttle(key)
     cursor = db.cursor()
     cursor.execute("SELECT id, email, hashed_password, name FROM users WHERE email = ?", (email_norm,))
     user = cursor.fetchone()
     if not user or not verify_password(user_in.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
-    
+
+    _FAILS.pop(key, None)
     token = create_access_token(user["id"], user["email"])
     return {
         "access_token": token,

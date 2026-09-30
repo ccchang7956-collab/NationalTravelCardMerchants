@@ -11,6 +11,8 @@ from backend.services.search_service import space_segment, parse_search_query
 
 router = APIRouter()
 
+TAIWAN_CITIES = ["基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣", "台中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "台南市", "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"]
+
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance in km between two lat/lon points."""
     if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
@@ -277,19 +279,25 @@ def get_stats(db: sqlite3.Connection = Depends(get_db)):
     has_website = cursor.fetchone()[0]
 
     cursor.execute("""
-        SELECT SUBSTR(address, 1, 3) as city, COUNT(*) as count
-        FROM merchants
+        SELECT address FROM merchants
         WHERE address IS NOT NULL AND address != ''
-        GROUP BY SUBSTR(address, 1, 3)
-        ORDER BY count DESC
     """)
-    # 台灣有效縣市清單 (排除雜訊)
-    taiwan_city_pattern = re.compile(r'^[\u4e00-\u9fff]{3}$') # 匹配 3 個中文字 (如 台北市、南投縣)
-    valid_cities = []
+    counts = {c: 0 for c in TAIWAN_CITIES}
+    other = 0
     for row in cursor.fetchall():
-        city_name = row["city"]
-        if city_name and taiwan_city_pattern.match(city_name):
-            valid_cities.append({"city": city_name, "count": row["count"]})
+        addr = row["address"] or ""
+        for c in TAIWAN_CITIES:
+            if addr.startswith(c):
+                counts[c] += 1
+                break
+        else:
+            other += 1
+    valid_cities = [
+        {"city": c, "count": n} for c, n in counts.items() if n > 0
+    ]
+    if other > 0:
+        valid_cities.append({"city": "其他", "count": other})
+    valid_cities.sort(key=lambda x: x["count"], reverse=True)
 
     return {
         "total_merchants": total,
