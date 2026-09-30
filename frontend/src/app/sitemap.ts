@@ -1,12 +1,13 @@
 import { MetadataRoute } from "next";
+import { getSiteUrl } from "@/utils/site";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 // 每次重新驗證間隔：24 小時（商店資料更新頻率低）
 export const revalidate = 86400;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const SITE_URL = getSiteUrl();
   // 靜態頁面
   const staticRoutes: MetadataRoute.Sitemap = [
     {

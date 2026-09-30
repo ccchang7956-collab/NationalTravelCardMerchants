@@ -7,6 +7,7 @@ import HomeSearchSection from "@/components/HomeSearchSection";
 import MerchantActions from "@/components/MerchantActions";
 import type { FilterState } from "@/components/FilterSheet";
 import { getBackendUrl } from "@/utils/env";
+import { getSiteUrl } from "@/utils/site";
 
 const TAIWAN_CITIES = [
   "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
@@ -37,20 +38,22 @@ export async function generateMetadata({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }): Promise<Metadata> {
-  const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const SITE_URL = getSiteUrl();
   const resolved = await searchParams;
   const q = typeof resolved.q === "string" ? resolved.q.slice(0, 50) : "";
   const city = typeof resolved.city === "string" ? resolved.city : "";
+  const parsedMetaPage = typeof resolved.page === "string" ? parseInt(resolved.page, 10) : 1;
+  const page = isNaN(parsedMetaPage) || parsedMetaPage < 1 ? 1 : parsedMetaPage;
 
   // 有搜尋條件或翻頁時不索引，避免搜尋結果頁稀釋首頁
-  const hasFilters = !!(q || city || resolved.has_website || resolved.radius_km);
+  const hasFilters = !!(q || city || resolved.has_website || resolved.radius_km || resolved.industry_code || resolved.lat || resolved.lon || (resolved.page && resolved.page !== "1"));
 
   return {
     alternates: {
-      canonical: SITE_URL + "/",
+      canonical: hasFilters || page > 1 ? `/?${new URLSearchParams(resolved as Record<string, string>).toString()}` : SITE_URL + "/",
     },
-    ...(hasFilters && {
-      robots: { index: false, follow: false },
+    ...((hasFilters || page > 1) && {
+      robots: { index: false, follow: true },
     }),
     ...(q && {
       title: `搜尋「${q}」的特約商店結果`,

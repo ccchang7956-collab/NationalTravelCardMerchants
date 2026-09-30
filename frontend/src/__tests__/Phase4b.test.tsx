@@ -72,8 +72,8 @@ describe("Phase4b Task5: page.tsx 型別上移 + 數字/字串防禦 + q 截斷 
       (l) => /^const SITE_URL\s*=/.test(l) && !/^\s/.test(l)
     );
     expect(topLevelSiteUrl).toBe(false);
-    // generateMetadata 函式內取值
-    expect(s).toMatch(/generateMetadata[\s\S]*?const SITE_URL = process\.env\.NEXT_PUBLIC_SITE_URL/);
+    // generateMetadata 函式內取值（直接讀 env 或經 getSiteUrl 中央 helper）
+    expect(s).toMatch(/generateMetadata[\s\S]*?const SITE_URL = (getSiteUrl\(\)|process\.env\.NEXT_PUBLIC_SITE_URL)/);
   });
 
   it("merchant page 與 opengraph-image 的 env 在函式內取值（無模組頂層凍結）", () => {
@@ -85,7 +85,7 @@ describe("Phase4b Task5: page.tsx 型別上移 + 數字/字串防禦 + q 截斷 
       );
       expect(topLevel).toBe(false);
     }
-    expect(m.match(/const SITE_URL = process\.env\.NEXT_PUBLIC_SITE_URL/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(m.match(/const SITE_URL = (getSiteUrl\(\)|process\.env\.NEXT_PUBLIC_SITE_URL)/g)?.length).toBeGreaterThanOrEqual(2);
     expect(og).toContain("process.env.INTERNAL_API_URL");
   });
 });
