@@ -18,3 +18,7 @@ services:
     # 本地開發時不需要每天自動跑，改為 sleep 保持容器存活
     # 手動測試請執行：docker compose exec scheduler python /app/update_data.py
     command: ["sleep", "infinity"]
+    # override 蓋掉 command 後原 healthcheck（ls update_meta.json）會誤判，
+    # 本地 dev 直接停用，基底 compose 的 healthcheck 不受影響。
+    healthcheck:
+      disable: true

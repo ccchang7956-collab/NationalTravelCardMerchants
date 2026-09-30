@@ -11,9 +11,9 @@ if [ "$(id -u)" = "0" ]; then
   DB_DIR="$(dirname "${DB_PATH:-/data/merchants.db}")"
   if [ -n "$DB_DIR" ] && [ "$DB_DIR" != "." ] && [ "$DB_DIR" != "/" ]; then
     mkdir -p "$DB_DIR" 2>/dev/null || true
-    chown -R 1000:1000 "$DB_DIR" 2>/dev/null || true
+    chown -R ntcuser:ntcuser "$DB_DIR" 2>/dev/null || true
   fi
-  chown -R 1000:1000 /data 2>/dev/null || true
+  chown -R ntcuser:ntcuser /data 2>/dev/null || true
   chmod 755 /data 2>/dev/null || true
   if command -v su >/dev/null 2>&1; then
     exec su ntcuser -s /bin/sh -c 'exec "$0" "$@"' "$@"

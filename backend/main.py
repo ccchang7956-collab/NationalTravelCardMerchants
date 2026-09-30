@@ -44,7 +44,11 @@ def root():
 
 # 資料新鮮度告警門檻（小時）：update_meta.json 的 last_updated 超過此值視為 stale。
 # 可用 DATA_STALE_AFTER_HOURS 環境變數覆寫，預設 48h。
-STALE_AFTER_HOURS = float(os.environ.get("DATA_STALE_AFTER_HOURS", "48"))
+# 非數字時 fallback 48，避免 import 期直接 crash。
+try:
+    STALE_AFTER_HOURS = float(os.environ.get("DATA_STALE_AFTER_HOURS", "48"))
+except (ValueError, TypeError):
+    STALE_AFTER_HOURS = 48.0
 _TAIPEI_TZ = timezone(timedelta(hours=8))
 
 def _read_update_meta() -> dict:
