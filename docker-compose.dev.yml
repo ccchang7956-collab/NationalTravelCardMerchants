@@ -1,5 +1,7 @@
-# 本地開發用覆寫設定（docker compose up 時自動套用）
-# 生產環境部署時請忽略此檔案（docker compose -f docker-compose.yml up）
+# 本地開發用覆寫設定（需手動 -f 指定才會套用）
+# 本地：docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# 生產：用 ./deploy.sh（docker-compose.yml + docker-compose.prod.yml），切勿套用此檔
+# （曾用檔名 docker-compose.override.yml，會被 compose 自動載入並把 scheduler 蓋成 sleep，現已改名防呆）
 
 services:
 

@@ -15,7 +15,8 @@ Internet → Cloudflare Tunnel (ntc.shibaalin.com)
 
 - 瀏覽器會**直連 backend**（見 `frontend/src/utils/env.ts`），但 Tunnel 一個 hostname 只能指一個 port，所以本機用 nginx 把 `/` 和 `/api/` 分流到兩個容器。
 - `NEXT_PUBLIC_API_URL`、`NEXT_PUBLIC_SITE_URL` 是 **build-time 烘進前端映像**（見 `frontend/Dockerfile`），換網域必須重 build 前端。
-- **上線一律用 `-f` 指定 compose 檔**，不要直接 `docker compose up`：預設會自動載入 `docker-compose.override.yml`，它把 scheduler 蓋成 `sleep infinity`（本地開發用），排程就不會跑。
+- **上線一律用 `./deploy.sh`**（內含 `-f docker-compose.yml -f docker-compose.prod.yml`），不要直接 `docker compose up`：少 nginx 不說，誤套 `docker-compose.dev.yml` 會把 scheduler 蓋成 `sleep infinity`（本地開發用），排程就不會跑。`start.sh` 僅限 macOS，有 Darwin 護欄。
+- `nginx.conf`、`docker-compose.prod.yml` 已進版控（無 secret），改完直接 commit。
 
 ## 1. 取 repo
 
@@ -38,16 +39,20 @@ openssl rand -hex 32   # 產生 JWT key，填入下方 .env
 NEXT_PUBLIC_SITE_URL=https://ntc.shibaalin.com
 NEXT_PUBLIC_API_URL=https://ntc.shibaalin.com
 CORS_ORIGINS=https://ntc.shibaalin.com
-JWT_SECRET_KEY=<openssl 產生的值>
-BACKEND_PORT=18080
-FRONTEND_PORT=13000
 ```
 
-## 3. 新增 `nginx.conf`（server 上建，不進版控）
+> JWT 已退役（純公開站），`.env` 留空即可；舊值留著也無害。
+> BACKEND_PORT/FRONTEND_PORT 在 prod 無作用（backend/frontend 不對外發
+> 布 port，唯一入口是 127.0.0.1:8088），只影響本地跑 base/dev compose。
+
+## 3. `nginx.conf`（已進版控，改完 commit 即可）
 
 ```nginx
 server {
   listen 80;
+  location = /api {
+    return 308 /api/;
+  }
   location /api/ {
     proxy_pass http://backend:8000;
     proxy_set_header Host $host;
@@ -60,8 +65,9 @@ server {
   }
 }
 ```
+（實際檔另有 X-Real-IP/XFF/timeout，以 repo 內為準）
 
-## 4. 新增 `docker-compose.prod.yml`（server 上建，不進版控）
+## 4. `docker-compose.prod.yml`（已進版控）
 
 ```yaml
 services:
@@ -76,14 +82,14 @@ services:
       - frontend
       - backend
 ```
+另把 backend/frontend 的 port 蓋回 `127.0.0.1`（base 是 `0.0.0.0`，prod 不該直連暴露）。
 
 > 8088 選用原因：80–8087 都已被其他專案佔用。
 
-## 5. 建置＋啟動
+## 5. 建置＋啟動（用 deploy.sh，一鍵含驗收）
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+./deploy.sh
 docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
@@ -117,8 +123,8 @@ curl https://ntc.shibaalin.com/api/health
 ## 8. 上線驗收
 
 - 開 `https://ntc.shibaalin.com`，店家列表有數字。
-- `/sitemap.xml`、`/llms.txt`、`robots.txt` 都是正式網域。
-- 去 Google Search Console 送 sitemap。
+- `/sitemap.xml`（首頁）、`/merchants/sitemap/0.xml`～`/5.xml`（6 片商家，共 54023 筆）、`/llms.txt`、`robots.txt`（列 7 條 sitemap）都是正式網域。
+- 去 Google Search Console 送 sitemap（index 沒有，7 個逐一送）。
 
 ## 日常維運
 

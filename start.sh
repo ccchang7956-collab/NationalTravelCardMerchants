@@ -2,6 +2,13 @@
 
 # 國旅卡特約商店查詢系統 — macOS 一鍵啟動腳本
 # 此腳本專為 macOS / MacBook Pro 設計，包含 Docker 環境檢查、自動啟動與服務健康檢查。
+# 生產 Ubuntu server 請用 ./deploy.sh，本腳本在非 macOS 直接拒絕執行
+# （曾有人在 server 誤跑：open 不存在＋會吃到 dev 設定蓋掉排程）。
+
+if [ "$(uname)" != "Darwin" ]; then
+    echo "[ERROR] start.sh 僅支援 macOS。Ubuntu server 請用 ./deploy.sh" >&2
+    exit 1
+fi
 
 # ANSI 顏色定義
 RED='\033[0;31m'
@@ -105,9 +112,9 @@ if ! docker info &> /dev/null; then
 fi
 log_success "Docker 服務已運行。"
 
-# 4. 啟動 Docker 容器
+# 4. 啟動 Docker 容器（本地開發：base + dev 覆寫；dev 把 scheduler 換成 sleep，方便手動觸發）
 log_info "正在使用 Docker Compose 啟動服務（並重新編譯變更）..."
-docker compose up --build -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
 
 if [ $? -ne 0 ]; then
     log_error "Docker Compose 啟動失敗！"

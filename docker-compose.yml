@@ -15,9 +15,11 @@ services:
       DB_PATH: /data/merchants.db
       TZ: Asia/Taipei
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?must set JWT_SECRET_KEY in .env}
+      # auth 已退役（純公開站，後端無任何 JWT 邏輯）：留空即可啟動，保留變數僅供未來啟用
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      # /  無 DB 也回 200，改打 /api/data-info（回應即代表 app 存活；total 欄位供外部監控）
+      test: ["CMD-SHELL", "curl -fs http://localhost:8000/api/data-info | grep -q total_merchants"]
       interval: 30s
       timeout: 10s
       start_period: 15s
@@ -41,6 +43,14 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      # alpine 無 curl，用 wget；注意 localhost 會先解 ::1（Node 只聽 v4），必須寫 127.0.0.1
+      # nginx 以此 gating，避免冷啟動 502
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 10s
+      start_period: 20s
+      retries: 5
 
   # ── Scheduler (supercronic) ──────────────────────────────────────────────
   scheduler:
@@ -55,8 +65,9 @@ services:
       DB_PATH: /data/merchants.db
       TZ: Asia/Taipei
     healthcheck:
-      test: ["CMD", "ls", "/data/update_meta.json"]
-      interval: 5m
+      # 查排程器進程存活（舊版查 update_meta.json 存在，首次灌資料前永遠紅燈）
+      test: ["CMD-SHELL", "grep -qa supercronic /proc/[0-9]*/cmdline 2>/dev/null"]
+      interval: 1m
       timeout: 10s
       start_period: 30s
       retries: 3

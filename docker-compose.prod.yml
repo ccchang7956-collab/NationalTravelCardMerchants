@@ -1,0 +1,49 @@
+services:
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 生產唯一對外入口是經 tunnel 的 127.0.0.1:8088。
+  # backend/frontend 的 ports 用 !reset 整組拿掉（base 的 0.0.0.0 綁定
+  # 與 prod 疊加會造成重複綁定衝突；且 prod 不需要直連入口）：
+  # 除錯請用 docker compose exec <svc> curl 容器內網，不用走 host port。
+  # BACKEND_PORT/FRONTEND_PORT 只在跑 base/dev compose（本地）時有效。
+  backend:
+    ports: !reset []
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    ports: !reset []
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  scheduler:
+    mem_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

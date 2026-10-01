@@ -1,2 +1,3 @@
 # 容器 TZ=Asia/Taipei：下行「0 3」即台灣時間每日 03:00 執行
-0 3 * * * python3 /app/update_data.py
+# flock 防重入（上次跑不完、下次又啟動時直接跳過）
+0 3 * * * flock -n /tmp/ntc_update.lock python3 /app/update_data.py
