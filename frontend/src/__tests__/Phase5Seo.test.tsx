@@ -31,7 +31,7 @@ describe("Phase5 Task1: 索引正確性", () => {
     expect(s).not.toContain("follow: false");
   });
 
-  it("page>1 用 self-canonical（非固定指回 /）", () => {
+  it("page>1 用 self-canonical（非固定指回 /，絕對網址）", () => {
     const s = readSrc("../app/page.tsx");
     const metaIdx = s.indexOf("generateMetadata");
     const metaBlock = s.slice(metaIdx, s.indexOf("export default async function Home"));
@@ -39,6 +39,9 @@ describe("Phase5 Task1: 索引正確性", () => {
     // canonical 由當頁 searchParams 自指（URLSearchParams）且處理 page>1
     expect(metaBlock).toContain("URLSearchParams");
     expect(metaBlock).toMatch(/page\s*>\s*1/);
+    // 自指 canonical 須為絕對網址（SITE_URL + "/?..."），避免驗證工具誤判
+    expect(metaBlock).toContain("SITE_URL}/?");
+    expect(metaBlock).not.toContain("canonical: `/?");
   });
 
   it("layout viewport 含 device-width", () => {

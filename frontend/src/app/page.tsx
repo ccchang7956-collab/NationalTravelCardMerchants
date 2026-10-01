@@ -50,7 +50,7 @@ export async function generateMetadata({
 
   return {
     alternates: {
-      canonical: hasFilters || page > 1 ? `/?${new URLSearchParams(resolved as Record<string, string>).toString()}` : SITE_URL + "/",
+      canonical: hasFilters || page > 1 ? `${SITE_URL}/?${new URLSearchParams(resolved as Record<string, string>).toString()}` : SITE_URL + "/",
     },
     ...((hasFilters || page > 1) && {
       robots: { index: false, follow: true },

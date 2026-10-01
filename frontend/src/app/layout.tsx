@@ -77,7 +77,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <PWAOfflineBanner />
-            {/* 網站層級結構化資料：WebSite + SearchAction */}
+            {/* 網站層級結構化資料：WebSite */}
             <script
               type="application/ld+json"
               dangerouslySetInnerHTML={{
@@ -86,17 +86,6 @@ export default function RootLayout({
                   "@type": "WebSite",
                   name: "國民旅遊卡特約商店查詢",
                   url: SITE_URL,
-                  description:
-                    "全台國民旅遊卡特約商店查詢系統，收錄超過萬間特約店家。",
-                  inLanguage: "zh-TW",
-                  potentialAction: {
-                    "@type": "SearchAction",
-                    target: {
-                      "@type": "EntryPoint",
-                      urlTemplate: `${SITE_URL}/?q={search_term_string}`,
-                    },
-                    "query-input": "required name=search_term_string",
-                  },
                 }),
               }}
             />

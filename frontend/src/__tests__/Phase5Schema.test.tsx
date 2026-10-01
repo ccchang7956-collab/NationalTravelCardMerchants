@@ -49,9 +49,23 @@ describe("Phase5 Task2: 卡片與結構化資料", () => {
     expect(s).toMatch(/export\s+const\s+alt\s*=/);
   });
 
+  it("layout WebSite 無 SearchAction（robots 已 disallow /*?q=，避免自相矛盾）", () => {
+    const s = readSrc("../app/layout.tsx");
+    expect(s).toContain('"@type": "WebSite"');
+    expect(s).not.toContain("SearchAction");
+    expect(s).not.toContain("potentialAction");
+  });
+
   it("twitter-image.tsx 存在且有 alt + default 匯出", () => {
     const s = readSrc("../app/twitter-image.tsx");
     expect(s).toMatch(/export\s+const\s+alt\s*=/);
     expect(s).toMatch(/export\s+default/);
+  });
+
+  it("twitter-image 無寫死商店數字（避免與首頁動態數字脫鉤）", () => {
+    const s = readSrc("../app/twitter-image.tsx");
+    expect(s).not.toContain("55,000");
+    expect(s).not.toContain("55000");
+    expect(s).toContain("全台特約商店查詢");
   });
 });
