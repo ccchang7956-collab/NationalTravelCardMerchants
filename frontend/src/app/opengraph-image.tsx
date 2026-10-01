@@ -62,7 +62,7 @@ export default async function OgImage() {
               textAlign: "center",
             }}
           >
-            收錄 55,000+ 間全台特約商店
+            全台特約商店查詢
           </div>
           <div
             style={{
