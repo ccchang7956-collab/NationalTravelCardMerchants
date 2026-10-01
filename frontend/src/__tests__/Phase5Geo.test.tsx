@@ -40,17 +40,11 @@ describe("Phase5 Task4: GEO 入口", () => {
     expect(s).toContain("給 AI 的本站說明");
   });
 
-  it("dashboard/layout.tsx 私人頁 noindex+nofollow", () => {
-    const s = readSrc("../app/dashboard/layout.tsx");
-    expect(s).toMatch(/index:\s*false/);
-    expect(s).toMatch(/follow:\s*false/);
-    expect(s).toContain("children");
+  it("dashboard 路由已移除（純公開站，無私人頁）", () => {
+    expect(fs.existsSync(path.join(__dirname, "../app/dashboard"))).toBe(false);
   });
 
-  it("itinerary/layout.tsx 私人頁 noindex+nofollow", () => {
-    const s = readSrc("../app/itinerary/layout.tsx");
-    expect(s).toMatch(/index:\s*false/);
-    expect(s).toMatch(/follow:\s*false/);
-    expect(s).toContain("children");
+  it("itinerary 路由已移除（純公開站，無私人頁）", () => {
+    expect(fs.existsSync(path.join(__dirname, "../app/itinerary"))).toBe(false);
   });
 });

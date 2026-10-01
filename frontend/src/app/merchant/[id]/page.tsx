@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, ArrowTopRightOnSquareIcon, MapIcon } from "@heroicons/react/24/outline";
 import MerchantMapSection from "@/components/MerchantMapSection";
-import MerchantActions from "@/components/MerchantActions";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
 
@@ -220,7 +219,6 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
               </p>
             )}
           </div>
-          <MerchantActions merchant={{ id: merchant.id, name: merchant.name }} variant="detail" />
         </header>
         
         <dl className="space-y-6 text-base text-foreground/80">

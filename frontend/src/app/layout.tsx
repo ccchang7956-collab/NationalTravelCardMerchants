@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import GlobalRadar from "@/components/GlobalRadar";
-import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import PWAOfflineBanner from "@/components/PWAOfflineBanner";
 import { getSiteUrl } from "@/utils/site";
@@ -75,8 +74,7 @@ export default function RootLayout({
     <html lang="zh-TW" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider>
-          <AuthProvider>
-            <PWAOfflineBanner />
+          <PWAOfflineBanner />
             {/* 網站層級結構化資料：WebSite */}
             <script
               type="application/ld+json"
@@ -117,7 +115,6 @@ export default function RootLayout({
               </footer>
               <GlobalRadar />
             </div>
-          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

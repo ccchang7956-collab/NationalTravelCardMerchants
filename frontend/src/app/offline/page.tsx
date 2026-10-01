@@ -34,19 +34,13 @@ export default function OfflinePage() {
       </h1>
       
       <p className="text-muted max-w-md mb-8 text-sm leading-relaxed">
-        您目前沒有連線至網際網路。別擔心，部分先前開啟過的頁面與「我的最愛」仍可在離線時查閱。
+        您目前沒有連線至網際網路。請檢查連線後再試一次，或返回首頁瀏覽已快取的頁面。
       </p>
 
       <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs justify-center">
         <Link
-          href="/dashboard"
-          className="px-5 py-2.5 rounded-lg bg-accent text-white font-medium text-sm hover:bg-accent-hover transition-colors shadow-xs flex items-center justify-center gap-2"
-        >
-          <span>查看我的最愛</span>
-        </Link>
-        <Link
           href="/"
-          className="px-5 py-2.5 rounded-lg border border-border text-foreground font-medium text-sm hover:bg-muted-bg transition-colors flex items-center justify-center gap-2"
+          className="px-5 py-2.5 rounded-lg bg-accent text-white font-medium text-sm hover:bg-accent-hover transition-colors shadow-xs flex items-center justify-center gap-2"
         >
           <span>返回首頁</span>
         </Link>

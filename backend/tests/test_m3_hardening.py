@@ -1,16 +1,15 @@
 """Task 3 (M3 hardening) TDD tests — Backend 安全與正確性.
 
-Covers: JWT guard, itinerary txn atomicity, optimize limits/validation,
-industry LIKE escaping, stable paging, merchant id/tax routing, db timeout/rollback.
+Covers: industry LIKE escaping, stable paging, merchant id/tax routing,
+db timeout/rollback.
 
 TDD: these tests FAIL on pre-fix code, PASS after the fix.
+
+Note (2026-10): auth/itinerary/assistant 已移除（純公開站），
+JWT/行程原子性/optimize 相關測試一併刪除。
 """
 import inspect
-import os
-import pathlib
 import sqlite3
-import subprocess
-import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -46,42 +45,7 @@ def m3_conn():
             FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
         );
         CREATE VIRTUAL TABLE merchants_fts USING fts5(name, address, tokenize="unicode61");
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            hashed_password TEXT NOT NULL,
-            name TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE user_itineraries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            start_date TEXT,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-        );
-        CREATE TABLE itinerary_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            itinerary_id INTEGER NOT NULL,
-            merchant_id INTEGER,
-            custom_name TEXT NOT NULL,
-            address TEXT,
-            lat REAL,
-            lon REAL,
-            order_index INTEGER NOT NULL,
-            estimated_cost REAL DEFAULT 0,
-            quota_category TEXT DEFAULT '一般消費',
-            stay_minutes INTEGER DEFAULT 60,
-            FOREIGN KEY (itinerary_id) REFERENCES user_itineraries (id) ON DELETE CASCADE,
-            FOREIGN KEY (merchant_id) REFERENCES merchants (id) ON DELETE SET NULL
-        );
     """)
-    conn.execute(
-        "INSERT INTO users (id, email, hashed_password, name) VALUES (1, 'test@example.com', 'hash', 'Test User')"
-    )
     merchants = [
         (1, "台北 Shop A", "台北市大安區新生南路1段", "106", "11111111", None, 25.0339, 121.5645),
         (2, "台北 Shop B", "台北市信義區松仁路2號", "110", "22222222", None, 25.0340, 121.5646),
@@ -110,15 +74,9 @@ def m3_conn():
 
 @pytest.fixture(autouse=True)
 def _override_deps(m3_conn):
-    from backend.auth_utils import get_current_user
-
-    def _user():
-        return {"id": 1, "username": "testuser"}
-
     def _db():
         yield m3_conn
 
-    app.dependency_overrides[get_current_user] = _user
     app.dependency_overrides[get_db] = _db
     yield
     app.dependency_overrides.clear()
@@ -126,107 +84,6 @@ def _override_deps(m3_conn):
 
 def _client():
     return TestClient(app, raise_server_exceptions=False)
-
-
-# 1. JWT: 無 env secret 即啟動失敗
-def test_jwt_no_default_secret():
-    env = dict(os.environ)
-    env.pop("JWT_SECRET_KEY", None)
-    repo_root = str(pathlib.Path(__file__).resolve().parents[2])
-    proc = subprocess.run(
-        [sys.executable, "-c", "import backend.auth_utils"],
-        cwd=repo_root,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert proc.returncode != 0, "import backend.auth_utils 無 JWT_SECRET_KEY 時應啟動失敗"
-    assert "RuntimeError" in proc.stderr
-    assert "JWT_SECRET_KEY" in proc.stderr
-
-
-# 2. itinerary create 原子性：部分 item 非法 -> 整筆 rollback
-def test_itinerary_create_atomic():
-    client = _client()
-    payload = {
-        "title": "原子性測試",
-        "items": [
-            {"custom_name": "合法店", "merchant_id": 1, "estimated_cost": 100},
-            {"custom_name": "幽靈店", "merchant_id": 999999, "estimated_cost": 100},
-        ],
-    }
-    res = client.post("/api/itineraries", json=payload)
-    assert res.status_code == 500
-    res = client.get("/api/itineraries")
-    assert res.status_code == 200
-    assert res.json() == [], "create 失敗後不應殘留半成品行程"
-
-
-# 3. itinerary update 原子性：帶非法 item 失敗後舊 items 仍在
-def test_itinerary_update_atomic():
-    client = _client()
-    res = client.post(
-        "/api/itineraries",
-        json={"title": "原始行程", "items": [{"custom_name": "原始店", "merchant_id": 1}]},
-    )
-    assert res.status_code == 200
-    itin_id = res.json()["id"]
-
-    bad = {
-        "title": "被污染的標題",
-        "items": [
-            {"custom_name": "新店", "merchant_id": 1},
-            {"custom_name": "幽靈店", "merchant_id": 999999},
-        ],
-    }
-    res = client.put(f"/api/itineraries/{itin_id}", json=bad)
-    assert res.status_code == 500
-
-    res = client.get(f"/api/itineraries/{itin_id}")
-    assert res.status_code == 200
-    data = res.json()
-    assert len(data["items"]) == 1
-    assert data["items"][0]["custom_name"] == "原始店"
-    assert data["title"] == "原始行程"
-
-
-# 4. optimize：points 限 1..100，超限 400
-def test_optimize_rejects_huge_points():
-    client = _client()
-    pts = [{"lat": 25.0 + i * 0.0001, "lon": 121.5} for i in range(500)]
-    res = client.post("/api/itineraries/optimize", json={"points": pts})
-    assert res.status_code == 400
-    assert "1..100" in res.json()["detail"]
-
-    res = client.post("/api/itineraries/optimize", json={"points": []})
-    assert res.status_code == 400
-
-    ok = [
-        {"id": 1, "lat": 25.0339, "lon": 121.5645},
-        {"id": 2, "lat": 25.0478, "lon": 121.5170},
-    ]
-    res = client.post("/api/itineraries/optimize", json={"points": ok})
-    assert res.status_code == 200
-
-
-# 5. optimize：座標範圍驗證 400
-def test_optimize_rejects_invalid_coordinate():
-    client = _client()
-    res = client.post(
-        "/api/itineraries/optimize", json={"points": [{"lat": 999.0, "lon": 121.5}]}
-    )
-    assert res.status_code == 400
-
-    res = client.post(
-        "/api/itineraries/optimize", json={"points": [{"lat": 25.0, "lon": 999.0}]}
-    )
-    assert res.status_code == 400
-
-    res = client.post(
-        "/api/itineraries/optimize", json={"points": [{"lon": 121.5}]}
-    )
-    assert res.status_code == 400
 
 
 # 6. industry LIKE 跳脫：industry_code="%" 不應回傳全表

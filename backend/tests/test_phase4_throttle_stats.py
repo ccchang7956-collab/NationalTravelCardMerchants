@@ -1,4 +1,7 @@
-"""Phase 4 Task 2: login/register in-memory throttle + stats city prefix buckets (TDD)."""
+"""Phase 4 Task 2: stats city prefix buckets (TDD).
+
+Note (2026-10): 登入限流功能已隨 auth 移除，僅保留 stats 測試。
+"""
 import inspect
 import sqlite3
 
@@ -38,30 +41,9 @@ def client(tmp_path):
             c.close()
 
     app.dependency_overrides[get_db] = _get_test_db
-    # 每個 test 前清掉記憶體限流桶，避免跨 test 污染
-    try:
-        from backend.routers import auth as _auth
-
-        if hasattr(_auth, "_FAILS"):
-            _auth._FAILS.clear()
-    except Exception:
-        pass
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
-    try:
-        from backend.routers import auth as _auth2
-
-        if hasattr(_auth2, "_FAILS"):
-            _auth2._FAILS.clear()
-    except Exception:
-        pass
-
-
-def test_login_throttled_after_5_fails(client):
-    for _ in range(6):
-        r = client.post("/api/auth/login", json={"email": "n@x.com", "password": "wrong"})
-    assert r.status_code == 429
 
 
 def test_stats_cities_are_known():
@@ -69,30 +51,6 @@ def test_stats_cities_are_known():
 
     assert "台北市" in TAIWAN_CITIES
     assert len(TAIWAN_CITIES) == 22
-
-
-def test_login_success_clears_throttle(client):
-    r = client.post(
-        "/api/auth/register",
-        json={"email": "clear@x.com", "password": "password123", "name": "C"},
-    )
-    assert r.status_code == 200
-    # 4 次失敗（401）
-    for _ in range(4):
-        bad = client.post(
-            "/api/auth/login", json={"email": "clear@x.com", "password": "wrongpass"}
-        )
-        assert bad.status_code == 401
-    # 成功一次 -> 清零
-    ok = client.post(
-        "/api/auth/login", json={"email": "clear@x.com", "password": "password123"}
-    )
-    assert ok.status_code == 200
-    # 清零後再失敗一次應為 401 而非 429
-    again = client.post(
-        "/api/auth/login", json={"email": "clear@x.com", "password": "wrongpass"}
-    )
-    assert again.status_code == 401
 
 
 def test_stats_prefix_buckets(client):

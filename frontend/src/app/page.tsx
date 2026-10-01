@@ -4,7 +4,6 @@ import Form from "next/form";
 import { redirect } from "next/navigation";
 import { MagnifyingGlassIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, MapIcon } from "@heroicons/react/24/outline";
 import HomeSearchSection from "@/components/HomeSearchSection";
-import MerchantActions from "@/components/MerchantActions";
 import type { FilterState } from "@/components/FilterSheet";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
@@ -234,7 +233,6 @@ export default async function Home({
                           {m.name}
                         </h2>
                       </Link>
-                      <MerchantActions merchant={{ id: m.id, name: m.name }} variant="card" />
                     </div>
                     <Link href={`/merchant/${m.tax_id || m.id}`} className="block mt-3">
                       <div className="space-y-2 text-sm text-muted">

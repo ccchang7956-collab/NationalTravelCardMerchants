@@ -6,7 +6,7 @@ import json
 import sqlite3
 from datetime import datetime, timezone, timedelta
 
-from backend.routers import merchants, auth, assistant, itineraries
+from backend.routers import merchants
 from backend.database import DB_PATH, get_db_connection, init_db
 
 
@@ -39,9 +39,6 @@ app.add_middleware(
 )
 
 app.include_router(merchants.router, prefix="/api", tags=["merchants"])
-app.include_router(auth.router, prefix="/api", tags=["auth"])
-app.include_router(assistant.router, prefix="/api", tags=["assistant"])
-app.include_router(itineraries.router, prefix="/api", tags=["itineraries"])
 
 @app.get("/")
 def root():

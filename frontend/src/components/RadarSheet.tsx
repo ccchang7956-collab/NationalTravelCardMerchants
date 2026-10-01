@@ -12,7 +12,6 @@ import {
   SparklesIcon,
 } from '@heroicons/react/24/outline';
 import { getPublicApiUrl } from '@/utils/env';
-import MerchantActions from '@/components/MerchantActions';
 
 interface RadarSheetProps {
   isOpen: boolean;
@@ -241,7 +240,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
         {isOffline && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs">
             <ExclamationTriangleIcon className="w-4 h-4 shrink-0" />
-            <span>目前處於離線狀態，若您先前景入過資料可檢視快取的周邊或收藏店家。</span>
+            <span>目前處於離線狀態，若您先前載入過資料可檢視快取的周邊店家。</span>
           </div>
         )}
 
@@ -366,7 +365,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
                       </p>
                     </div>
 
-                    {/* 右側操作按鈕區（導航 + 收藏 + 記帳） */}
+                    {/* 右側操作按鈕區（導航） */}
                     <div className="flex items-center gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-border/40 shrink-0 justify-between sm:justify-end">
                       {/* Google Maps 導航按鈕 */}
                       <a
@@ -379,9 +378,6 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
                         <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
                         <span>導航</span>
                       </a>
-
-                      {/* 收藏與記帳功能 */}
-                      <MerchantActions merchant={{ id: merchant.id, name: merchant.name }} />
                     </div>
                   </div>
                 );

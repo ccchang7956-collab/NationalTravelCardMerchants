@@ -1,9 +1,10 @@
-"""Phase 5 Task 3: sitemap index + 分片上限 + 真實 lastModified。
+"""Phase 5 Task 3: sitemap 分片上限 + 真實 lastModified。
 
 驗收：
-- sitemap.ts 有 MAX_PAGES 分頁上限（總抓取有上限）。
-- export generateSitemaps 產生 sitemap index（單檔 60000 URL 超 Google 50000
-  上限，必須拆多檔；Next.js 會讓 /sitemap.xml 成為 index）。
+- merchants/sitemap.ts 有 MAX_PAGES 分頁上限（總抓取有上限）。
+- export generateSitemaps 產生多子檔（單檔 60000 URL 超 Google 50000
+  上限，必須拆多檔；子檔位於 /merchants/sitemap/<id>.xml，
+  根 /sitemap.xml 只含首頁）。
 - 每子檔 ≤10000 條商家 URL（PER_PAGE × PAGES_PER_FILE）。
 - 分片總容量覆蓋約 55k 商家。
 - lastModified 用後端 /api/data-info 的 last_updated 真值，fetch 失敗才 fallback new Date。
@@ -12,7 +13,7 @@
 import pathlib
 import re
 
-SRC = pathlib.Path("frontend/src/app/sitemap.ts").read_text()
+SRC = pathlib.Path("frontend/src/app/merchants/sitemap.ts").read_text()
 
 
 def test_sitemap_has_page_cap():
@@ -38,8 +39,8 @@ def test_sitemap_fetch_failure_breaks():
 
 
 def test_sitemap_index_generate_sitemaps():
-    # 單檔 60000 超 Google 50000 上限 → 必須 export generateSitemaps 拆 index
-    assert "generateSitemaps" in SRC, "應 export generateSitemaps 產生 sitemap index"
+    # 單檔 60000 超 Google 50000 上限 → 必須 export generateSitemaps 拆多子檔
+    assert "generateSitemaps" in SRC, "應 export generateSitemaps 產生多子檔"
     assert re.search(r"function sitemap\([^)]*id", SRC), \
         "sitemap() 應接受分片 id 參數"
 
