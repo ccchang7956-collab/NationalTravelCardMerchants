@@ -1,8 +1,10 @@
 import sqlite3
 import math
+import os
+import json
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional, List, Tuple
-from backend.database import get_db
+from backend.database import get_db, DB_PATH
 from backend.models import MerchantListItem, MerchantDetail, PaginatedMerchants, Stats, CityStat, IndustryInfo
 
 from backend.services.search_service import space_segment, parse_search_query
@@ -266,6 +268,22 @@ def get_merchant(merchant_id_or_tax_id: str, db: sqlite3.Connection = Depends(ge
     return merchant
 
 
+def _read_stats_last_updated() -> Optional[str]:
+    """讀 update_meta.json 取 last_updated，失敗回 None（與 /api/data-info 同來源）。"""
+    try:
+        meta_path = os.path.join(os.path.dirname(DB_PATH), "update_meta.json")
+        if not os.path.exists(meta_path):
+            return None
+        with open(meta_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return None
+        val = data.get("last_updated")
+        return val if isinstance(val, str) and val else None
+    except Exception:
+        return None
+
+
 @router.get("/stats", response_model=Stats)
 def get_stats(db: sqlite3.Connection = Depends(get_db)):
     cursor = db.cursor()
@@ -300,7 +318,8 @@ def get_stats(db: sqlite3.Connection = Depends(get_db)):
     return {
         "total_merchants": total,
         "has_website": has_website,
-        "cities": valid_cities
+        "cities": valid_cities,
+        "last_updated": _read_stats_last_updated()
     }
 
 

@@ -21,6 +21,18 @@ async function getMerchant(id: string) {
   return res.json();
 }
 
+// Fetch stats for last_updated（資料更新時間標示用）
+async function getStats() {
+  const API_URL = getBackendUrl();
+  try {
+    const res = await fetch(`${API_URL}/api/stats`, { next: { revalidate: 3600 } });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 // Generate dynamic metadata for SEO
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const SITE_URL = getSiteUrl();
@@ -64,11 +76,34 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function MerchantPage({ params }: { params: Promise<{ id: string }> }) {
   const SITE_URL = getSiteUrl();
   const resolvedParams = await params;
-  const merchant = await getMerchant(resolvedParams.id);
+  const [merchant, statsData] = await Promise.all([
+    getMerchant(resolvedParams.id),
+    getStats(),
+  ]);
 
   if (!merchant) {
     notFound();
   }
+
+  const last_updated: string | null =
+    typeof statsData?.last_updated === "string" && statsData.last_updated
+      ? statsData.last_updated
+      : null;
+  const lastUpdatedDate = last_updated ? last_updated.slice(0, 10) : null;
+
+  // 行業別依 priority 排序（後端已排序，前端再保險排序一次）
+  interface MerchantIndustry {
+    industry_code: string;
+    industry_name: string;
+    priority: number;
+  }
+  const industries: MerchantIndustry[] = Array.isArray(merchant.industries)
+    ? [...merchant.industries].sort(
+        (a: MerchantIndustry, b: MerchantIndustry) =>
+          (a.priority ?? 99) - (b.priority ?? 99)
+      )
+    : [];
+  const primaryIndustry: MerchantIndustry | undefined = industries[0];
 
   const pageUrl = `${SITE_URL}/merchant/${merchant.tax_id || resolvedParams.id}`;
   const hasCoords = !!(merchant.lat && merchant.lon);
@@ -118,6 +153,14 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
       value: merchant.tax_id,
     },
     description: `國民旅遊卡特約商店：${merchant.name}，位於${merchant.address}。`,
+    ...(primaryIndustry?.industry_name
+      ? { category: primaryIndustry.industry_name }
+      : {}),
+    ...(last_updated ? { dateModified: last_updated } : {}),
+    speakable: {
+      "@type": "SpeakableSpecification",
+      cssSelector: ["h1", "address"],
+    },
     isPartOf: {
       "@type": "GovernmentService",
       name: "國民旅遊卡特約商店計畫",
@@ -162,8 +205,8 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
         <ArrowLeftIcon className="w-4 h-4" /> 返回列表
       </Link>
       
-      <div className="bg-card rounded-2xl p-8 md:p-10 shadow-sm border border-border/60">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <article className="bg-card rounded-2xl p-8 md:p-10 shadow-sm border border-border/60">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <span className="bg-accent/10 text-accent px-3 py-1 rounded-full text-xs font-medium tracking-wide">
               國民旅遊卡特約商店
@@ -171,32 +214,74 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
             <h1 className="text-3xl md:text-4xl font-medium text-foreground mt-3">
               {merchant.name}
             </h1>
+            {lastUpdatedDate && (
+              <p className="mt-2 text-xs text-muted">
+                <time dateTime={last_updated ?? undefined}>資料更新：{lastUpdatedDate}</time>
+              </p>
+            )}
           </div>
           <MerchantActions merchant={{ id: merchant.id, name: merchant.name }} variant="detail" />
-        </div>
+        </header>
         
-        <div className="space-y-6 text-base text-foreground/80">
+        <dl className="space-y-6 text-base text-foreground/80">
           <div className="flex items-start gap-3">
             <MapPinIcon className="w-5 h-5 mt-0.5 text-muted shrink-0" />
             <div>
-              <p className="font-medium text-foreground">商店地址</p>
-              <p className="mt-1 text-muted">{merchant.zip_code} {merchant.address}</p>
-              <a 
-                href={hasCoords ? `https://www.google.com/maps/dir/?api=1&destination=${merchant.lat},${merchant.lon}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(merchant.name + ' ' + merchant.address)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 mt-2 text-sm text-accent hover:underline"
-              >
-                在 Google 地圖上查看 <ArrowTopRightOnSquareIcon className="w-3 h-3" />
-              </a>
+              <dt className="font-medium text-foreground">商店地址</dt>
+              <dd className="mt-1 text-muted">
+                <address className="not-italic">{merchant.zip_code} {merchant.address}</address>
+                <a 
+                  href={hasCoords ? `https://www.google.com/maps/dir/?api=1&destination=${merchant.lat},${merchant.lon}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(merchant.name + ' ' + merchant.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 mt-2 text-sm text-accent hover:underline"
+                >
+                  在 Google 地圖上查看 <ArrowTopRightOnSquareIcon className="w-3 h-3" />
+                </a>
+              </dd>
             </div>
           </div>
           
           <div className="flex items-start gap-3">
             <BuildingStorefrontIcon className="w-5 h-5 mt-0.5 text-muted shrink-0" />
             <div>
-              <p className="font-medium text-foreground">統一編號</p>
-              <p className="mt-1 text-muted">{merchant.tax_id}</p>
+              <dt className="font-medium text-foreground">統一編號</dt>
+              <dd className="mt-1 text-muted">{merchant.tax_id}</dd>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <BuildingStorefrontIcon className="w-5 h-5 mt-0.5 text-muted shrink-0" />
+            <div>
+              <dt className="font-medium text-foreground">行業類別</dt>
+              <dd className="mt-1 text-muted">
+                {industries.length > 0 ? (
+                  <ul className="flex flex-wrap gap-1.5">
+                    {industries.map((ind) => (
+                      <li
+                        key={`${ind.industry_code}-${ind.priority}`}
+                        className="bg-muted-bg px-2.5 py-0.5 rounded-full text-sm"
+                      >
+                        {ind.industry_name}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  "未分類"
+                )}
+              </dd>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <MapPinIcon className="w-5 h-5 mt-0.5 text-muted shrink-0" />
+            <div>
+              <dt className="font-medium text-foreground">座標</dt>
+              <dd className="mt-1 text-muted">
+                {hasCoords
+                  ? `${Number(merchant.lat).toFixed(5)}, ${Number(merchant.lon).toFixed(5)}`
+                  : "未提供"}
+              </dd>
             </div>
           </div>
           
@@ -204,19 +289,21 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
             <div className="flex items-start gap-3">
               <GlobeAltIcon className="w-5 h-5 mt-0.5 text-muted shrink-0" />
               <div>
-                <p className="font-medium text-foreground">官方網站</p>
-                <a 
-                  href={merchant.website.startsWith('http') ? merchant.website : `http://${merchant.website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 inline-block text-accent hover:underline break-all"
-                >
-                  {merchant.website}
-                </a>
+                <dt className="font-medium text-foreground">官方網站</dt>
+                <dd className="mt-1">
+                  <a 
+                    href={merchant.website.startsWith('http') ? merchant.website : `http://${merchant.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-accent hover:underline break-all"
+                  >
+                    {merchant.website}
+                  </a>
+                </dd>
               </div>
             </div>
           )}
-        </div>
+        </dl>
 
         {/* 地圖區塊 */}
         {hasCoords && (
@@ -240,7 +327,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
             />
           </div>
         )}
-      </div>
+      </article>
 
       {/* LocalBusiness 結構化資料 */}
       <script

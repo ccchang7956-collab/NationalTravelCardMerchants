@@ -42,6 +42,7 @@ class Stats(BaseModel):
     total_merchants: int
     has_website: int
     cities: List[CityStat]
+    last_updated: Optional[str] = None
 
 class UserCreate(BaseModel):
     email: EmailStr

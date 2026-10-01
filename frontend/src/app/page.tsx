@@ -160,6 +160,17 @@ export default async function Home({
     });
   }
 
+  const last_updated: string | null =
+    typeof stats?.last_updated === "string" && stats.last_updated
+      ? stats.last_updated
+      : null;
+  const lastUpdatedDate = last_updated ? last_updated.slice(0, 10) : null;
+  const statsTotal = Number(stats?.total_merchants ?? 0);
+  // 後端 /stats cities 已依筆數降序，取前三名動態呈現（無寫死數字）
+  const topCities: CityStat[] = Array.isArray(stats?.cities)
+    ? stats.cities.slice(0, 3)
+    : [];
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       
@@ -170,7 +181,15 @@ export default async function Home({
         </h1>
         {stats && (
           <span className="text-muted text-sm">
-            收錄 {Number(stats?.total_merchants ?? 0).toLocaleString()} 間全台特約商店
+            收錄 {statsTotal.toLocaleString()} 間全台特約商店
+            {lastUpdatedDate && (
+              <>
+                {" "}·{" "}
+                <time dateTime={last_updated ?? undefined}>
+                  資料更新：{lastUpdatedDate}
+                </time>
+              </>
+            )}
           </span>
         )}
       </div>
@@ -207,7 +226,7 @@ export default async function Home({
             const mapUrl = `/map?${mapParams.toString()}`;
             return (
               <div key={m.id} className="relative group">
-                <div className="bg-card p-5 rounded-xl border border-border/50 shadow-sm hover:shadow-md hover:border-accent/40 transition-all duration-200 h-full flex flex-col justify-between">
+                <article className="bg-card p-5 rounded-xl border border-border/50 shadow-sm hover:shadow-md hover:border-accent/40 transition-all duration-200 h-full flex flex-col justify-between">
                   <div>
                     <div className="flex items-start justify-between gap-2">
                       <Link href={`/merchant/${m.tax_id || m.id}`} className="block flex-1 group-hover:text-accent transition-colors">
@@ -248,7 +267,7 @@ export default async function Home({
                       <span>查看附近商店</span>
                     </Link>
                   </div>
-                </div>
+                </article>
               </div>
             );
           })}
@@ -414,9 +433,10 @@ export default async function Home({
             </h2>
             <p>
               <strong>國民旅遊卡（National Travel Card）</strong>
-              為行政院人事行政總處推動之國內旅遊補助方案，全體公務人員及其眷屬可持國旅卡於全台超過
-              {stats ? ` ${Number(stats?.total_merchants ?? 0).toLocaleString()} ` : " 55,000 "}
-              間特約商店消費。
+              為行政院人事行政總處推動之國內旅遊補助方案，全體公務人員及其眷屬可持國旅卡於全台
+              {stats ? `超過 ${statsTotal.toLocaleString()} 間` : "眾多"}
+              特約商店消費
+              {lastUpdatedDate ? `（截至 ${lastUpdatedDate}）` : ""}。
             </p>
             <p>
               特約商店涵蓋多種類別：
@@ -433,11 +453,20 @@ export default async function Home({
               支援店名搜尋、縣市篩選，以及地圖定位查看附近商店。
             </p>
             <p className="text-xs text-muted/60">
-              資料來源：行政院人事行政總處政府開放資料。如有疑問請以官方公告為準。
+              資料來源：行政院人事行政總處政府開放資料
+              {lastUpdatedDate && (
+                <>
+                 ；
+                  <time dateTime={last_updated ?? undefined}>
+                    資料更新：{lastUpdatedDate}
+                  </time>
+                </>
+              )}
+              。如有疑問請以官方公告為準。
             </p>
           </section>
 
-          {/* FAQ 常見問題 */}
+          {/* FAQ 常見問題（精華 5 問，完整版見 /faq） */}
           <section
             aria-label="國旅卡常見問題"
             className="mt-8 pt-6 border-t border-border/40 space-y-4"
@@ -451,9 +480,10 @@ export default async function Home({
                   國民旅遊卡可以在哪裡使用？
                 </summary>
                 <p className="mt-2 ml-4">
-                  國民旅遊卡（國旅卡）可在全台超過
-                  {stats ? ` ${Number(stats?.total_merchants ?? 0).toLocaleString()} ` : " 55,000 "}
-                  間特約商店使用，涵蓋住宿、餐飲、休閒遊樂、文化體育、交通運輸等類別。本系統提供即時查詢服務，支援縣市篩選與店名搜尋。
+                  國民旅遊卡（國旅卡）可在全台
+                  {stats ? `超過 ${statsTotal.toLocaleString()} 間` : "眾多"}
+                  特約商店使用，涵蓋住宿、餐飲、休閒遊樂、文化體育、交通運輸等類別。本系統提供即時查詢服務，支援縣市篩選與店名搜尋
+                  {lastUpdatedDate ? `（截至 ${lastUpdatedDate}）` : ""}。
                 </p>
               </details>
               <details className="group">
@@ -470,7 +500,8 @@ export default async function Home({
                   國民旅遊卡特約商店資料多久更新一次？
                 </summary>
                 <p className="mt-2 ml-4">
-                  本系統資料來源為政府開放資料，系統每日自動比對更新，確保提供最新的特約商店清單。
+                  本系統資料來源為政府開放資料，系統每日自動比對更新，確保提供最新的特約商店清單
+                  {lastUpdatedDate ? `（截至 ${lastUpdatedDate}，共 ${statsTotal.toLocaleString()} 間）` : ""}。
                 </p>
               </details>
               <details className="group">
@@ -478,8 +509,11 @@ export default async function Home({
                   哪個縣市的國旅卡特約商店最多？
                 </summary>
                 <p className="mt-2 ml-4">
-                  根據最新資料，台北市（中山區為最密集，超過 1,700
-                  間）、新北市、台中市為特約商店數量最多的縣市，各有數千間特約商店。
+                  根據最新資料
+                  {lastUpdatedDate ? `（截至 ${lastUpdatedDate}）` : ""}
+                  {topCities.length > 0
+                    ? `，${topCities.map((c) => `${c.city}（${c.count.toLocaleString()} 間）`).join("、")}為特約商店數量最多的縣市。`
+                    : "，各主要縣市均有數千間特約商店，實際數量請以站內統計為準。"}
                 </p>
               </details>
               <details className="group">
@@ -491,9 +525,14 @@ export default async function Home({
                 </p>
               </details>
             </div>
+            <p className="text-sm">
+              <Link href="/faq" className="text-accent hover:underline">
+                查看完整常見問題 →
+              </Link>
+            </p>
           </section>
 
-          {/* FAQPage JSON-LD Schema */}
+          {/* FAQPage JSON-LD Schema（與上方 5 則精華問答一致） */}
           <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{
@@ -506,7 +545,7 @@ export default async function Home({
                     name: "國民旅遊卡可以在哪裡使用？",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: `國民旅遊卡（國旅卡）可在全台超過${stats ? ` ${Number(stats?.total_merchants ?? 0).toLocaleString()} ` : " 55,000 "}間特約商店使用，涵蓋住宿、餐飲、休閒遊樂、文化體育、交通運輸等類別。本系統提供即時查詢服務，支援縣市篩選與店名搜尋。`,
+                      text: `國民旅遊卡（國旅卡）可在全台${stats ? `超過 ${statsTotal.toLocaleString()} 間` : "眾多"}特約商店使用，涵蓋住宿、餐飲、休閒遊樂、文化體育、交通運輸等類別。本系統提供即時查詢服務，支援縣市篩選與店名搜尋${lastUpdatedDate ? `（截至 ${lastUpdatedDate}）` : ""}。`,
                     },
                   },
                   {
@@ -522,7 +561,7 @@ export default async function Home({
                     name: "國民旅遊卡特約商店資料多久更新一次？",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: "本系統資料來源為政府開放資料，系統每日自動比對更新，確保提供最新的特約商店清單。",
+                      text: `本系統資料來源為政府開放資料，系統每日自動比對更新，確保提供最新的特約商店清單${lastUpdatedDate ? `（截至 ${lastUpdatedDate}，共 ${statsTotal.toLocaleString()} 間）` : ""}。`,
                     },
                   },
                   {
@@ -530,7 +569,9 @@ export default async function Home({
                     name: "哪個縣市的國旅卡特約商店最多？",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: "根據最新資料，台北市（中山區為最密集，超過 1,700 間）、新北市、台中市為特約商店數量最多的縣市，各有數千間特約商店。",
+                      text: topCities.length > 0
+                        ? `根據最新資料${lastUpdatedDate ? `（截至 ${lastUpdatedDate}）` : ""}，${topCities.map((c) => `${c.city}（${c.count.toLocaleString()} 間）`).join("、")}為特約商店數量最多的縣市。`
+                        : "根據最新資料，各主要縣市均有數千間特約商店，實際數量請以站內統計為準。",
                     },
                   },
                   {
