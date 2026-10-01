@@ -672,10 +672,14 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
         if conn:
             conn.close()
 
-def validate_records(insert_data, count):
-    """解析筆數閘門：筆數過少（<1000）視為壞解析，拒絕進同步。"""
-    if count < 1000:
-        log.error(f"Parse too few: {count}")
+def validate_records(count, *, min_expected=1000):
+    """解析筆數閘門：低於絕對下限視為壞解析，拒絕進同步。
+
+    相對閘門（驟降 abort）由 transactional_sync_db 的 MASS 閘門負責；
+    這裡只擋災難性壞掉。舊簽名 validate_records(insert_data, count) 已移除。
+    """
+    if count < min_expected:
+        log.error(f"Parse too few: {count} < {min_expected}")
         return False
     return True
 
@@ -897,15 +901,17 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
     new_count = len(normalized_temp_merchants)
 
     # 0. 安全閘門：筆數驟降 abort（避免壞解析清空生產資料）
-    # 閾值由環境變數 MASS_DELETE_MIN_OLD / MASS_DELETE_RATIO 控制
+    # 閾值由環境變數 MASS_DELETE_MIN_OLD / MASS_DELETE_RATIO 控制（即時讀，
+    # 不用頂層快取值，容器啟動後改 env 重跑即生效）。
+    # 空庫（old_count=0）不適用比例閘門，但新筆數也至少要有絕對下限，避免把空/壞庫洗上線。
     try:
-        _min_old = int(os.environ.get("MASS_DELETE_MIN_OLD", str(MASS_MIN_OLD)))
+        _min_old = int(os.environ.get("MASS_DELETE_MIN_OLD", "100"))
     except (ValueError, TypeError):
-        _min_old = MASS_MIN_OLD
+        _min_old = 100
     try:
-        _ratio = float(os.environ.get("MASS_DELETE_RATIO", str(MASS_RATIO)))
+        _ratio = float(os.environ.get("MASS_DELETE_RATIO", "0.5"))
     except (ValueError, TypeError):
-        _ratio = MASS_RATIO
+        _ratio = 0.5
     if old_count > _min_old and new_count < old_count * _ratio:
         target_conn.close()
         raise RuntimeError(f"Abort: new={new_count} < {_ratio*100:.0f}% of old={old_count}, refuse mass delete")
@@ -925,7 +931,14 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
         removed_favorites = 0
 
         # 0. 規範化 target_db 既有資料的 tax_id
-        cursor.execute("UPDATE merchants SET tax_id = NULLIF(TRIM(REPLACE(REPLACE(tax_id, CHAR(12288), ''), ' ', '')), '');")
+        # 規範化既有 tax_id：Python 側 normalize_tax_id 清所有 \s（含 \t\n\r＋全形空白），
+        # SQL 側同步清掉這些，避免兩側對不上誤判下架。清完若撞 UNIQUE（同稅號並存兩列），
+        # 讓它在交易內報錯 ROLLBACK（下方 except），不靜默洗庫。
+        cursor.execute(
+            "UPDATE merchants SET tax_id = NULLIF(TRIM("
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(tax_id, CHAR(12288), ''), ' ', ''), CHAR(9), ''), CHAR(10), ''), CHAR(13), '')"
+            "), '');"
+        )
 
         # 1. 有 tax_id 商家 UPSERT
         valid_tax_merchants = [m for m in normalized_temp_merchants if m["tax_id"] is not None]
@@ -1059,37 +1072,6 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
     return removed_favorites
 
 
-def atomic_swap_db(temp_db_path: str, target_db_path: str) -> None:
-    """
-    將剛解析建好的 temp_db_path 原子性替換至 target_db_path。
-    若舊 DB 存在則備份，並透過 os.replace 完成檔案層級替換，
-    避免線上 API 查詢時遇到 DROP TABLE 或連線鎖定錯誤。
-    """
-    backup_path = target_db_path + ".bak"
-    if os.path.exists(target_db_path):
-        try:
-            shutil.copy2(target_db_path, backup_path)
-            log.info(f"💾 已備份舊 DB → {backup_path}")
-        except Exception as e:
-            log.warning(f"⚠️ 備份舊 DB 失敗: {e}")
-
-    try:
-        os.chmod(temp_db_path, 0o644)
-    except Exception:
-        pass
-
-    os.replace(temp_db_path, target_db_path)
-    log.info(f"✅ 原子性替換 DB 成功：{target_db_path}")
-
-    for ext in ["-wal", "-shm"]:
-        old_wal = target_db_path + ext
-        if os.path.exists(old_wal):
-            try:
-                os.remove(old_wal)
-            except Exception:
-                pass
-
-
 # ── 主流程 ───────────────────────────────────────────────────────────────────
 
 def main():
@@ -1156,7 +1138,7 @@ def main():
             log.error("❌ 更新中止（PDF 解析失敗）")
             notify("❌ 國旅卡更新中止（PDF 解析失敗）")
             sys.exit(1)
-        if not validate_records([], new_count):
+        if not validate_records(new_count):
             log.error("❌ 更新中止（解析筆數過少）")
             notify(f"❌ 國旅卡更新中止（解析筆數過少：{new_count}）")
             sys.exit(1)

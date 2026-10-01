@@ -29,10 +29,14 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
 def init_db(conn: sqlite3.Connection = None):
     close_after = False
     if conn is None:
-        conn = sqlite3.connect(DB_PATH)
+        # 與 get_db_connection 同等級：排程 BEGIN IMMEDIATE 大交易期間重啟，
+        # 裸連線（預設 timeout 5s、無 WAL）會直接 database is locked 炸掉 lifespan
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10.0)
         close_after = True
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA busy_timeout = 5000;")
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
     cursor = conn.cursor()
     
     cursor.execute("""

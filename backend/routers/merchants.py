@@ -1,4 +1,5 @@
 import sqlite3
+import logging
 import math
 import os
 import json
@@ -8,6 +9,8 @@ from backend.database import get_db, DB_PATH
 from backend.models import MerchantListItem, MerchantDetail, PaginatedMerchants, Stats, CityStat, IndustryInfo
 
 from backend.services.search_service import space_segment, parse_search_query
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -120,14 +123,10 @@ def get_merchants(
         cursor.execute(query, query_params)
         rows = cursor.fetchall()
         items = [dict(row) for row in rows]
-    except sqlite3.OperationalError:
-        return {
-            "total": 0,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": 1,
-            "items": []
-        }
+    except sqlite3.OperationalError as e:
+        # DB 鎖住/毀損時回 503（舊版吞成 200 空結果，前端顯示「無商家」，監控也不會叫）
+        log.error(f"get_merchants OperationalError: {e}")
+        raise HTTPException(status_code=503, detail="Database temporarily unavailable")
 
     return {
         "total": total,
@@ -220,8 +219,9 @@ def get_nearby_merchants(
     try:
         cursor.execute(query, params)
         rows = cursor.fetchall()
-    except sqlite3.OperationalError:
-        return []
+    except sqlite3.OperationalError as e:
+        log.error(f"get_nearby_merchants OperationalError: {e}")
+        raise HTTPException(status_code=503, detail="Database temporarily unavailable")
     
     results = []
     for row in rows:
@@ -239,15 +239,18 @@ def get_nearby_merchants(
 def get_merchant(merchant_id_or_tax_id: str, db: sqlite3.Connection = Depends(get_db)):
     cursor = db.cursor()
     row = None
-    if merchant_id_or_tax_id.isdigit():
-        cursor.execute("SELECT * FROM merchants WHERE id = ?", (int(merchant_id_or_tax_id),))
+    key = merchant_id_or_tax_id
+    # 超長數字（>18 位不可能是 id；Python 3.11+ int() 4300 位上限會直接 ValueError）
+    # 直接走 tax_id 查，查無即 404，避免掃描器輕易打爆 500
+    if key.isdigit() and len(key) <= 18:
+        cursor.execute("SELECT * FROM merchants WHERE id = ?", (int(key),))
         row = cursor.fetchone()
         if row is None:
             # 純數字亦可能是 tax_id（本國統編為 8 位數字），fallback 查 tax_id
-            cursor.execute("SELECT * FROM merchants WHERE tax_id = ?", (merchant_id_or_tax_id,))
+            cursor.execute("SELECT * FROM merchants WHERE tax_id = ?", (key,))
             row = cursor.fetchone()
     else:
-        cursor.execute("SELECT * FROM merchants WHERE tax_id = ?", (merchant_id_or_tax_id,))
+        cursor.execute("SELECT * FROM merchants WHERE tax_id = ?", (key,))
         row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Merchant not found")
