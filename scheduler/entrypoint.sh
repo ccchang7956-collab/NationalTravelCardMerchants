@@ -13,7 +13,7 @@ if [ "$(id -u)" = "0" ]; then
   chown -R ntcuser:ntcuser /data 2>/dev/null || true
   chmod 755 /data 2>/dev/null || true
   if command -v su >/dev/null 2>&1; then
-    exec su ntcuser -s /bin/sh -c 'exec "$0" "$@"' "$@"
+    exec su ntcuser -s /bin/sh -c 'exec "$0" "$@"' -- "$@"
   elif command -v runuser >/dev/null 2>&1; then
     exec runuser -u ntcuser -- "$@"
   fi

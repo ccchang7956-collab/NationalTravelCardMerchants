@@ -333,6 +333,11 @@ def atomic_write_text(path: str, data: str) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, path)
+        # backend 以 ntcuser 讀取，scheduler 手動 exec 可能為 root：統一 644 避免 600 造成 backend 讀不到
+        try:
+            os.chmod(path, 0o644)
+        except Exception:
+            pass
     except Exception:
         try:
             os.remove(tmp)
@@ -404,19 +409,25 @@ def download_zip(dest: str) -> bool:
                         pass
                     return False
                 f.write(chunk)
-        # content-type 檢查：拒收 html 錯誤頁
-        content_type = resp.headers.get("Content-Type", "")
-        if "text/html" in content_type.lower():
-            log.error(f"❌ 下載內容為 HTML（Content-Type: {content_type}），疑似錯誤頁")
-            try:
-                os.remove(dest)
-            except Exception:
-                pass
-            return False
-        # ZIP 魔數校驗：前 4 bytes 須為 PK\x03\x04
+        # 魔數優先：官方站會誤送 Content-Type: text/html（實為 ZIP），以魔數為準
+        # 見 Content-Disposition: attachment; filename=QualifiedRetailerList.zip
         with open(dest, "rb") as f:
             magic = f.read(4)
-        if magic != b"PK\x03\x04":
+        content_type = resp.headers.get("Content-Type", "")
+        if magic == b"PK\x03\x04":
+            if "text/html" in content_type.lower():
+                log.warning(f"⚠️ Content-Type 為 {content_type} 但魔數為 ZIP，仍接受（server 誤設）")
+        else:
+            # 非 ZIP：若 content-type 是 html 或魔數像 html，視為錯誤頁
+            with open(dest, "rb") as f:
+                head = f.read(1024).lstrip().lower()
+            if "text/html" in content_type.lower() or head.startswith(b"<html") or head.startswith(b"<!doctype"):
+                log.error(f"❌ 下載內容為 HTML（Content-Type: {content_type}），疑似錯誤頁")
+                try:
+                    os.remove(dest)
+                except Exception:
+                    pass
+                return False
             log.error(f"❌ 下載檔案魔數不符（{magic!r}），非 ZIP")
             try:
                 os.remove(dest)

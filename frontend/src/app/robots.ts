@@ -13,6 +13,10 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/map", "/*?q=", "/*?city=", "/*?page=", "/*?lat=", "/*?industry_code="],
       },
     ],
-    sitemap: `${SITE_URL}/sitemap.xml`,
+    // 根 sitemap 只含首頁；商家分片在 /merchants/sitemap/<id>.xml（共 6 片，見 app/merchants/sitemap.ts）
+    sitemap: [
+      `${SITE_URL}/sitemap.xml`,
+      ...Array.from({ length: 6 }, (_, id) => `${SITE_URL}/merchants/sitemap/${id}.xml`),
+    ],
   };
 }
