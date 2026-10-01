@@ -69,23 +69,36 @@ export default function HomeSearchSection({
 
   const handleFilterChange = useCallback(
     (newFilters: FilterState) => {
-      setFilters(newFilters);
+      // 定位失敗時距離篩選無法生效：清掉 radius，避免徽章顯示有篩、結果沒篩
+      const effective =
+        newFilters.radiusKm !== null && !userLocation
+          ? { ...newFilters, radiusKm: null }
+          : newFilters;
+      setFilters(effective);
 
       // 用 ref 持有目前輸入框的 q，避免 URL 舊 q 凍結
       const q = qRef.current?.value || "";
 
+      // 列表頁不做地理篩選：有定位＋距離一律導向 /map（參數名對齊 map 頁：radius/lat/lon）
+      if (effective.radiusKm !== null && userLocation) {
+        const mapParams = new URLSearchParams();
+        mapParams.set("lat", userLocation.lat.toFixed(5));
+        mapParams.set("lon", userLocation.lon.toFixed(5));
+        mapParams.set("radius", String(effective.radiusKm));
+        if (q) mapParams.set("q", q);
+        if (effective.industryCode)
+          mapParams.set("industry_code", effective.industryCode);
+        router.push(`/map?${mapParams.toString()}`);
+        return;
+      }
+
       const params = new URLSearchParams();
       if (q) params.set("q", q);
-      if (newFilters.city) params.set("city", newFilters.city);
-      if (newFilters.hasWebsite !== null)
-        params.set("has_website", String(newFilters.hasWebsite));
-      if (newFilters.industryCode)
-        params.set("industry_code", newFilters.industryCode);
-      if (newFilters.radiusKm !== null && userLocation) {
-        params.set("radius_km", String(newFilters.radiusKm));
-        params.set("lat", userLocation.lat.toFixed(5));
-        params.set("lon", userLocation.lon.toFixed(5));
-      }
+      if (effective.city) params.set("city", effective.city);
+      if (effective.hasWebsite !== null)
+        params.set("has_website", String(effective.hasWebsite));
+      if (effective.industryCode)
+        params.set("industry_code", effective.industryCode);
       params.set("page", "1");
 
       router.push(`/?${params.toString()}`);

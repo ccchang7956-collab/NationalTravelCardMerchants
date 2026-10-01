@@ -67,7 +67,8 @@ def get_merchants(
         params.append(fts_query)
 
     if city:
-        safe_city = city.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        # 寫入側已 NFKC + 臺→台正規化，查詢側同步處理，否則 臺北/臺中/臺南/臺東永遠 0 筆
+        safe_city = city.replace("臺", "台").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         where_clauses.append("m.address LIKE ? ESCAPE '\\'")
         params.append(f"{safe_city}%")
 

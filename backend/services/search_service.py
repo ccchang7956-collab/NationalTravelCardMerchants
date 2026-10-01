@@ -53,6 +53,18 @@ def space_segment(text: str, generate_ngrams: bool = True) -> str:
 
     return " ".join(tokens)
 
+def _quote_fts_token(tok: str) -> list[str]:
+    """把單一 token 轉成 FTS5 phrase 清單。
+
+    生產索引（scheduler/update_data.space_segment）把 CJK 逐字存成獨立 token，
+    因此 CJK 必須逐字拆成 AND（`"牛" AND "肉" AND "麵"`）；ASCII 維持整詞 phrase。
+    此寫法對 ngram 索引同樣成立（含 unigram），兩側相容。
+    """
+    if tok.isascii():
+        return [f'"{tok}"']
+    return [f'"{ch}"' for ch in tok]
+
+
 def parse_search_query(q: Optional[str]) -> Optional[str]:
     if not q:
         return None
@@ -76,9 +88,10 @@ def parse_search_query(q: Optional[str]) -> Optional[str]:
         if not segmented:
             continue
         segmented = segmented.replace('"', '')
-        if segmented in seen:
-            continue
-        seen.add(segmented)
-        parts.append(f'"{segmented}"')
-        
+        for tok in segmented.split():
+            if not tok or tok in seen:
+                continue
+            seen.add(tok)
+            parts.extend(_quote_fts_token(tok))
+
     return " AND ".join(parts) if parts else None

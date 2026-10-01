@@ -45,11 +45,20 @@ export async function generateMetadata({
   const page = isNaN(parsedMetaPage) || parsedMetaPage < 1 ? 1 : parsedMetaPage;
 
   // 有搜尋條件或翻頁時不索引，避免搜尋結果頁稀釋首頁
-  const hasFilters = !!(q || city || resolved.has_website || resolved.radius_km || resolved.industry_code || resolved.lat || resolved.lon || (resolved.page && resolved.page !== "1"));
+  // canonical 只收白名單參數（junk param 不照抄，避免污染與重複內容）
+  // 地理參數只影響 noindex（會 client 導向 /map），不進 canonical
+  const hasGeoParams = !!(resolved.radius_km || resolved.lat || resolved.lon);
+  const hasFilters = !!(q || city || resolved.has_website || resolved.industry_code || hasGeoParams || (resolved.page && resolved.page !== "1"));
+  const canonicalParams = new URLSearchParams();
+  if (q) canonicalParams.set("q", q);
+  if (city) canonicalParams.set("city", city);
+  if (typeof resolved.has_website === "string") canonicalParams.set("has_website", resolved.has_website);
+  if (typeof resolved.industry_code === "string") canonicalParams.set("industry_code", resolved.industry_code);
+  if (page > 1) canonicalParams.set("page", String(page));
 
   return {
     alternates: {
-      canonical: hasFilters || page > 1 ? `${SITE_URL}/?${new URLSearchParams(resolved as Record<string, string>).toString()}` : SITE_URL + "/",
+      canonical: hasFilters || page > 1 ? `${SITE_URL}/?${canonicalParams.toString()}` : SITE_URL + "/",
     },
     ...((hasFilters || page > 1) && {
       robots: { index: false, follow: true },
@@ -77,12 +86,20 @@ export default async function Home({
   const hasWebsite: boolean | null =
     hasWebsiteParam === "true" ? true : hasWebsiteParam === "false" ? false : null;
   const industryCode = typeof resolvedParams.industry_code === "string" ? resolvedParams.industry_code : "";
-  const radiusKm: number | null =
-    typeof resolvedParams.radius_km === "string"
-      ? parseFloat(resolvedParams.radius_km) || null
-      : null;
-  const latParam = typeof resolvedParams.lat === "string" ? parseFloat(resolvedParams.lat) : NaN;
-  const lonParam = typeof resolvedParams.lon === "string" ? parseFloat(resolvedParams.lon) : NaN;
+
+  // 列表頁不做地理篩選（後端 /api/merchants 無 geo 參數）：帶定位參數的分享連結導向 /map
+  const geoRadius = typeof resolvedParams.radius_km === "string" ? parseFloat(resolvedParams.radius_km) : NaN;
+  const geoLat = typeof resolvedParams.lat === "string" ? parseFloat(resolvedParams.lat) : NaN;
+  const geoLon = typeof resolvedParams.lon === "string" ? parseFloat(resolvedParams.lon) : NaN;
+  if (Number.isFinite(geoRadius) && Number.isFinite(geoLat) && Number.isFinite(geoLon)) {
+    const mapParams = new URLSearchParams();
+    mapParams.set("lat", geoLat.toFixed(5));
+    mapParams.set("lon", geoLon.toFixed(5));
+    mapParams.set("radius", String(geoRadius));
+    if (q) mapParams.set("q", q);
+    if (industryCode) mapParams.set("industry_code", industryCode);
+    redirect(`/map?${mapParams.toString()}`);
+  }
 
   const query = new URLSearchParams();
   if (q) query.append("q", q);
@@ -119,11 +136,6 @@ export default async function Home({
     if (city) redirectQuery.append("city", city);
     if (hasWebsite !== null) redirectQuery.append("has_website", String(hasWebsite));
     if (industryCode) redirectQuery.append("industry_code", industryCode);
-    if (radiusKm !== null && !isNaN(latParam) && !isNaN(lonParam)) {
-      redirectQuery.append("radius_km", String(radiusKm));
-      redirectQuery.append("lat", latParam.toFixed(5));
-      redirectQuery.append("lon", lonParam.toFixed(5));
-    }
     redirectQuery.append("page", totalPages.toString());
     redirect(`/?${redirectQuery.toString()}`);
   }
@@ -131,7 +143,7 @@ export default async function Home({
   const initialFilters: FilterState = {
     city,
     hasWebsite,
-    radiusKm,
+    radiusKm: null,
     industryCode,
   };
 
@@ -141,11 +153,6 @@ export default async function Home({
     if (city) params.set("city", city);
     if (hasWebsite !== null) params.set("has_website", String(hasWebsite));
     if (industryCode) params.set("industry_code", industryCode);
-    if (radiusKm !== null && !isNaN(latParam) && !isNaN(lonParam)) {
-      params.set("radius_km", String(radiusKm));
-      params.set("lat", latParam.toFixed(5));
-      params.set("lon", lonParam.toFixed(5));
-    }
     params.set("page", String(targetPage));
     return `/?${params.toString()}`;
   };
@@ -198,8 +205,6 @@ export default async function Home({
         initialQ={q}
         initialFilters={initialFilters}
         cities={TAIWAN_CITIES}
-        initialLat={isNaN(latParam) ? undefined : latParam}
-        initialLon={isNaN(lonParam) ? undefined : lonParam}
       />
 
       {/* Results Meta */}
@@ -391,13 +396,6 @@ export default async function Home({
               {city && <input type="hidden" name="city" value={city} />}
               {hasWebsite !== null && <input type="hidden" name="has_website" value={String(hasWebsite)} />}
               {industryCode && <input type="hidden" name="industry_code" value={industryCode} />}
-              {radiusKm !== null && !isNaN(latParam) && !isNaN(lonParam) && (
-                <>
-                  <input type="hidden" name="radius_km" value={String(radiusKm)} />
-                  <input type="hidden" name="lat" value={latParam.toFixed(5)} />
-                  <input type="hidden" name="lon" value={lonParam.toFixed(5)} />
-                </>
-              )}
               <span>跳至第</span>
               <input
                 type="number"
