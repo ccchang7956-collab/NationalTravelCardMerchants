@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import GlobalRadar from "@/components/GlobalRadar";
-import { ThemeProvider } from "@/components/ThemeProvider";
 import PWAOfflineBanner from "@/components/PWAOfflineBanner";
 import { getSiteUrl } from "@/utils/site";
 import "./globals.css";
@@ -71,51 +70,49 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-TW" suppressHydrationWarning>
+    <html lang="zh-TW">
       <body className={inter.className}>
-        <ThemeProvider>
-          <PWAOfflineBanner />
-            {/* 網站層級結構化資料：WebSite */}
-            <script
-              type="application/ld+json"
-              dangerouslySetInnerHTML={{
-                __html: JSON.stringify({
-                  "@context": "https://schema.org",
-                  "@type": "WebSite",
-                  name: "國民旅遊卡特約商店查詢",
-                  url: SITE_URL,
-                }),
-              }}
-            />
-            <script
-              type="application/ld+json"
-              dangerouslySetInnerHTML={{
-                __html: JSON.stringify({
-                  "@context": "https://schema.org",
-                  "@type": "Organization",
-                  name: "國民旅遊卡特約商店查詢",
-                  url: SITE_URL,
-                  logo: `${SITE_URL}/icons/icon-512x512.png`,
-                  sameAs: [],
-                }),
-              }}
-            />
-            <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-200">
-              <Navbar />
-              <main className="flex-1 max-w-5xl w-full mx-auto p-6 md:py-10">
-                {children}
-              </main>
-              <footer className="border-t border-border py-8 text-center text-sm text-muted mt-10">
-                <p>資料來源：政府開放資料</p>
-                <p className="mt-2">
-                  <a href="/llms.txt" className="underline hover:text-foreground">
-                    給 AI 的本站說明
-                  </a>
-                </p>
-              </footer>
-              <GlobalRadar />
-            </div>
-        </ThemeProvider>
+        <PWAOfflineBanner />
+        {/* 網站層級結構化資料：WebSite */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              name: "國民旅遊卡特約商店查詢",
+              url: SITE_URL,
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: "國民旅遊卡特約商店查詢",
+              url: SITE_URL,
+              logo: `${SITE_URL}/icons/icon-512x512.png`,
+              sameAs: [],
+            }),
+          }}
+        />
+        <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-200">
+          <Navbar />
+          <main className="flex-1 max-w-5xl w-full mx-auto p-6 md:py-10">
+            {children}
+          </main>
+          <footer className="border-t border-border py-8 text-center text-sm text-muted mt-10">
+            <p>資料來源：政府開放資料</p>
+            <p className="mt-2">
+              <a href="/llms.txt" className="underline hover:text-foreground">
+                給 AI 的本站說明
+              </a>
+            </p>
+          </footer>
+          <GlobalRadar />
+        </div>
       </body>
     </html>
   );

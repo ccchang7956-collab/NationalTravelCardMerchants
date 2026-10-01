@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ListBulletIcon, MapIcon } from "@heroicons/react/24/outline";
-import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -44,8 +43,6 @@ export default function Navbar() {
             <MapIcon className={`w-5 h-5 transition-transform duration-300 ${isMapActive ? "rotate-3 scale-110" : "group-hover:scale-110"}`} />
             <span>地圖</span>
           </Link>
-
-          <ThemeToggle />
         </nav>
       </div>
     </header>
