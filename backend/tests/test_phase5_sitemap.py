@@ -14,6 +14,15 @@ import pathlib
 import re
 
 SRC = pathlib.Path("frontend/src/app/merchants/sitemap.ts").read_text()
+# 分片數單一來源（frontend/src/utils/sitemapShards.ts），robots 與 sitemap 共用
+SHARDS_SRC = pathlib.Path("frontend/src/utils/sitemapShards.ts").read_text()
+ROBOTS_SRC = pathlib.Path("frontend/src/app/robots.ts").read_text()
+
+
+def _num_sitemaps() -> int:
+    m = re.search(r"NUM_SITEMAPS\s*=\s*(\d+)", SHARDS_SRC)
+    assert m, "sitemapShards.ts 應定義 NUM_SITEMAPS"
+    return int(m.group(1))
 
 
 def test_sitemap_has_page_cap():
@@ -56,6 +65,13 @@ def test_sitemap_index_covers_all_merchants():
     # 分片總容量必須覆蓋約 55k 商家
     per = int(re.search(r"PER_PAGE\s*=\s*(\d+)", SRC).group(1))
     ppf = int(re.search(r"PAGES_PER_FILE\s*=\s*(\d+)", SRC).group(1))
-    num = int(re.search(r"NUM_SITEMAPS\s*=\s*(\d+)", SRC).group(1))
+    num = _num_sitemaps()
+    assert "NUM_SITEMAPS" in SRC, "sitemap 應引用共用 NUM_SITEMAPS"
     assert num >= 2, "至少應拆成 2 個子檔"
     assert num * per * ppf >= 55000, "分片總容量應覆蓋約 55k 商家"
+
+
+def test_robots_sitemap_matches_shards():
+    # robots 列的商家分片數必須與 NUM_SITEMAPS 同步（過去曾雙寫漂移）
+    assert "NUM_SITEMAPS" in ROBOTS_SRC, "robots 應引用共用 NUM_SITEMAPS 而非寫死數字"
+    assert "sitemap.xml" in ROBOTS_SRC

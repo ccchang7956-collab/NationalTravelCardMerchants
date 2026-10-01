@@ -52,8 +52,9 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=tw&limit=5`,
           {
             headers: {
+              // 瀏覽器禁 User-Agent（forbidden header，送了也到不了 Nominatim）：改用 Referer 政策註明來源
               "Accept-Language": "zh-TW,zh;q=0.9",
-              "User-Agent": "NationalTravelCardQuerySystem/1.0 (contact: admin@example.com)"
+              "Referer": window.location.origin,
             },
             signal: controller.signal,
           }

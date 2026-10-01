@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
 import { getSiteUrl } from "@/utils/site";
+import { NUM_SITEMAPS } from "@/utils/sitemapShards";
 
 const API_URL =
   process.env.INTERNAL_API_URL ||
@@ -12,12 +13,11 @@ export const revalidate = 86400;
 // Google 規定單一 sitemap 檔最多 50000 個 URL；本站約 55k 商家，
 // 故以 generateSitemaps 拆成多子檔（保守每子檔取 10000 上限）。
 // PER_PAGE=100 × PAGES_PER_FILE=100 = 每子檔最多 10000 條商家 URL；
-// NUM_SITEMAPS=6 → 最多 60000 筆，覆蓋目前約 55k 商家。
+// NUM_SITEMAPS（見 @/utils/sitemapShards，=6）→ 最多 60000 筆，覆蓋目前約 55k 商家.
 // 子檔位於 /merchants/sitemap/<id>.xml（根 /sitemap.xml 只含首頁，見 app/sitemap.ts）。
 const PER_PAGE = 100;
 const PAGES_PER_FILE = 100;
 const URLS_PER_FILE = PER_PAGE * PAGES_PER_FILE; // 10000 ≤ 50000
-const NUM_SITEMAPS = 6;
 const MAX_PAGES = NUM_SITEMAPS * PAGES_PER_FILE; // 600：全部分片合计抓取上限
 
 // 後端 /api/data-info 的 last_updated 是資料真實更新時間；

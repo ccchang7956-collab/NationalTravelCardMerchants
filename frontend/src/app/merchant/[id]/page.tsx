@@ -1,10 +1,12 @@
 import { Metadata } from "next";
+import { cache } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeftIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, ArrowTopRightOnSquareIcon, MapIcon } from "@heroicons/react/24/outline";
 import MerchantMapSection from "@/components/MerchantMapSection";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
+import { sanitizeUrl } from "@/utils/sanitize";
 
 const TAIWAN_CITIES = [
   "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
@@ -12,13 +14,15 @@ const TAIWAN_CITIES = [
   "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣",
 ];
 
-// Fetch merchant data
-async function getMerchant(id: string) {
+// Fetch merchant data（react cache：metadata＋page 同請求只打一次後端）
+const getMerchant = cache(async (id: string) => {
   const API_URL = getBackendUrl();
   const res = await fetch(`${API_URL}/api/merchants/${encodeURIComponent(id)}`, { next: { revalidate: 3600 } });
-  if (!res.ok) return null;
+  // 404 才回 null（→ notFound）；後端 500/超時直接 throw，不偽裝成 404
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`merchant API failed: ${res.status}`);
   return res.json();
-}
+});
 
 // Fetch stats for last_updated（資料更新時間標示用）
 async function getStats() {
@@ -84,6 +88,12 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
     notFound();
   }
 
+  // /merchant/<id> 與 /merchant/<tax_id> 雙 URL 並存會重複內容：
+  // 有 tax 一律 301 到 tax slug（canonical 一致；無 tax 才留數字 id）
+  if (merchant.tax_id && resolvedParams.id !== String(merchant.tax_id)) {
+    redirect(`/merchant/${merchant.tax_id}`);
+  }
+
   const last_updated: string | null =
     typeof statsData?.last_updated === "string" && statsData.last_updated
       ? statsData.last_updated
@@ -116,10 +126,8 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
     const addr: string = merchant.address || "";
     return TAIWAN_CITIES.find((c) => addr.startsWith(c));
   })();
-  const normalizeWebsite = (w: string) =>
-    w.startsWith("http") ? w : `http://${w}`;
   const websiteUrl: string | undefined = merchant.website
-    ? normalizeWebsite(merchant.website)
+    ? sanitizeUrl(merchant.website)
     : undefined;
 
   // 完整的 LocalBusiness 結構化資料
@@ -129,7 +137,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
     "@id": pageUrl,
     name: merchant.name,
     url: pageUrl,
-    ...(websiteUrl ? { sameAs: [websiteUrl] } : {}),
+    ...(websiteUrl && websiteUrl !== "about:blank" ? { sameAs: [websiteUrl] } : {}),
     address: {
       "@type": "PostalAddress",
       streetAddress: merchant.address,
@@ -283,14 +291,14 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
           
-          {merchant.website && (
+          {websiteUrl && websiteUrl !== "about:blank" && (
             <div className="flex items-start gap-3">
               <GlobeAltIcon className="w-5 h-5 mt-0.5 text-muted shrink-0" />
               <div>
                 <dt className="font-medium text-foreground">官方網站</dt>
                 <dd className="mt-1">
-                  <a 
-                    href={merchant.website.startsWith('http') ? merchant.website : `http://${merchant.website}`}
+                  <a
+                    href={websiteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block text-accent hover:underline break-all"

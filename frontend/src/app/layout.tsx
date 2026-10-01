@@ -8,10 +8,12 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 
-const SITE_URL = getSiteUrl();
-
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
+// generateMetadata（函式內呼叫 getSiteUrl）：禁止模組頂層 const，缺 env 時
+// throw 會在 import 期炸掉整站（見 utils/site.ts 註解）
+export async function generateMetadata(): Promise<Metadata> {
+  const SITE_URL = getSiteUrl();
+  return {
+    metadataBase: new URL(SITE_URL),
   title: {
     default: "國民旅遊卡特約商店查詢｜全台商店檢索系統",
     template: "%s｜國旅卡特約商店",
@@ -55,10 +57,11 @@ export const metadata: Metadata = {
       "max-image-preview": "large",
     },
   },
-};
+  };
+}
 
 export const viewport: Viewport = {
-  themeColor: "#2563eb",
+  themeColor: "#C25E40",
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
@@ -69,6 +72,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const SITE_URL = getSiteUrl();
   return (
     <html lang="zh-TW">
       <body className={inter.className}>

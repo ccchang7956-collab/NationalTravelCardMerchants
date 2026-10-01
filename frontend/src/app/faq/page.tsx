@@ -3,10 +3,10 @@ import Link from "next/link";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
 
-const SITE_URL = getSiteUrl();
-
-export const metadata: Metadata = {
-  title: "常見問題",
+export async function generateMetadata(): Promise<Metadata> {
+  const SITE_URL = getSiteUrl();
+  return {
+    title: "常見問題",
   description:
     "國民旅遊卡常見問題：8000 元額度區分、特約商店查詢、刷卡失敗處理、統編查詢、外島商店與行業類別篩選完整說明。",
   alternates: {
@@ -20,8 +20,9 @@ export const metadata: Metadata = {
     url: `${SITE_URL}/faq`,
     locale: "zh_TW",
     siteName: "國民旅遊卡特約商店查詢",
-  },
-};
+    },
+  };
+}
 
 interface CityStat {
   city: string;

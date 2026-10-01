@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
 import { getSiteUrl } from "@/utils/site";
+import { NUM_SITEMAPS } from "@/utils/sitemapShards";
 
 export default function robots(): MetadataRoute.Robots {
   const SITE_URL = getSiteUrl();
@@ -13,10 +14,10 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/map", "/*?q=", "/*?city=", "/*?page=", "/*?lat=", "/*?industry_code="],
       },
     ],
-    // 根 sitemap 只含首頁；商家分片在 /merchants/sitemap/<id>.xml（共 6 片，見 app/merchants/sitemap.ts）
+    // 根 sitemap 只含首頁；商家分片在 /merchants/sitemap/<id>.xml（片數見 sitemapShards）
     sitemap: [
       `${SITE_URL}/sitemap.xml`,
-      ...Array.from({ length: 6 }, (_, id) => `${SITE_URL}/merchants/sitemap/${id}.xml`),
+      ...Array.from({ length: NUM_SITEMAPS }, (_, id) => `${SITE_URL}/merchants/sitemap/${id}.xml`),
     ],
   };
 }

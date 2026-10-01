@@ -10,16 +10,12 @@ interface HomeSearchSectionProps {
   initialQ: string;
   initialFilters: FilterState;
   cities: string[];
-  initialLat?: number;
-  initialLon?: number;
 }
 
 export default function HomeSearchSection({
   initialQ,
   initialFilters,
   cities,
-  initialLat,
-  initialLon,
 }: HomeSearchSectionProps) {
   const router = useRouter();
   const [filters, setFilters] = useState<FilterState>(initialFilters);
@@ -118,7 +114,7 @@ export default function HomeSearchSection({
             type="text"
             name="q"
             defaultValue={initialQ}
-            maxLength={100}
+            maxLength={50}
             placeholder="搜尋店名 or 地址..."
             className="w-full pl-10 pr-4 py-2.5 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
           />
@@ -132,11 +128,11 @@ export default function HomeSearchSection({
         {filters.industryCode && (
           <input type="hidden" name="industry_code" value={filters.industryCode} />
         )}
-        {filters.radiusKm !== null && (userLocation || initialLat !== undefined || initialLon !== undefined) && (
+        {filters.radiusKm !== null && userLocation && (
           <>
             <input type="hidden" name="radius_km" value={String(filters.radiusKm)} />
-            <input type="hidden" name="lat" value={userLocation ? userLocation.lat.toFixed(5) : (initialLat ?? "")} />
-            <input type="hidden" name="lon" value={userLocation ? userLocation.lon.toFixed(5) : (initialLon ?? "")} />
+            <input type="hidden" name="lat" value={userLocation.lat.toFixed(5)} />
+            <input type="hidden" name="lon" value={userLocation.lon.toFixed(5)} />
           </>
         )}
 

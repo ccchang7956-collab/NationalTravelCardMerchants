@@ -82,17 +82,20 @@ export default function FilterSheet({
     };
   }, [isOpen, industries.length, industriesLoading]);
 
-  // Sync draft when filters change externally (e.g. URL navigation)
+  // Sync draft when filters change externally (e.g. URL navigation).
+  // 必須在 useEffect 內：render 期直接 setState 在併發模式下可無限重渲染。
   const [prevFilters, setPrevFilters] = useState<FilterState>(filters);
-  if (
-    filters.city !== prevFilters.city ||
-    filters.hasWebsite !== prevFilters.hasWebsite ||
-    filters.radiusKm !== prevFilters.radiusKm ||
-    filters.industryCode !== prevFilters.industryCode
-  ) {
-    setPrevFilters(filters);
-    setDraft(filters);
-  }
+  useEffect(() => {
+    if (
+      filters.city !== prevFilters.city ||
+      filters.hasWebsite !== prevFilters.hasWebsite ||
+      filters.radiusKm !== prevFilters.radiusKm ||
+      filters.industryCode !== prevFilters.industryCode
+    ) {
+      setPrevFilters(filters);
+      setDraft(filters);
+    }
+  }, [filters, prevFilters]);
 
   const handleClose = useCallback(() => {
     setIsOpen(false);

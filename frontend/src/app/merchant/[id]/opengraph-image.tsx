@@ -21,8 +21,9 @@ export default async function OgImage({
   let cityBadge = "";
 
   try {
-    const res = await fetch(`${API_URL}/api/merchants/${id}`, {
+    const res = await fetch(`${API_URL}/api/merchants/${encodeURIComponent(id)}`, {
       next: { revalidate: 3600 },
+      signal: AbortSignal.timeout(10000),
     });
     if (res.ok) {
       const merchant = await res.json();
