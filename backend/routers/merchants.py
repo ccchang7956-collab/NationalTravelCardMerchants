@@ -71,9 +71,13 @@ def get_merchants(
 
     if city:
         # 寫入側已 NFKC + 臺→台正規化，查詢側同步處理，否則 臺北/臺中/臺南/臺東永遠 0 筆
-        safe_city = city.replace("臺", "台").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        where_clauses.append("m.address LIKE ? ESCAPE '\\'")
-        params.append(f"{safe_city}%")
+        safe_city = city.replace("臺", "台")
+        # 前綴改範圍查詢吃 idx_merchants_address（LIKE 預設大小寫不敏感走不到索引；
+        # 範圍寫法天然免疫 %/_ 萬用字元）。BINARY 排序下 [prefix, prefix末字+1) 恰為前綴集合
+        # （縣市皆 CJK 定長前綴；任意輸入末字為 U+10FFFF 的理論邊界不處理）。
+        upper = safe_city[:-1] + chr(ord(safe_city[-1]) + 1) if safe_city else "\U0010FFFF"
+        where_clauses.append("m.address >= ? AND m.address < ?")
+        params.extend([safe_city, upper])
 
     if zip_code:
         where_clauses.append("m.zip_code = ?")
@@ -292,26 +296,32 @@ def _read_stats_last_updated() -> Optional[str]:
 def get_stats(db: sqlite3.Connection = Depends(get_db)):
     cursor = db.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM merchants")
-    total = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COUNT(*) FROM merchants WHERE website IS NOT NULL AND website != ''")
-    has_website = cursor.fetchone()[0]
-
+    # 一次掃表拿兩個總數（舊版三次掃表＋全量地址拉進 Python）
     cursor.execute("""
-        SELECT address FROM merchants
-        WHERE address IS NOT NULL AND address != ''
+        SELECT COUNT(*),
+               SUM(website IS NOT NULL AND website <> '')
+        FROM merchants
+    """)
+    row = cursor.fetchone()
+    total = row[0]
+    has_website = row[1] or 0
+
+    # 城市分桶：DB 側 GROUP BY 前三字（縣市皆三字），Python 只歸納 ≤23 個桶
+    # （舊版 54k 地址全拉回 Python 逐筆 startswith，慢兩個量級）
+    cursor.execute("""
+        SELECT substr(address, 1, 3) AS city3, COUNT(*)
+        FROM merchants
+        WHERE address IS NOT NULL AND address <> ''
+        GROUP BY city3
     """)
     counts = {c: 0 for c in TAIWAN_CITIES}
     other = 0
-    for row in cursor.fetchall():
-        addr = row["address"] or ""
-        for c in TAIWAN_CITIES:
-            if addr.startswith(c):
-                counts[c] += 1
-                break
+    for r in cursor.fetchall():
+        c3 = r["city3"] or ""
+        if c3 in counts:
+            counts[c3] += r[1]
         else:
-            other += 1
+            other += r[1]
     valid_cities = [
         {"city": c, "count": n} for c, n in counts.items() if n > 0
     ]

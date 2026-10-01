@@ -214,6 +214,46 @@ def test_get_industries_api(db_conn):
     assert data[1]["industry_name"] == "餐館業"
 
 
+def test_city_filter_range_and_normalization():
+    client = TestClient(app)
+    # 範圍查詢：前綴命中
+    r = client.get("/api/merchants", params={"city": "台北市"})
+    assert r.status_code == 200
+    assert r.json()["total"] == 1
+    assert r.json()["items"][0]["name"] == "台北大安咖啡店"
+    # 臺→台正規化（寫入側早有）
+    r = client.get("/api/merchants", params={"city": "臺北市"})
+    assert r.status_code == 200
+    assert r.json()["total"] == 1
+    # 範圍寫法天然免疫 LIKE 萬用字元（舊 LIKE 需 ESCAPE，新寫法直接無效）
+    assert client.get("/api/merchants", params={"city": "%"}).json()["total"] == 0
+    assert client.get("/api/merchants", params={"city": "_"}).json()["total"] == 0
+
+
+def test_stats_empty_db():
+    from backend.database import init_db
+
+    conn = sqlite3.connect(":memory:", check_same_thread=False)
+    conn.execute("PRAGMA foreign_keys = ON;")
+    conn.row_factory = sqlite3.Row
+    init_db(conn)
+
+    def _empty_db():
+        yield conn
+
+    app.dependency_overrides[get_db] = _empty_db
+    try:
+        client = TestClient(app)
+        r = client.get("/api/stats")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total_merchants"] == 0
+        assert data["has_website"] == 0
+        assert data["cities"] == []
+    finally:
+        conn.close()
+
+
 def test_merchants_filter_by_industry(db_conn):
     client = TestClient(app)
     # 1. 測試精確子類別代碼 (551011)
