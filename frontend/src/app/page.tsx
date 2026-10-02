@@ -458,7 +458,15 @@ export default async function Home({
               支援店名搜尋、縣市篩選，以及地圖定位查看附近商店。
             </p>
             <p className="text-xs text-muted/60">
-              資料來源：行政院人事行政總處政府開放資料
+              資料來源：行政院人事行政總處
+              <a
+                href="https://travel.nccc.com.tw/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              >
+                政府開放資料
+              </a>
               {lastUpdatedDate && (
                 <>
                  ；

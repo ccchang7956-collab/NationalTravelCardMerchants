@@ -108,7 +108,18 @@ export default function RootLayout({
             {children}
           </main>
           <footer className="border-t border-border py-8 text-center text-sm text-muted mt-10">
-            <p>資料來源：政府開放資料</p>
+            <p>
+              資料來源：
+              <a
+                href="https://travel.nccc.com.tw/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              >
+                政府開放資料
+              </a>
+              （行政院人事行政總處委託聯合信用卡中心發布之特約商店清冊）
+            </p>
             <p className="mt-2">
               <a href="/llms.txt" className="underline hover:text-foreground">
                 給 AI 的本站說明
