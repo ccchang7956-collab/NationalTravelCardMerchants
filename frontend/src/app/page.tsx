@@ -115,8 +115,14 @@ export default async function Home({
   let stats = null;
   try {
     const [mRes, sRes] = await Promise.all([
-      fetch(`${API_URL}/api/merchants?${query.toString()}`, { next: { revalidate: 300 } }),
-      fetch(`${API_URL}/api/stats`, { next: { revalidate: 3600 } }),
+      fetch(`${API_URL}/api/merchants?${query.toString()}`, {
+        next: { revalidate: 300 },
+        signal: AbortSignal.timeout(10000),
+      }),
+      fetch(`${API_URL}/api/stats`, {
+        next: { revalidate: 3600 },
+        signal: AbortSignal.timeout(10000),
+      }),
     ]);
     if (mRes.ok) data = await mRes.json();
     if (sRes.ok) stats = await sRes.json();

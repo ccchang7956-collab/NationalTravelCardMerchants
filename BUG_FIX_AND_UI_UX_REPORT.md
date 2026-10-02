@@ -1,6 +1,10 @@
 # 國民旅遊卡特約商店專案 (National Travel Card Merchants)
 ## Bug 修復與 UI/UX 優化總體驗證報告
 
+> ⚠️ ARCHIVED（2026-10）：此報告描述的功能子集（登入註冊、行程規劃、黑夜模式）
+> 已於後續 commit 移除，測試數量亦已變化（後端拆文件、前端 12 suites/75 tests）。
+> 驗收請以當下 `pytest --collect-only -q` / `npx jest --listTests` 為準，本文件僅留作歷史。
+
 ---
 
 ### 一、 專案簡介與測試摘要 (Project Overview & Test Summary)
