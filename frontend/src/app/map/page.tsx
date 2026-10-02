@@ -19,6 +19,7 @@ import {
 import AddressSearch from "@/components/AddressSearch";
 import FilterSheet, { FilterState, DEFAULT_FILTER_STATE } from "@/components/FilterSheet";
 import { getPublicApiUrl } from "@/utils/env";
+import { geoErrorMessage } from "@/utils/geolocation";
 
 // Dynamically import the map to avoid SSR issues (Leaflet needs window)
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -192,8 +193,10 @@ function MapContent() {
   }, [currentParamsKey, prevParamsKey, targetLat, targetLon, targetRadius, targetKeyword, targetIndCode]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Trigger fetch when URL parameters change or initial load
+  // Trigger fetch when URL parameters change or initial load.
+  // lastFetchedRef 去重：定位/滑桿直接打過的同 key 不再重打（曾經每次切半徑打兩次）
   useEffect(() => {
+    if (lastFetchedRef.current === currentParamsKey) return;
     let isCancelled = false;
     Promise.resolve().then(() => {
       if (!isCancelled) {
@@ -203,25 +206,29 @@ function MapContent() {
     return () => {
       isCancelled = true;
     };
-  }, [fetchNearby, targetLat, targetLon, targetRadius, targetKeyword, targetIndCode]);
+  }, [fetchNearby, currentParamsKey, targetLat, targetLon, targetRadius, targetKeyword, targetIndCode]);
 
-  // Debounced radius slider effect
+  // Debounced radius slider effect：只改 URL，抓取交給 URL effect（單次）。
+  // 舊版這裡直接 fetchNearby＋updateURL 改網址，URL effect 又打一次＝雙打。
   useEffect(() => {
     if (tempRadius === radius) return;
 
     const timer = setTimeout(() => {
       setRadius(tempRadius);
-      fetchNearby(center[0], center[1], tempRadius, keyword, filterState.industryCode || "");
+      updateURL(center[0], center[1], tempRadius, keyword, filterState.industryCode || "");
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [tempRadius, radius, center, keyword, filterState.industryCode, fetchNearby]);
+  }, [tempRadius, radius, center, keyword, filterState.industryCode, updateURL]);
 
   // Scroll active merchant item into view in sidebar
   useEffect(() => {
     if (selectedMerchant && merchantRefs.current[selectedMerchant.id]) {
+      const reduced =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       merchantRefs.current[selectedMerchant.id]?.scrollIntoView({
-        behavior: "smooth",
+        behavior: reduced ? "auto" : "smooth",
         block: "nearest",
       });
     }
@@ -242,7 +249,8 @@ function MapContent() {
         fetchNearby(loc[0], loc[1], radius, keyword, filterState.industryCode || "");
       },
       (err) => {
-        setGeoError("定位失敗：" + err.message);
+        const msg = geoErrorMessage(err);
+        setGeoError(msg);
         setLocationStatus("定位失敗，請手動點擊地圖選擇位置");
       },
       { enableHighAccuracy: false, timeout: 5000 }
@@ -264,7 +272,7 @@ function MapContent() {
         setLocationLoading(false);
       },
       (err) => {
-        setLocationGeoError("定位失敗：" + err.message);
+        setLocationGeoError(geoErrorMessage(err));
         setLocationLoading(false);
       },
       { enableHighAccuracy: false, timeout: 8000 }

@@ -19,6 +19,7 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
   const [results, setResults] = useState<NominatimResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +35,7 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
+    setSearchError(null);
     if (!val.trim()) {
       setResults([]);
       setShowDropdown(false);
@@ -47,6 +49,7 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
 
     const delayDebounceFn = setTimeout(async () => {
       setLoading(true);
+      setSearchError(null);
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=tw&limit=5`,
@@ -63,11 +66,15 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
           const data = await res.json();
           setResults(data);
           setShowDropdown(true);
+        } else {
+          // 舊版靜默失敗（console  only）：顯示可重試提示
+          setSearchError(`地址搜尋暫時不可用（${res.status}），請稍後再試或直接點地圖定位`);
         }
       } catch (err) {
         // 忽略因取消造成的 AbortError
         if (err instanceof Error && err.name === "AbortError") return;
         console.error("Geocoding fetch error:", err);
+        setSearchError("地址搜尋連線失敗，請檢查網路後再試，或直接點地圖定位");
       } finally {
         setLoading(false);
       }
@@ -103,6 +110,10 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
           </div>
         )}
       </div>
+
+      {searchError && !loading && (
+        <p className="mt-1.5 text-xs text-red-500" role="alert">{searchError}</p>
+      )}
 
       {showDropdown && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">

@@ -14,6 +14,8 @@ export default function MerchantMiniMap({ lat, lon, name }: MerchantMiniMapProps
   const containerRef = useRef<HTMLDivElement>(null);
   // 儲存 { map, marker } 以便後續更新
   const instanceRef = useRef<{ map: L.Map; marker: L.Marker } | null>(null);
+  // popup 名稱節點：lat/lon/name 變時同步更新文字（textContent，無 XSS 風險）
+  const nameElRef = useRef<HTMLDivElement | null>(null);
 
   // ── 初始化地圖（只執行一次）────────────────────────────────────────────────
   useEffect(() => {
@@ -74,6 +76,7 @@ export default function MerchantMiniMap({ lat, lon, name }: MerchantMiniMapProps
       nameEl.style.cssText = "font-weight:600;font-size:13px;color:#333";
       nameEl.textContent = name; // textContent 不會解析 HTML，安全
       popupContainer.appendChild(nameEl);
+      nameElRef.current = nameEl;
 
       const labelEl = document.createElement("div");
       labelEl.style.cssText = "font-size:11px;color:#888;margin-top:2px";
@@ -106,14 +109,15 @@ export default function MerchantMiniMap({ lat, lon, name }: MerchantMiniMapProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 當 lat/lon/name 改變時更新標記位置（不重建整個地圖）──────────────────
+  // ── 當 lat/lon/name 改變時更新標記位置與 popup 名稱（不重建整個地圖）──
   useEffect(() => {
     if (!instanceRef.current) return;
     const { map, marker } = instanceRef.current;
     const newLatLng = [lat, lon] as [number, number];
     marker.setLatLng(newLatLng);
+    if (nameElRef.current) nameElRef.current.textContent = name;
     map.setView(newLatLng, map.getZoom(), { animate: true });
-  }, [lat, lon]);
+  }, [lat, lon, name]);
 
   return (
     <div

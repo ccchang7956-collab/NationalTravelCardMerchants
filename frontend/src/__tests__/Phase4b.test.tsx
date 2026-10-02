@@ -50,9 +50,9 @@ describe("Phase4b Task5: page.tsx 型別上移 + 數字/字串防禦 + q 截斷 
     expect(s).toContain('aria-label="下一頁"');
   });
 
-  it("搜尋框保留 maxLength=100（未被移除）", () => {
+  it("搜尋框保留 maxLength=50（與服務端 slice(0,50) 對齊）", () => {
     const s = readSrc("../components/HomeSearchSection.tsx");
-    expect(s).toMatch(/maxLength=\{100\}/);
+    expect(s).toMatch(/maxLength=\{50\}/);
   });
 
   it("total/total_pages 使用 Number() + Number.isFinite 防禦（後端回字串/異常不污染分頁）", () => {

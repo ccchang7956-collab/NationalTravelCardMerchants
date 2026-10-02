@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Form from "next/form";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import FilterSheet, { FilterState } from "@/components/FilterSheet";
+import { geoErrorMessage } from "@/utils/geolocation";
 
 interface HomeSearchSectionProps {
   initialQ: string;
@@ -56,7 +57,7 @@ export default function HomeSearchSection({
         setLocationLoading(false);
       },
       (err) => {
-        setLocationError("定位失敗：" + err.message);
+        setLocationError(geoErrorMessage(err));
         setLocationLoading(false);
       },
       { enableHighAccuracy: false, timeout: 8000 }

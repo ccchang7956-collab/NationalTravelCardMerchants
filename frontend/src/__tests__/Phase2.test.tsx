@@ -74,7 +74,8 @@ describe("Phase2 Task4: getBackendUrl 去尾 slash", () => {
 });
 
 describe("Phase2 Task4: HomeSearchSection key + maxLength", () => {
-  it("input 有 maxLength=100", () => {
+  // maxLength=50：與 page.tsx 服務端 slice(0, 50) 對齊，使用者看到的 q 即實際查詢
+  it("input 有 maxLength=50", () => {
     const { container } = render(
       <HomeSearchSection
         initialQ="test"
@@ -86,7 +87,7 @@ describe("Phase2 Task4: HomeSearchSection key + maxLength", () => {
       'input[name="q"]'
     ) as HTMLInputElement | null;
     expect(input).not.toBeNull();
-    expect(input?.getAttribute("maxlength")).toBe("100");
+    expect(input?.getAttribute("maxlength")).toBe("50");
   });
 
   it("initialQ 改變時 input 值跟著更新（key={initialQ} 受控更新）", () => {
@@ -117,7 +118,7 @@ describe("Phase2 Task4: HomeSearchSection key + maxLength", () => {
       "utf8"
     );
     expect(src).toMatch(/key=\{initialQ\}/);
-    expect(src).toMatch(/maxLength=\{100\}/);
+    expect(src).toMatch(/maxLength=\{50\}/);
     // q 來自 ref 而非每次讀 URL 的舊 q
     expect(src).not.toMatch(/window\.location\.search/);
     expect(src).toMatch(/useRef/);

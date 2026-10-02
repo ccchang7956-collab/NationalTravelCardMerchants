@@ -129,7 +129,10 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
     [fetchNearbyMerchants]
   );
 
-  // 當開啟抽屜時自動取得定位與監聽 Esc 鍵
+  // 當開啟抽屜時自動取得定位與監聽 Esc 鍵。
+  // 依賴只留 isOpen：半徑切換走 handleRadiusChange 顯式抓取，coords 寫入不重打
+  //（舊版依賴 coords/radius，切半徑與定位回來都會再打一次）。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -154,7 +157,8 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, coords, radius, requestLocationAndFetch, fetchNearbyMerchants, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // 切換半徑
   const handleRadiusChange = (newRadius: number) => {
@@ -197,7 +201,12 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
       <div className="flex-1" onClick={onClose} aria-hidden="true" />
 
       {/* Sheet 底盤 Modal */}
-      <div className="bg-card border-t border-border shadow-2xl rounded-t-3xl max-h-[85vh] flex flex-col w-full max-w-2xl mx-auto overflow-hidden animate-in slide-in-from-bottom duration-300">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="radar-sheet-title"
+        className="bg-card border-t border-border shadow-2xl rounded-t-3xl max-h-[85vh] flex flex-col w-full max-w-2xl mx-auto overflow-hidden animate-in slide-in-from-bottom duration-300"
+      >
         {/* Handle Bar 頂部拉桿 */}
         <div className="w-full flex justify-center py-2.5 cursor-grab active:cursor-grabbing" onClick={onClose}>
           <div className="w-12 h-1.5 bg-muted/40 rounded-full" />
@@ -210,7 +219,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
               <SparklesIcon className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <h2 id="radar-sheet-title" className="text-lg font-bold text-foreground flex items-center gap-2">
                 📡 行動周邊雷達
               </h2>
               <p className="text-xs text-muted">即時探索附近的國民旅遊卡特約店家</p>

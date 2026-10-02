@@ -20,6 +20,29 @@ export const DEFAULT_FILTER_STATE: FilterState = {
 const RADIUS_STEPS = [0.5, 1, 2, 5, 10, 20];
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
+// /api/industries 全站共用、幾乎不變：模組級 promise 快取，首頁＋地圖頁只打一次
+export interface IndustryOption {
+  industry_code: string;
+  industry_name: string;
+}
+let industriesCache: Promise<IndustryOption[]> | null = null;
+function fetchIndustriesCached(): Promise<IndustryOption[]> {
+  if (!industriesCache) {
+    industriesCache = fetch(`${API_URL}/api/industries`).then((res) => {
+      if (!res.ok) throw new Error(`industries API failed: ${res.status}`);
+      return res.json();
+    }).then((data) => {
+      if (!Array.isArray(data)) throw new Error("industries API returned non-array");
+      return data as IndustryOption[];
+    }).catch((err) => {
+      // 失敗清掉快取，下次開 sheet 重試
+      industriesCache = null;
+      throw err;
+    });
+  }
+  return industriesCache;
+}
+
 interface FilterSheetProps {
   filters: FilterState;
   cities: string[];
@@ -64,10 +87,9 @@ export default function FilterSheet({
     Promise.resolve().then(() => {
       if (!isMounted) return;
       setIndustriesLoading(true);
-      fetch(`${API_URL}/api/industries`)
-        .then((res) => res.json())
+      fetchIndustriesCached()
         .then((data) => {
-          if (isMounted && Array.isArray(data)) {
+          if (isMounted) {
             setIndustries(data);
           }
         })
