@@ -177,18 +177,28 @@ def get_nearby_merchants(
         min_lon = lon - lon_delta
         max_lon = lon + lon_delta
 
-    query = f"""
-        SELECT m.*, 
-               ((m.lat - ?) * (m.lat - ?) + (m.lon - ?) * (m.lon - ?) * {cos_lat_sq}) AS _proxy_dist 
+    query = """
+        SELECT m.*,
+               ((m.lat - ?) * (m.lat - ?) + (m.lon - ?) * (m.lon - ?) * ?) AS _proxy_dist
         FROM merchants m
     """
     joins = []
     where_clauses = [
         "m.lat IS NOT NULL",
         "m.lat BETWEEN ? AND ?",
-        "m.lon BETWEEN ? AND ?"
     ]
-    params = [lat, lat, lon, lon, min_lat, max_lat, min_lon, max_lon]
+    params = [lat, lat, lon, lon, cos_lat_sq, min_lat, max_lat]
+    # 換日線包裹：min/max 超出 ±180 時 BETWEEN 會漏掉另一側，拆成 OR
+    #（台灣本島碰不到，純正確性；極地 abs_cos≈0 已在上方收斂為全經度）
+    if min_lon < -180.0:
+        where_clauses.append("((m.lon >= ? AND m.lon <= 180.0) OR (m.lon >= -180.0 AND m.lon <= ?))")
+        params.extend([min_lon + 360.0, max_lon])
+    elif max_lon > 180.0:
+        where_clauses.append("((m.lon >= ? AND m.lon <= 180.0) OR (m.lon >= -180.0 AND m.lon <= ?))")
+        params.extend([min_lon, max_lon - 360.0])
+    else:
+        where_clauses.append("m.lon BETWEEN ? AND ?")
+        params.extend([min_lon, max_lon])
 
     if q is not None and q.strip() != "":
         fts_query = parse_search_query(q)
@@ -215,7 +225,8 @@ def get_nearby_merchants(
     if where_clauses:
         query += " WHERE " + " AND ".join(where_clauses)
 
-    candidate_limit = max(limit * 3, 300)
+    # 候選放大：proxy 排序截尾會丟掉半徑內較遠者（市區高密度），候選取足再精算
+    candidate_limit = max(limit * 5, 1000)
     query += " ORDER BY _proxy_dist ASC LIMIT ?"
     params.append(candidate_limit)
 

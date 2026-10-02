@@ -665,6 +665,10 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
         conn.commit()
 
         count = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
+        ignored = len(insert_data) - count
+        if ignored > 0:
+            # 同稅號多分店只留第一家（UNIQUE＋OR IGNORE）：有數就告警，不再無聲丟
+            log.warning(f"⚠️ {ignored} 筆因 tax_id 重複被忽略（一稅號只留第一家）")
         doc.close()
         log.info(f"✅ 解析完成，寫入 {count} 筆")
         return count
