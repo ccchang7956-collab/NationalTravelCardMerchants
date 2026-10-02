@@ -287,20 +287,23 @@ def get_merchant(merchant_id_or_tax_id: str, db: sqlite3.Connection = Depends(ge
     return merchant
 
 
-def _read_stats_last_updated() -> Optional[str]:
-    """讀 update_meta.json 取 last_updated，失敗回 None（與 /api/data-info 同來源）。"""
+def _read_stats_meta() -> dict:
+    """讀 update_meta.json（與 /api/data-info 同來源），失敗回 {}。"""
     try:
         meta_path = os.path.join(os.path.dirname(DB_PATH), "update_meta.json")
         if not os.path.exists(meta_path):
-            return None
+            return {}
         with open(meta_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        if not isinstance(data, dict):
-            return None
-        val = data.get("last_updated")
-        return val if isinstance(val, str) and val else None
+            return data if isinstance(data, dict) else {}
     except Exception:
-        return None
+        return {}
+
+
+def _read_stats_last_updated() -> Optional[str]:
+    """讀 update_meta.json 取 last_updated，失敗回 None（與 /api/data-info 同來源）。"""
+    val = _read_stats_meta().get("last_updated")
+    return val if isinstance(val, str) and val else None
 
 
 @router.get("/stats", response_model=Stats)
@@ -340,11 +343,14 @@ def get_stats(db: sqlite3.Connection = Depends(get_db)):
         valid_cities.append({"city": "其他", "count": other})
     valid_cities.sort(key=lambda x: x["count"], reverse=True)
 
+    meta = _read_stats_meta()
     return {
         "total_merchants": total,
         "has_website": has_website,
         "cities": valid_cities,
-        "last_updated": _read_stats_last_updated()
+        "last_updated": _read_stats_last_updated(),
+        "last_checked": meta.get("last_checked"),
+        "last_check_result": meta.get("last_check_result"),
     }
 
 

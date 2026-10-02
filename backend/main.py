@@ -71,14 +71,20 @@ def _read_update_meta() -> dict:
 
 @app.get("/api/health")
 def health():
-    """健康檢查 + 資料新鮮度：last_updated 超過 STALE_AFTER_HOURS 視為 stale 告警。"""
+    """健康檢查 + 管線存活：最後「檢查」時間超過 STALE_AFTER_HOURS 視為 stale。
+
+    無變更也會每天留下 last_checked，因此看檢查時間而非資料時間；
+    舊版 meta 沒有該欄位才退回看 last_updated（行為與過去一致）。
+    """
     meta = _read_update_meta()
     last_updated = meta.get("last_updated")
+    last_checked = meta.get("last_checked")
+    anchor = last_checked if isinstance(last_checked, str) and last_checked else last_updated
     age_hours = None
     stale = True
-    if isinstance(last_updated, str) and last_updated:
+    if isinstance(anchor, str) and anchor:
         try:
-            ts = datetime.fromisoformat(last_updated)
+            ts = datetime.fromisoformat(anchor)
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=_TAIPEI_TZ)
             age_hours = (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds() / 3600
@@ -90,6 +96,8 @@ def health():
         "status": "stale" if stale else "ok",
         "database_ready": os.path.exists(DB_PATH),
         "last_updated": last_updated,
+        "last_checked": last_checked,
+        "last_check_result": meta.get("last_check_result"),
         "age_hours": age_hours,
         "stale": stale,
         "stale_after_hours": STALE_AFTER_HOURS,
@@ -125,6 +133,8 @@ def data_info():
         "database_ready": os.path.exists(DB_PATH),
         "total_merchants": meta.get("total_merchants", total_merchants),
         "last_updated": meta.get("last_updated"),
+        "last_checked": meta.get("last_checked"),
+        "last_check_result": meta.get("last_check_result"),
         "pdf_hash": meta.get("pdf_hash"),
         "new_merchants": meta.get("new_merchants"),
         "removed_merchants": meta.get("removed_merchants"),

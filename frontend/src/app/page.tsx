@@ -7,6 +7,7 @@ import HomeSearchSection from "@/components/HomeSearchSection";
 import type { FilterState } from "@/components/FilterSheet";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
+import { freshnessNote } from "@/utils/dataFreshness";
 
 const TAIWAN_CITIES = [
   "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
@@ -120,7 +121,7 @@ export default async function Home({
         signal: AbortSignal.timeout(10000),
       }),
       fetch(`${API_URL}/api/stats`, {
-        next: { revalidate: 3600 },
+        next: { revalidate: 300 },
         signal: AbortSignal.timeout(10000),
       }),
     ]);
@@ -178,6 +179,8 @@ export default async function Home({
       : null;
   const lastUpdatedDate = last_updated ? last_updated.slice(0, 10) : null;
   const statsTotal = Number(stats?.total_merchants ?? 0);
+  // 排程每天檢查：有當日記錄就加註，免得「無新資料」被當成排程壞掉
+  const freshNote = freshnessNote(stats?.last_checked, stats?.last_check_result);
   // 後端 /stats cities 已依筆數降序，取前三名動態呈現（無寫死數字）
   const topCities: CityStat[] = Array.isArray(stats?.cities)
     ? stats.cities.slice(0, 3)
@@ -198,7 +201,7 @@ export default async function Home({
               <>
                 {" "}·{" "}
                 <time dateTime={last_updated ?? undefined}>
-                  資料更新：{lastUpdatedDate}
+                  資料更新：{lastUpdatedDate}{freshNote}
                 </time>
               </>
             )}
@@ -460,7 +463,7 @@ export default async function Home({
                 <>
                  ；
                   <time dateTime={last_updated ?? undefined}>
-                    資料更新：{lastUpdatedDate}
+                    資料更新：{lastUpdatedDate}{freshNote}
                   </time>
                 </>
               )}

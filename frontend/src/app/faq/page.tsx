@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
+import { freshnessNote } from "@/utils/dataFreshness";
 
 export async function generateMetadata(): Promise<Metadata> {
   const SITE_URL = getSiteUrl();
@@ -37,10 +38,12 @@ export default async function FaqPage() {
     has_website?: number;
     cities?: CityStat[];
     last_updated?: string;
+    last_checked?: string;
+    last_check_result?: string;
   } | null = null;
   try {
     const res = await fetch(`${API_URL}/api/stats`, {
-      next: { revalidate: 3600 },
+      next: { revalidate: 300 },
     });
     if (res.ok) stats = await res.json();
   } catch {
@@ -52,6 +55,7 @@ export default async function FaqPage() {
       ? stats.last_updated
       : null;
   const lastUpdatedDate = last_updated ? last_updated.slice(0, 10) : null;
+  const freshNote = freshnessNote(stats?.last_checked, stats?.last_check_result);
   const statsTotal = Number(stats?.total_merchants ?? 0);
   const hasWebsiteCount = Number(stats?.has_website ?? 0);
   const topCities: CityStat[] = Array.isArray(stats?.cities)
@@ -139,7 +143,7 @@ export default async function FaqPage() {
             <>
               {" "}
               <time dateTime={last_updated ?? undefined}>
-                （資料更新：{lastUpdatedDate}）
+                （資料更新：{lastUpdatedDate}{freshNote}）
               </time>
             </>
           )}

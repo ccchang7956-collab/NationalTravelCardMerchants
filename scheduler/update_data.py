@@ -321,6 +321,35 @@ def sha256_file(path: str) -> str:
             h.update(chunk)
     return h.hexdigest()
 
+def record_check(result: str, note: str = "") -> None:
+    """記錄一次排程檢查（成功/跳過/失敗都會留痕）。
+
+    背景：過去只有資料異動才寫 update_meta.json，「今日已檢查但無新資料」與
+    「排程根本沒跑」長得一模一樣（last_updated 都停住）。從此每次執行都更新
+    last_checked＋last_check_result，health/前端據此判斷管線是否存活。
+    result: updated | skipped_no_change | failed
+    """
+    meta: dict = {}
+    try:
+        if os.path.exists(META_FILE):
+            with open(META_FILE, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    meta = loaded
+    except Exception:
+        meta = {}
+    meta["last_checked"] = datetime.now(TZ_TAIPEI).isoformat()
+    meta["last_check_result"] = result
+    if note:
+        meta["last_check_note"] = note
+    elif "last_check_note" in meta and result != "failed":
+        meta.pop("last_check_note", None)
+    try:
+        atomic_write_text(META_FILE, json.dumps(meta, ensure_ascii=False, indent=2))
+    except Exception as e:
+        log.warning(f"⚠️ 寫入檢查記錄失敗: {e}")
+
+
 def atomic_write_text(path: str, data: str) -> None:
     """原子寫入文字檔：mkstemp + fsync + os.replace，避免 meta/hash 半寫入。"""
     import tempfile
@@ -1095,12 +1124,14 @@ def main():
         # 1. 下載
         if not download_zip(zip_path):
             log.error("❌ 更新中止（下載失敗）")
+            record_check("failed", "download")
             notify("❌ 國旅卡更新中止（下載失敗）")
             sys.exit(1)
 
         # 2. 解壓
         if not extract_pdf(zip_path, pdf_path):
             log.error("❌ 更新中止（解壓失敗）")
+            record_check("failed", "extract")
             notify("❌ 國旅卡更新中止（解壓失敗）")
             sys.exit(1)
 
@@ -1114,6 +1145,7 @@ def main():
 
         if new_hash == old_hash:
             log.info("✅ PDF 無變更，無需更新，結束")
+            record_check("skipped_no_change")
             return
 
         log.info("🆕 偵測到新版 PDF，開始更新...")
@@ -1140,10 +1172,12 @@ def main():
         new_count = parse_pdf_to_db(pdf_path, new_db)
         if new_count < 0:
             log.error("❌ 更新中止（PDF 解析失敗）")
+            record_check("failed", "parse")
             notify("❌ 國旅卡更新中止（PDF 解析失敗）")
             sys.exit(1)
         if not validate_records(new_count):
             log.error("❌ 更新中止（解析筆數過少）")
+            record_check("failed", f"too_few:{new_count}")
             notify(f"❌ 國旅卡更新中止（解析筆數過少：{new_count}）")
             sys.exit(1)
 
@@ -1179,6 +1213,7 @@ def main():
             removed_favorites = transactional_sync_db(new_db, DB_PATH)
         except Exception as e:
             log.error(f"❌ 更新中止（同步失敗）：{e}")
+            record_check("failed", "sync")
             notify(f"❌ 國旅卡更新中止（同步失敗）：{e}")
             sys.exit(1)
         log.info(f"✅ DB 已更新：{DB_PATH}")
@@ -1208,6 +1243,8 @@ def main():
         "removed_merchants": removed_count,
         "removed_favorites": removed_favorites,
         "duration_seconds": round((end_time - start_time).total_seconds(), 1),
+        "last_checked": end_time.isoformat(),
+        "last_check_result": "updated",
     }
     atomic_write_text(META_FILE, json.dumps(meta, ensure_ascii=False, indent=2))
 

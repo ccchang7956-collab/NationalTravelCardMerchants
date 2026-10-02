@@ -43,6 +43,8 @@ class Stats(BaseModel):
     has_website: int
     cities: List[CityStat]
     last_updated: Optional[str] = None
+    last_checked: Optional[str] = None
+    last_check_result: Optional[str] = None
 
 class UserCreate(BaseModel):
     email: EmailStr

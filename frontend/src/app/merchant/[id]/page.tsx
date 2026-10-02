@@ -7,6 +7,7 @@ import MerchantMapSection from "@/components/MerchantMapSection";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
 import { sanitizeUrl } from "@/utils/sanitize";
+import { freshnessNote } from "@/utils/dataFreshness";
 
 const TAIWAN_CITIES = [
   "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
@@ -28,7 +29,7 @@ const getMerchant = cache(async (id: string) => {
 async function getStats() {
   const API_URL = getBackendUrl();
   try {
-    const res = await fetch(`${API_URL}/api/stats`, { next: { revalidate: 3600 } });
+    const res = await fetch(`${API_URL}/api/stats`, { next: { revalidate: 300 } });
     if (!res.ok) return null;
     return res.json();
   } catch {
@@ -99,6 +100,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
       ? statsData.last_updated
       : null;
   const lastUpdatedDate = last_updated ? last_updated.slice(0, 10) : null;
+  const freshNote = freshnessNote(statsData?.last_checked, statsData?.last_check_result);
 
   // 行業別依 priority 排序（後端已排序，前端再保險排序一次）
   interface MerchantIndustry {
@@ -223,7 +225,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
             </h1>
             {lastUpdatedDate && (
               <p className="mt-2 text-xs text-muted">
-                <time dateTime={last_updated ?? undefined}>資料更新：{lastUpdatedDate}</time>
+                <time dateTime={last_updated ?? undefined}>資料更新：{lastUpdatedDate}{freshNote}</time>
               </p>
             )}
           </div>
