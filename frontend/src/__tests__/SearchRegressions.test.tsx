@@ -4,8 +4,21 @@ import FilterSheet, { DEFAULT_FILTER_STATE } from "@/components/FilterSheet";
 import { clampRadiusKm, mapSearchParams, mapSearchKey } from "@/utils/mapSearchParams";
 import { loadHomeData } from "@/utils/homeData";
 
-test("official industry groups and details are selectable without filtering merchants yet", () => {
-  global.fetch = jest.fn();
+beforeEach(() => {
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [] });
+});
+
+test("official industry groups and details are applied to merchant filters", async () => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => [{
+      industry_code: "790011",
+      industry_name: "旅行業",
+      industry_group_code: "79",
+      industry_group_name: "旅行及其他相關服務業",
+      industry_group_order: 65,
+    }],
+  });
   const submit = jest.fn(event => event.preventDefault());
   const change = jest.fn();
   render(<form onSubmit={submit}>
@@ -14,20 +27,19 @@ test("official industry groups and details are selectable without filtering merc
     <button type="submit">搜尋表單</button>
   </form>);
   fireEvent.click(screen.getByRole("button", { name: "篩選" }));
+  await screen.findByRole("option", { name: "旅行及其他相關服務業" });
   const group = screen.getByLabelText("行業別");
   const detail = screen.getByLabelText("行業細項分類");
-  expect(screen.getByRole("option", { name: "旅行業" })).toBeInTheDocument();
   expect(detail).toBeDisabled();
-  fireEvent.change(group, { target: { value: "0017" } });
+  fireEvent.change(group, { target: { value: "79" } });
   expect(detail).toBeEnabled();
-  expect(screen.getByRole("option", { name: "旅行社-觀光旅遊" })).toBeInTheDocument();
-  fireEvent.change(detail, { target: { value: "7901" } });
-  expect(screen.getByRole("status")).toHaveTextContent("暫不影響搜尋結果");
+  expect(screen.getByRole("option", { name: "旅行業" })).toBeInTheDocument();
+  fireEvent.change(detail, { target: { value: "790011" } });
   fireEvent.click(screen.getByRole("button", { name: "有" }));
   fireEvent.click(screen.getByRole("button", { name: "20 km" }));
   fireEvent.click(screen.getByRole("button", { name: /套用篩選/ }));
-  expect(change).toHaveBeenCalledWith(expect.objectContaining({ hasWebsite: true, radiusKm: 20, industryCode: "" }));
-  expect(fetch).not.toHaveBeenCalled();
+  expect(change).toHaveBeenCalledWith(expect.objectContaining({ hasWebsite: true, radiusKm: 20, industryCode: "790011" }));
+  expect(fetch).toHaveBeenCalledTimes(1);
   expect(submit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "搜尋表單" }));
   expect(submit).toHaveBeenCalledTimes(1);

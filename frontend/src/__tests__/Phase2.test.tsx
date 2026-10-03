@@ -5,7 +5,7 @@
 import fs from "fs";
 import path from "path";
 import React from "react";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { getBackendUrl, getPublicApiUrl } from "@/utils/env";
 import HomeSearchSection from "@/components/HomeSearchSection";
 import type { FilterState } from "@/components/FilterSheet";
@@ -75,7 +75,7 @@ describe("Phase2 Task4: getBackendUrl 去尾 slash", () => {
 
 describe("Phase2 Task4: HomeSearchSection key + maxLength", () => {
   // maxLength=50：與 page.tsx 服務端 slice(0, 50) 對齊，使用者看到的 q 即實際查詢
-  it("input 有 maxLength=50", () => {
+  it("input 有 maxLength=50", async () => {
     const { container } = render(
       <HomeSearchSection
         initialQ="test"
@@ -88,9 +88,10 @@ describe("Phase2 Task4: HomeSearchSection key + maxLength", () => {
     ) as HTMLInputElement | null;
     expect(input).not.toBeNull();
     expect(input?.getAttribute("maxlength")).toBe("50");
+    await screen.findByText("行業資料尚未同步，分類更新後即可使用。");
   });
 
-  it("initialQ 改變時 input 值跟著更新（key={initialQ} 受控更新）", () => {
+  it("initialQ 改變時 input 值跟著更新（key={initialQ} 受控更新）", async () => {
     const { container, rerender } = render(
       <HomeSearchSection
         initialQ="first"
@@ -101,6 +102,7 @@ describe("Phase2 Task4: HomeSearchSection key + maxLength", () => {
     const getVal = () =>
       (container.querySelector('input[name="q"]') as HTMLInputElement | null)
         ?.value;
+    await screen.findByText("行業資料尚未同步，分類更新後即可使用。");
     expect(getVal()).toBe("first");
     rerender(
       <HomeSearchSection

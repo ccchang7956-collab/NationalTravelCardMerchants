@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import tempfile
+import zipfile
 import pytest
 from unittest.mock import patch
 
@@ -78,7 +79,7 @@ def test_import_industry_encoding_and_idempotency():
         """)
         conn.execute("INSERT INTO merchants (name, tax_id) VALUES (?, ?)", ("商店A", "11111111"))
         conn.execute("INSERT INTO merchants (name, tax_id) VALUES (?, ?)", ("商店C", "33333333"))
-        # 先插入舊行業資料，確認匯入時只有 CSV 內商店的行業會被清空，其他商店則保留
+        # 舊資料應由完整的官方每日快照取代，即使本地商家未出現在快照中也需清除舊分類。
         conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",
                      ("11111111", "999999", "舊行業A", 1))
         conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)",
@@ -97,16 +98,56 @@ def test_import_industry_encoding_and_idempotency():
         from scripts.import_industry import import_csv_to_db
         import_csv_to_db(csv_path, db_path)
         
-        # 驗證資料庫結果：舊行業應該被刪除，取而代之的是新的兩個行業，而商店C的資料應被保留
+        # 驗證資料庫結果：舊分類及不在新快照中的商店C分類都應被清除。
         res = conn.execute("SELECT tax_id, industry_code, industry_name, priority FROM merchant_industries ORDER BY tax_id, priority").fetchall()
         conn.close()
         
-        assert len(res) == 3
+        assert len(res) == 2
         # 商店A (11111111) 新的兩個行業
         assert res[0] == ("11111111", "561115", "餐館業", 1)
         assert res[1] == ("11111111", "561116", "飲料店業", 2)
-        # 商店C (33333333) 保留的舊行業
-        assert res[2] == ("33333333", "888888", "舊行業C", 1)
+
+
+def test_import_official_zip_and_reject_invalid_snapshot():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test_zip.db")
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE merchants (id INTEGER PRIMARY KEY, name TEXT, tax_id TEXT UNIQUE)")
+        conn.execute("""
+            CREATE TABLE merchant_industries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_id TEXT NOT NULL,
+                industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("INSERT INTO merchants VALUES (1, '商店A', '11111111')")
+        conn.commit()
+        conn.close()
+
+        csv_content = (
+            "統一編號,行業代號,名稱,行業代號1,名稱1,行業代號2,名稱2,行業代號3,名稱3\n"
+            "11111111,551011,旅館業,,,,,,\n"
+        )
+        zip_path = os.path.join(tmpdir, "official.zip")
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("BGMOPEN1.csv", csv_content.encode("utf-8-sig"))
+
+        from scripts.import_industry import import_csv_to_db
+        assert import_csv_to_db(zip_path, db_path) == 1
+
+        invalid_path = os.path.join(tmpdir, "invalid.csv")
+        with open(invalid_path, "w", encoding="utf-8") as source:
+            source.write("not,the,official,format\n11111111,anything,else\n")
+        with pytest.raises(ValueError):
+            import_csv_to_db(invalid_path, db_path)
+
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute("SELECT tax_id, industry_code FROM merchant_industries").fetchall()
+        conn.close()
+        assert rows == [("11111111", "551011")]
 
 
 def test_foreign_key_cascade_delete():

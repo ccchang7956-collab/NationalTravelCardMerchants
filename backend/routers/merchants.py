@@ -9,6 +9,7 @@ from backend.database import get_db, DB_PATH
 from backend.models import MerchantListItem, MerchantDetail, PaginatedMerchants, Stats, CityStat, IndustryInfo
 
 from backend.services.search_service import space_segment, parse_search_query
+from shared.tax_industry import industry_group_for, industry_group_prefixes
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +36,24 @@ def append_city_website_filters(clauses, params, city, has_website):
         clauses.append("m.website IS NOT NULL AND m.website != ''")
     elif has_website is False:
         clauses.append("(m.website IS NULL OR m.website = '')")
+
+
+def append_industry_filter(clauses, params, industry_code):
+    if not industry_code:
+        return
+    prefixes = industry_group_prefixes(industry_code) or (industry_code,)
+    patterns = []
+    for prefix in prefixes:
+        safe_prefix = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        patterns.append("mi.industry_code LIKE ? ESCAPE '\\'")
+        params.append(f"{safe_prefix}%")
+    clauses.append(f"""
+        EXISTS (
+            SELECT 1 FROM merchant_industries mi
+            WHERE mi.tax_id = m.tax_id
+              AND ({" OR ".join(patterns)})
+        )
+    """)
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance in km between two lat/lon points."""
@@ -95,17 +114,7 @@ def get_merchants(
         where_clauses.append("m.zip_code = ?")
         params.append(zip_code)
 
-    if industry_code:
-        safe_ind = industry_code.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        where_clauses.append("""
-            EXISTS (
-                SELECT 1 FROM merchant_industries mi 
-                WHERE mi.tax_id = m.tax_id 
-                  AND mi.industry_code LIKE ? ESCAPE '\\'
-                  AND mi.priority = 1
-            )
-        """)
-        params.append(f"{safe_ind}%")
+    append_industry_filter(where_clauses, params, industry_code)
 
     # 拼接 JOIN
     if joins:
@@ -219,17 +228,7 @@ def get_nearby_merchants(
 
     append_city_website_filters(where_clauses, params, city, has_website)
 
-    if industry_code:
-        safe_ind = industry_code.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        where_clauses.append("""
-            EXISTS (
-                SELECT 1 FROM merchant_industries mi 
-                WHERE mi.tax_id = m.tax_id 
-                  AND mi.industry_code LIKE ? ESCAPE '\\'
-                  AND mi.priority = 1
-            )
-        """)
-        params.append(f"{safe_ind}%")
+    append_industry_filter(where_clauses, params, industry_code)
 
     if joins:
         query += " " + " ".join(joins)
@@ -370,11 +369,22 @@ def get_stats(db: sqlite3.Connection = Depends(get_db)):
 def get_industries(db: sqlite3.Connection = Depends(get_db)):
     cursor = db.cursor()
     cursor.execute("""
-        SELECT DISTINCT mi.industry_code, mi.industry_name 
+        SELECT DISTINCT mi.industry_code, mi.industry_name
         FROM merchant_industries mi
         JOIN merchants m ON mi.tax_id = m.tax_id
         WHERE mi.industry_code != '' AND mi.industry_name != ''
-          AND mi.priority = 1
         ORDER BY mi.industry_code ASC
     """)
-    return [{"industry_code": row["industry_code"], "industry_name": row["industry_name"]} for row in cursor.fetchall()]
+    industries = []
+    for row in cursor.fetchall():
+        code = row["industry_code"]
+        group_code, group_name, order = industry_group_for(code)
+        industries.append({
+            "industry_code": code,
+            "industry_name": row["industry_name"],
+            "industry_group_code": group_code,
+            "industry_group_name": group_name,
+            "industry_group_order": order,
+        })
+    industries.sort(key=lambda item: (item["industry_group_order"], item["industry_code"]))
+    return industries

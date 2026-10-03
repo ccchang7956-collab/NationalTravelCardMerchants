@@ -21,12 +21,13 @@ describe("Phase5 Task1: 索引正確性", () => {
     expect(s).not.toContain('"/?q="');
   });
 
-  it("page.tsx 暫不把沒有資料對照的 industry_code 當篩選條件", () => {
+  it("page.tsx 將行業篩選結果設為 noindex，並保留分類於 canonical", () => {
     const s = readSrc("../app/page.tsx");
     const metaIdx = s.indexOf("generateMetadata");
     expect(metaIdx).toBeGreaterThan(-1);
     const metaBlock = s.slice(metaIdx, s.indexOf("export default async function Home"));
-    expect(metaBlock).not.toMatch(/hasFilters[\s\S]*?industry_code/);
+    expect(metaBlock).toMatch(/hasFilters[\s\S]*?industryCode/);
+    expect(metaBlock).toContain('canonicalParams.set("industry_code", industryCode)');
     expect(s).toContain("follow: true");
     expect(s).not.toContain("follow: false");
   });

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { AdjustmentsHorizontalIcon, XMarkIcon, MapPinIcon } from "@heroicons/react/24/outline";
-import { INDUSTRY_GROUPS } from "@/utils/industryTaxonomy";
+import { getPublicApiUrl } from "@/utils/env";
+import { groupIndustryOptions, IndustryGroup, IndustryOption } from "@/utils/industryTaxonomy";
 
 export interface FilterState {
   city: string;
@@ -20,10 +21,7 @@ export const DEFAULT_FILTER_STATE: FilterState = {
 
 const RADIUS_STEPS = [0.5, 1, 2, 5, 10, 20];
 
-interface IndustrySelection {
-  groupCode: string;
-  detailCode: string;
-}
+type IndustryLoadState = "loading" | "ready" | "error";
 
 interface FilterSheetProps {
   filters: FilterState;
@@ -41,18 +39,41 @@ function countActiveFilters(filters: FilterState): number {
   if (filters.city) count++;
   if (filters.hasWebsite !== null) count++;
   if (filters.radiusKm !== null) count++;
+  if (filters.industryCode) count++;
   return count;
 }
 
 export default function FilterSheet(props: FilterSheetProps) {
   const key = JSON.stringify([props.filters.city, props.filters.hasWebsite, props.filters.radiusKm, props.filters.industryCode || ""]);
-  const [industrySelection, setIndustrySelection] = useState<IndustrySelection>({ groupCode: "", detailCode: "" });
+  const [industryGroups, setIndustryGroups] = useState<IndustryGroup[]>([]);
+  const [industryLoadState, setIndustryLoadState] = useState<IndustryLoadState>("loading");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${getPublicApiUrl()}/api/industries`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`行業分類 API 回傳 ${response.status}`);
+        return response.json() as Promise<IndustryOption[]>;
+      })
+      .then((options) => {
+        if (!Array.isArray(options)) throw new Error("行業分類格式錯誤");
+        setIndustryGroups(groupIndustryOptions(options));
+        setIndustryLoadState("ready");
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === "AbortError") return;
+        setIndustryGroups([]);
+        setIndustryLoadState("error");
+      });
+    return () => controller.abort();
+  }, []);
+
   return (
     <FilterSheetPanel
       key={key}
       {...props}
-      industrySelection={industrySelection}
-      onIndustrySelectionChange={setIndustrySelection}
+      industryGroups={industryGroups}
+      industryLoadState={industryLoadState}
     />
   );
 }
@@ -66,17 +87,20 @@ function FilterSheetPanel({
   locationLoading,
   locationError,
   mode = "list",
-  industrySelection,
-  onIndustrySelectionChange,
+  industryGroups,
+  industryLoadState,
 }: FilterSheetProps & {
-  industrySelection: IndustrySelection;
-  onIndustrySelectionChange: (selection: IndustrySelection) => void;
+  industryGroups: IndustryGroup[];
+  industryLoadState: IndustryLoadState;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const selectedIndustryGroup = INDUSTRY_GROUPS.find((group) => group.code === industrySelection.groupCode);
 
   // Local draft state — only committed on "套用"
   const [draft, setDraft] = useState<FilterState>(filters);
+  const selectedIndustryGroup = industryGroups.find(
+    (group) => group.code === draft.industryCode || group.details.some((detail) => detail.industry_code === draft.industryCode),
+  );
+  const selectedIndustryDetail = selectedIndustryGroup?.details.find((detail) => detail.industry_code === draft.industryCode);
   // Touch state for swipe-to-close
   const touchStartY = useRef<number | null>(null);
 
@@ -105,15 +129,13 @@ function FilterSheetPanel({
   }, [filters, setDraft]);
 
   const handleApply = useCallback(() => {
-    // Keep industry choices visible, but do not send them as active filters until merchant mappings exist.
-    onChange({ ...draft, industryCode: "" });
+    onChange(draft);
     setIsOpen(false);
   }, [draft, onChange]);
 
   const handleClear = useCallback(() => {
     setDraft({ ...DEFAULT_FILTER_STATE, radiusKm: mode === "map" ? 2 : null });
-    onIndustrySelectionChange({ groupCode: "", detailCode: "" });
-  }, [mode, onIndustrySelectionChange, setDraft]);
+  }, [mode, setDraft]);
 
   const handleOverlayClick = handleClose;
 
@@ -187,7 +209,7 @@ function FilterSheetPanel({
             篩選條件
           </h2>
           <div className="flex items-center gap-3">
-            {(countActiveFilters(draft) > 0 || industrySelection.groupCode) && (
+            {countActiveFilters(draft) > 0 && (
               <button
                 type="button"
                 onClick={handleClear}
@@ -237,12 +259,12 @@ function FilterSheetPanel({
             </label>
             <select
               id="filter-industry"
-              value={industrySelection.groupCode}
-              onChange={(e) => onIndustrySelectionChange({ groupCode: e.target.value, detailCode: "" })}
+              value={selectedIndustryGroup?.code || ""}
+              onChange={(e) => setDraft({ ...draft, industryCode: e.target.value })}
               className="w-full px-3 py-2.5 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all text-sm cursor-pointer"
             >
               <option value="">所有行業</option>
-              {INDUSTRY_GROUPS.map((group) => (
+              {industryGroups.map((group) => (
                 <option key={group.code} value={group.code}>
                   {group.name}
                 </option>
@@ -254,19 +276,22 @@ function FilterSheetPanel({
             <select
               id="filter-industry-detail"
               disabled={!selectedIndustryGroup}
-              value={industrySelection.detailCode}
-              onChange={(e) => onIndustrySelectionChange({ ...industrySelection, detailCode: e.target.value })}
+              value={selectedIndustryDetail?.industry_code || ""}
+              onChange={(e) => setDraft({ ...draft, industryCode: e.target.value || selectedIndustryGroup?.code || "" })}
               className="w-full px-3 py-2.5 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all text-sm disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="">{selectedIndustryGroup ? "所有細項" : "請先選擇行業別"}</option>
               {selectedIndustryGroup?.details.map((detail) => (
-                <option key={detail.code} value={detail.code}>
-                  {detail.name}
+                <option key={detail.industry_code} value={detail.industry_code}>
+                  {detail.industry_name}
                 </option>
               ))}
             </select>
             <p role="status" className="text-xs text-muted mt-2">
-              目前僅提供分類選擇；商家行業對照資料尚未建置，因此暫不影響搜尋結果。
+              {industryLoadState === "loading" && "正在載入財政部行業分類…"}
+              {industryLoadState === "error" && "行業分類目前無法載入，請稍後再試。"}
+              {industryLoadState === "ready" && industryGroups.length === 0 && "行業資料尚未同步，分類更新後即可使用。"}
+              {industryLoadState === "ready" && industryGroups.length > 0 && "分類依財政部稅籍資料；選擇大類或細項即可篩選商家。"}
             </p>
           </div>
 

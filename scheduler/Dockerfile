@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 複製腳本（build context 為 repo root，見 docker-compose.yml）
 COPY scheduler/update_data.py .
+COPY scripts/import_industry.py ./import_industry.py
 COPY scheduler/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY backend/database.py ./vendor_backend_database.py
 COPY shared/ ./shared/

@@ -10,6 +10,7 @@ import { getSiteUrl } from "@/utils/site";
 import { freshnessNote } from "@/utils/dataFreshness";
 import { loadHomeData } from "@/utils/homeData";
 import { mapSearchParams } from "@/utils/mapSearchParams";
+import { normalizeIndustryCode } from "@/utils/industryTaxonomy";
 import { locationLabel, hasCoordinates } from "@/utils/coordinates";
 
 const TAIWAN_CITIES = [
@@ -47,6 +48,7 @@ export async function generateMetadata({
   const resolved = await searchParams;
   const q = typeof resolved.q === "string" ? resolved.q.slice(0, 50) : "";
   const city = typeof resolved.city === "string" ? resolved.city : "";
+  const industryCode = normalizeIndustryCode(resolved.industry_code);
   const parsedMetaPage = typeof resolved.page === "string" ? parseInt(resolved.page, 10) : 1;
   const page = isNaN(parsedMetaPage) || parsedMetaPage < 1 ? 1 : parsedMetaPage;
 
@@ -54,11 +56,12 @@ export async function generateMetadata({
   // canonical 只收白名單參數（junk param 不照抄，避免污染與重複內容）
   // 地理參數只影響 noindex（會 client 導向 /map），不進 canonical
   const hasGeoParams = !!(resolved.radius_km || resolved.lat || resolved.lon);
-  const hasFilters = !!(q || city || resolved.has_website || hasGeoParams || (resolved.page && resolved.page !== "1"));
+  const hasFilters = !!(q || city || resolved.has_website || industryCode || hasGeoParams || (resolved.page && resolved.page !== "1"));
   const canonicalParams = new URLSearchParams();
   if (q) canonicalParams.set("q", q);
   if (city) canonicalParams.set("city", city);
   if (typeof resolved.has_website === "string") canonicalParams.set("has_website", resolved.has_website);
+  if (industryCode) canonicalParams.set("industry_code", industryCode);
   if (page > 1) canonicalParams.set("page", String(page));
 
   return {
@@ -90,8 +93,7 @@ export default async function Home({
   const hasWebsiteParam = typeof resolvedParams.has_website === "string" ? resolvedParams.has_website : undefined;
   const hasWebsite: boolean | null =
     hasWebsiteParam === "true" ? true : hasWebsiteParam === "false" ? false : null;
-  // Merchant-to-industry mappings are not present in the current source data yet.
-  const industryCode = "";
+  const industryCode = normalizeIndustryCode(resolvedParams.industry_code);
 
   // 列表頁不做地理篩選（後端 /api/merchants 無 geo 參數）：帶定位參數的分享連結導向 /map
   const geoRadius = typeof resolvedParams.radius_km === "string" ? parseFloat(resolvedParams.radius_km) : NaN;

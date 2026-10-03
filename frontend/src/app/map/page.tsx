@@ -22,6 +22,7 @@ import { getPublicApiUrl } from "@/utils/env";
 import { geoErrorMessage } from "@/utils/geolocation";
 import { DEFAULT_CENTER, clampLat, clampLon, clampRadiusKm, mapSearchParams, mapSearchKey, parseHasWebsite } from "@/utils/mapSearchParams";
 import { distanceLabel, locationLabel, navigationUrl } from "@/utils/coordinates";
+import { normalizeIndustryCode } from "@/utils/industryTaxonomy";
 
 // Dynamically import the map to avoid SSR issues (Leaflet needs window)
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -144,8 +145,7 @@ function MapContent() {
   const targetLon = clampLon(parsedLon);
   const targetRadius = clampRadiusKm(parsedRadius);
   const targetKeyword = qParam || "";
-  // Merchant-to-industry mappings are not present in the current source data yet.
-  const targetIndCode = "";
+  const targetIndCode = normalizeIndustryCode(searchParams.get("industry_code"));
 
   const [prevParamsKey, setPrevParamsKey] = useState<string>("");
   const currentParamsKey = mapSearchKey(targetLat, targetLon, targetRadius, targetKeyword, targetIndCode, targetCity, targetHasWebsite);

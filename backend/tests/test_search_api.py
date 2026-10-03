@@ -56,6 +56,7 @@ def fixture_db_conn():
     conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("11111111", "561115", "餐館業", 1))
     conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("11111111", "561116", "飲料店業", 2))
     conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("33333333", "551011", "旅館業", 1))
+    conn.execute("INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES (?, ?, ?, ?)", ("22222222", "451010", "農產品批發市場經營業", 1))
     
     # 手動將分詞後的資料寫入 merchants_fts，對應 id 欄位
     for m_id, name, address, _, _, _, _, _ in test_merchants:
@@ -207,11 +208,12 @@ def test_get_industries_api(db_conn):
     response = client.get("/api/industries")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
-    assert data[0]["industry_code"] == "551011"
-    assert data[0]["industry_name"] == "旅館業"
-    assert data[1]["industry_code"] == "561115"
-    assert data[1]["industry_name"] == "餐館業"
+    assert len(data) == 4
+    assert [item["industry_code"] for item in data] == ["451010", "551011", "561115", "561116"]
+    accommodation = next(item for item in data if item["industry_code"] == "551011")
+    assert accommodation["industry_name"] == "旅館業"
+    assert accommodation["industry_group_code"] == "55"
+    assert accommodation["industry_group_name"] == "住宿業"
 
 
 def test_city_filter_range_and_normalization():
@@ -270,6 +272,15 @@ def test_merchants_filter_by_industry(db_conn):
     assert data["total"] == 1
     assert data["items"][0]["name"] == "台北大安咖啡店"
 
+    # 次要行業也可命中，批發大類同時涵蓋 45、46 開頭的分類
+    response = client.get("/api/merchants?industry_code=561116")
+    assert response.status_code == 200
+    assert [item["name"] for item in response.json()["items"]] == ["台北大安咖啡店"]
+
+    response = client.get("/api/merchants?industry_code=45-46")
+    assert response.status_code == 200
+    assert [item["name"] for item in response.json()["items"]] == ["高雄大安咖啡店"]
+
 
 def test_nearby_merchants_filter_by_industry(db_conn):
     client = TestClient(app)
@@ -286,7 +297,5 @@ def test_nearby_merchants_filter_by_industry(db_conn):
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 0
-
-
 
 

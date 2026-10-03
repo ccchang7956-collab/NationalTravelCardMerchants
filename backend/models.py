@@ -10,6 +10,9 @@ class MerchantIndustry(BaseModel):
 class IndustryInfo(BaseModel):
     industry_code: str
     industry_name: str
+    industry_group_code: str
+    industry_group_name: str
+    industry_group_order: int
 
 class MerchantBase(BaseModel):
     id: int
@@ -139,4 +142,3 @@ class ItineraryResponse(BaseModel):
     items: List[ItineraryItemResponse] = []
     total_tourist_quota: float = 0.0
     total_general_quota: float = 0.0
-
