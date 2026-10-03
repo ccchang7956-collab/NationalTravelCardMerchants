@@ -111,7 +111,7 @@ export default function RootLayout({
             <p>
               資料來源：
               <a
-                href="https://travel.nccc.com.tw/"
+                href="https://data.gov.tw/dataset/12982"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline hover:text-foreground"
