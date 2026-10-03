@@ -9,7 +9,7 @@ import {
   MagnifyingGlassIcon,
   ArrowTopRightOnSquareIcon,
   BuildingStorefrontIcon,
-  SparklesIcon,
+  RadioIcon,
 } from '@heroicons/react/24/outline';
 import { getPublicApiUrl } from '@/utils/env';
 import { distanceLabel, locationLabel, navigationUrl } from '@/utils/coordinates';
@@ -256,12 +256,12 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
         {/* 標題與關閉按鈕 */}
         <div className="px-5 pb-3 flex items-center justify-between border-b border-border/60">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-              <SparklesIcon className="w-5 h-5 animate-pulse" />
+            <div className="p-2 rounded-xl bg-accent/10 text-accent">
+              <RadioIcon className="w-5 h-5" />
             </div>
             <div>
               <h2 id="radar-sheet-title" className="text-lg font-bold text-foreground flex items-center gap-2">
-                📡 行動周邊雷達
+                行動周邊雷達
               </h2>
               <p className="text-xs text-muted">即時探索附近的國民旅遊卡特約店家</p>
             </div>
@@ -417,7 +417,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
                         href={mapsUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-xl bg-blue-600/10 text-blue-600 dark:text-blue-400 hover:bg-blue-600/20 font-medium transition-all"
+                        className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 font-medium transition-all"
                         title="開啟 Google 地圖導航"
                       >
                         <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
