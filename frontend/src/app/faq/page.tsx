@@ -9,7 +9,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "常見問題",
   description:
-    "國民旅遊卡常見問題：8000 元額度區分、特約商店查詢、刷卡失敗處理、統編查詢、外島商店與行業類別篩選完整說明。",
+    "國民旅遊卡常見問題：8000 元額度區分、特約商店查詢、刷卡失敗處理、統編查詢、外島商店與行業分類選項說明。",
   alternates: {
     canonical: `${SITE_URL}/faq`,
   },
@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
     type: "website",
     title: "常見問題｜國旅卡特約商店",
     description:
-      "國民旅遊卡常見問題完整說明：額度、查詢方式、刷卡問題與行業類別篩選。",
+      "國民旅遊卡常見問題完整說明：額度、查詢方式、刷卡問題與行業分類選項。",
     url: `${SITE_URL}/faq`,
     locale: "zh_TW",
     siteName: "國民旅遊卡特約商店查詢",
@@ -78,7 +78,7 @@ export default async function FaqPage() {
       id: "faq-2",
       question: "如何查詢附近的國旅卡特約商店？",
       answer:
-        "可使用本系統的地圖功能，開啟定位後即可查看附近 1～5 公里內的特約商店。也可在首頁依縣市、行業類別進行篩選查詢。",
+        "可使用本系統的地圖功能，開啟定位後即可查看附近 1～5 公里內的特約商店。也可在首頁依縣市進行篩選查詢。",
     },
     {
       id: "faq-3",
@@ -114,7 +114,7 @@ export default async function FaqPage() {
       id: "faq-8",
       question: "如何用統一編號（統編）查詢特約商店？",
       answer:
-        "在本系統首頁搜尋框直接輸入 8 碼統一編號即可找到對應商店；或直接開啟該店詳情頁（網址格式為 /merchant/{統一編號}），查看地址、行業類別與地圖位置。詳情頁同時標示統編，方便核對是否為同一店家。",
+        "在本系統首頁搜尋框直接輸入 8 碼統一編號即可找到對應商店；或直接開啟該店詳情頁（網址格式為 /merchant/{統一編號}），查看地址與地圖位置。詳情頁同時標示統編，方便核對是否為同一店家。行業別對照資料目前尚未建置。",
     },
     {
       id: "faq-9",
@@ -127,7 +127,7 @@ export default async function FaqPage() {
     {
       id: "faq-10",
       question: "特約商店的行業類別有哪些？如何篩選？",
-      answer: `特約商店涵蓋住宿、餐飲、休閒遊樂、交通運輸、文化體育等行業類別，每間商店的詳情頁均列出其行業類別（無資料者顯示為未分類）。可在首頁以行業類別代碼篩選特定業種${hasWebsiteCount > 0 ? `；另有約 ${hasWebsiteCount.toLocaleString()} 間商店提供官方網站${cutoff}，可進一步篩選查看` : "，也可篩選有官方網站的商店"}。`,
+      answer: `本站提供官方行業別大類與細項分類選單供參考；目前商家行業對照資料尚未建置，選取分類暫不會篩選結果${hasWebsiteCount > 0 ? `。另有約 ${hasWebsiteCount.toLocaleString()} 間商店提供官方網站${cutoff}，可進一步篩選查看` : "。商店仍可依其他條件查詢"}`,
     },
   ];
 

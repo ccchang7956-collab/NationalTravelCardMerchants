@@ -1,14 +1,11 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import FilterSheet, { DEFAULT_FILTER_STATE } from "@/components/FilterSheet";
 import { clampRadiusKm, mapSearchParams, mapSearchKey } from "@/utils/mapSearchParams";
 import { loadHomeData } from "@/utils/homeData";
 
-test("delayed industry response and retry work without submitting the surrounding form", async () => {
-  let finish: (response: unknown) => void = () => {};
-  global.fetch = jest.fn()
-    .mockResolvedValueOnce({ ok: false, status: 503 })
-    .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+test("official industry groups and details are selectable without filtering merchants yet", () => {
+  global.fetch = jest.fn();
   const submit = jest.fn(event => event.preventDefault());
   const change = jest.fn();
   render(<form onSubmit={submit}>
@@ -17,22 +14,26 @@ test("delayed industry response and retry work without submitting the surroundin
     <button type="submit">搜尋表單</button>
   </form>);
   fireEvent.click(screen.getByRole("button", { name: "篩選" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("行業別載入失敗");
-  fireEvent.click(screen.getByRole("button", { name: "重試" }));
-  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-  await act(async () => { finish({ ok: true, json: async () => [{ industry_code: "561", industry_name: "餐飲" }] }); });
-  expect(await screen.findByRole("option", { name: "餐飲 (561)" })).toBeInTheDocument();
+  const group = screen.getByLabelText("行業別");
+  const detail = screen.getByLabelText("行業細項分類");
+  expect(screen.getByRole("option", { name: "旅行業" })).toBeInTheDocument();
+  expect(detail).toBeDisabled();
+  fireEvent.change(group, { target: { value: "0017" } });
+  expect(detail).toBeEnabled();
+  expect(screen.getByRole("option", { name: "旅行社-觀光旅遊" })).toBeInTheDocument();
+  fireEvent.change(detail, { target: { value: "7901" } });
+  expect(screen.getByRole("status")).toHaveTextContent("暫不影響搜尋結果");
   fireEvent.click(screen.getByRole("button", { name: "有" }));
   fireEvent.click(screen.getByRole("button", { name: "20 km" }));
   fireEvent.click(screen.getByRole("button", { name: /套用篩選/ }));
-  expect(change).toHaveBeenCalledWith(expect.objectContaining({ hasWebsite: true, radiusKm: 20 }));
+  expect(change).toHaveBeenCalledWith(expect.objectContaining({ hasWebsite: true, radiusKm: 20, industryCode: "" }));
+  expect(fetch).not.toHaveBeenCalled();
   expect(submit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "搜尋表單" }));
   expect(submit).toHaveBeenCalledTimes(1);
 });
 
 test("map sheet always has a radius and reset restores 2 km", async () => {
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [] });
   const change = jest.fn();
   render(<FilterSheet mode="map" filters={{ ...DEFAULT_FILTER_STATE, radiusKm: 20 }} cities={[]}
     onChange={change} userLocation={null} onRequestLocation={jest.fn()} locationLoading={false} locationError={null} />);
@@ -45,7 +46,6 @@ test("map sheet always has a radius and reset restores 2 km", async () => {
 });
 
 test("list distance choices stay disabled until the explicit location request succeeds", async () => {
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [] });
   const requestLocation = jest.fn();
   const change = jest.fn();
   const props = { filters: DEFAULT_FILTER_STATE, cities: [], onChange: change,

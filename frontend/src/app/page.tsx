@@ -54,12 +54,11 @@ export async function generateMetadata({
   // canonical 只收白名單參數（junk param 不照抄，避免污染與重複內容）
   // 地理參數只影響 noindex（會 client 導向 /map），不進 canonical
   const hasGeoParams = !!(resolved.radius_km || resolved.lat || resolved.lon);
-  const hasFilters = !!(q || city || resolved.has_website || resolved.industry_code || hasGeoParams || (resolved.page && resolved.page !== "1"));
+  const hasFilters = !!(q || city || resolved.has_website || hasGeoParams || (resolved.page && resolved.page !== "1"));
   const canonicalParams = new URLSearchParams();
   if (q) canonicalParams.set("q", q);
   if (city) canonicalParams.set("city", city);
   if (typeof resolved.has_website === "string") canonicalParams.set("has_website", resolved.has_website);
-  if (typeof resolved.industry_code === "string") canonicalParams.set("industry_code", resolved.industry_code);
   if (page > 1) canonicalParams.set("page", String(page));
 
   return {
@@ -91,7 +90,8 @@ export default async function Home({
   const hasWebsiteParam = typeof resolvedParams.has_website === "string" ? resolvedParams.has_website : undefined;
   const hasWebsite: boolean | null =
     hasWebsiteParam === "true" ? true : hasWebsiteParam === "false" ? false : null;
-  const industryCode = typeof resolvedParams.industry_code === "string" ? resolvedParams.industry_code : "";
+  // Merchant-to-industry mappings are not present in the current source data yet.
+  const industryCode = "";
 
   // 列表頁不做地理篩選（後端 /api/merchants 無 geo 參數）：帶定位參數的分享連結導向 /map
   const geoRadius = typeof resolvedParams.radius_km === "string" ? parseFloat(resolvedParams.radius_km) : NaN;
@@ -495,7 +495,7 @@ export default async function Home({
                 </summary>
                 <p className="mt-2 ml-4">
                   可使用本系統的地圖功能，開啟定位後即可查看附近 1～5
-                  公里內的特約商店。也可在首頁依縣市、行業類別進行篩選查詢。
+                  公里內的特約商店。也可在首頁依縣市進行篩選查詢。
                 </p>
               </details>
               <details className="group">
@@ -556,7 +556,7 @@ export default async function Home({
                     name: "如何查詢附近的國旅卡特約商店？",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: "可使用本系統的地圖功能，開啟定位後即可查看附近 1～5 公里內的特約商店。也可依縣市、行業類別進行篩選查詢。",
+                      text: "可使用本系統的地圖功能，開啟定位後即可查看附近 1～5 公里內的特約商店。也可依縣市進行篩選查詢。",
                     },
                   },
                   {

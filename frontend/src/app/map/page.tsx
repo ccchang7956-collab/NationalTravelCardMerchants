@@ -133,7 +133,6 @@ function MapContent() {
   const lonParam = searchParams.get("lon");
   const radiusParam = searchParams.get("radius");
   const qParam = searchParams.get("q");
-  const indCodeParam = searchParams.get("industry_code");
   const targetCity = searchParams.get("city") || "";
   const targetHasWebsite = parseHasWebsite(searchParams.get("has_website"));
 
@@ -145,7 +144,8 @@ function MapContent() {
   const targetLon = clampLon(parsedLon);
   const targetRadius = clampRadiusKm(parsedRadius);
   const targetKeyword = qParam || "";
-  const targetIndCode = indCodeParam || "";
+  // Merchant-to-industry mappings are not present in the current source data yet.
+  const targetIndCode = "";
 
   const [prevParamsKey, setPrevParamsKey] = useState<string>("");
   const currentParamsKey = mapSearchKey(targetLat, targetLon, targetRadius, targetKeyword, targetIndCode, targetCity, targetHasWebsite);
