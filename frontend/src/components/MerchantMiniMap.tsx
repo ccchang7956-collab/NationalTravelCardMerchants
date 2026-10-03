@@ -122,7 +122,7 @@ export default function MerchantMiniMap({ lat, lon, name }: MerchantMiniMapProps
   return (
     <div
       ref={containerRef}
-      className="w-full rounded-xl overflow-hidden border border-border/50"
+      className="relative isolate z-0 w-full rounded-xl overflow-hidden border border-border/50"
       style={{ height: "280px" }}
     />
   );

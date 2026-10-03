@@ -398,7 +398,7 @@ function MapContent() {
       {/* Map + Sidebar */}
       <div className="flex gap-4 flex-col lg:flex-row px-2" style={{ minHeight: "520px" }}>
         {/* Map */}
-        <div className="flex-1 relative rounded-xl overflow-hidden border border-border/50 shadow-sm min-h-[380px] lg:min-h-[480px]">
+        <div className="flex-1 relative isolate z-0 rounded-xl overflow-hidden border border-border/50 shadow-sm min-h-[380px] lg:min-h-[480px]">
           <MapView
             merchants={merchants}
             center={center}
