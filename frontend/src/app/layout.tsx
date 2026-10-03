@@ -118,7 +118,6 @@ export default function RootLayout({
               >
                 政府開放資料
               </a>
-              （行政院人事行政總處委託聯合信用卡中心發布之特約商店清冊）
             </p>
             <p className="mt-2">
               <a href="/llms.txt" className="underline hover:text-foreground">
