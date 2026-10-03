@@ -1,6 +1,6 @@
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from "next/og";
 
-export const runtime = "edge";
+export const dynamic = "force-dynamic";
 export const alt = "國民旅遊卡特約商店查詢";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -45,15 +45,17 @@ export default async function TwitterImage() {
           <div
             style={{
               fontSize: "56px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
               fontWeight: "700",
               color: "#FFFFFF",
               textAlign: "center",
               lineHeight: "1.2",
             }}
           >
-            國民旅遊卡
-            <br />
-            特約商店查詢
+            <div>國民旅遊卡</div>
+            <div>特約商店查詢</div>
           </div>
           <div
             style={{

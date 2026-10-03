@@ -6,6 +6,7 @@ import sqlite3
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.routers.merchants import parse_search_query
+from backend.database import init_db
 
 # 取得 DB 路徑
 backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
@@ -40,29 +41,7 @@ def migrate_database():
         conn.execute("PRAGMA busy_timeout = 5000;")
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
-        cursor = conn.cursor()
-        print("🛠️  建立 FTS5 虛擬表...")
-        cursor.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS merchants_fts USING fts5(
-                name,
-                address,
-                content='merchants',
-                content_rowid='id',
-                tokenize='trigram'
-            );
-        """)
-        print("🛠️  檢查並建立經緯度欄位...")
-        cursor.execute("PRAGMA table_info(merchants);")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "lat" not in columns:
-            cursor.execute("ALTER TABLE merchants ADD COLUMN lat REAL;")
-        if "lon" not in columns:
-            cursor.execute("ALTER TABLE merchants ADD COLUMN lon REAL;")
-        print("🛠️  建立經緯度聯合索引...")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_lat_lon ON merchants(lat, lon);")
-        print("⚡ 重建 FTS5 索引...")
-        cursor.execute("INSERT INTO merchants_fts(merchants_fts) VALUES('rebuild');")
-        conn.commit()
+        init_db(conn)
         print("✅ 資料庫遷移與索引重建成功！")
     except Exception as e:
         if conn:

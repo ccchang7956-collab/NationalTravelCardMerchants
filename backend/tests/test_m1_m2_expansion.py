@@ -116,7 +116,7 @@ def test_fts_query_fullwidth_and_special_punctuation():
     """Verify parse_search_query safely handles fullwidth spaces, quotes, and punctuation."""
     q1 = parse_search_query("台北\u3000美食")
     assert q1 is not None
-    assert "台北" in q1 and "美食" in q1
+    assert q1 == '"台 北" AND "美 食"'
 
     q2 = parse_search_query(':::*** "NOT A VALID SQL"')
     # Should not cause exception and produce safe query or None

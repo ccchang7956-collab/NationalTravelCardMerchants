@@ -16,6 +16,26 @@ router = APIRouter()
 
 TAIWAN_CITIES = ["基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣", "台中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "台南市", "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣"]
 
+
+def append_city_website_filters(clauses, params, city, has_website):
+    if city:
+        safe_city = city.replace("臺", "台")
+        prefixes = list(dict.fromkeys([safe_city, safe_city.replace("台", "臺")]))
+        ranges = []
+        for prefix in prefixes:
+            if ord(prefix[-1]) < 0x10FFFF:
+                upper = prefix[:-1] + chr(ord(prefix[-1]) + 1)
+                ranges.append("(m.address >= ? AND m.address < ?)")
+                params.extend([prefix, upper])
+            else:
+                ranges.append("(substr(m.address, 1, length(?)) = ?)")
+                params.extend([prefix, prefix])
+        clauses.append("(" + " OR ".join(ranges) + ")")
+    if has_website is True:
+        clauses.append("m.website IS NOT NULL AND m.website != ''")
+    elif has_website is False:
+        clauses.append("(m.website IS NULL OR m.website = '')")
+
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance in km between two lat/lon points."""
     if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
@@ -69,24 +89,11 @@ def get_merchants(
         where_clauses.append("f.merchants_fts MATCH ?")
         params.append(fts_query)
 
-    if city:
-        # 寫入側已 NFKC + 臺→台正規化，查詢側同步處理，否則 臺北/臺中/臺南/臺東永遠 0 筆
-        safe_city = city.replace("臺", "台")
-        # 前綴改範圍查詢吃 idx_merchants_address（LIKE 預設大小寫不敏感走不到索引；
-        # 範圍寫法天然免疫 %/_ 萬用字元）。BINARY 排序下 [prefix, prefix末字+1) 恰為前綴集合
-        # （縣市皆 CJK 定長前綴；任意輸入末字為 U+10FFFF 的理論邊界不處理）。
-        upper = safe_city[:-1] + chr(ord(safe_city[-1]) + 1) if safe_city else "\U0010FFFF"
-        where_clauses.append("m.address >= ? AND m.address < ?")
-        params.extend([safe_city, upper])
+    append_city_website_filters(where_clauses, params, city, has_website)
 
     if zip_code:
         where_clauses.append("m.zip_code = ?")
         params.append(zip_code)
-
-    if has_website is True:
-        where_clauses.append("m.website IS NOT NULL AND m.website != ''")
-    elif has_website is False:
-        where_clauses.append("(m.website IS NULL OR m.website = '')")
 
     if industry_code:
         safe_ind = industry_code.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -147,6 +154,8 @@ def get_nearby_merchants(
     lon: float = Query(..., description="Longitude of center point"),
     radius_km: float = Query(2.0, ge=0.1, le=20.0, description="Search radius in km"),
     q: Optional[str] = Query(None, description="Search keyword for name or address"),
+    city: Optional[str] = Query(None, description="Filter by city"),
+    has_website: Optional[bool] = Query(None, description="Filter by website availability"),
     industry_code: Optional[str] = Query(None, description="Filter by industry code (supports prefix wildcard matching)"),
     limit: int = Query(100, ge=1, le=500, description="Max number of results"),
     db: sqlite3.Connection = Depends(get_db)
@@ -207,6 +216,8 @@ def get_nearby_merchants(
         joins.append("JOIN merchants_fts f ON m.id = f.rowid")
         where_clauses.append("f.merchants_fts MATCH ?")
         params.append(fts_query)
+
+    append_city_website_filters(where_clauses, params, city, has_website)
 
     if industry_code:
         safe_ind = industry_code.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -351,6 +362,7 @@ def get_stats(db: sqlite3.Connection = Depends(get_db)):
         "last_updated": _read_stats_last_updated(),
         "last_checked": meta.get("last_checked"),
         "last_check_result": meta.get("last_check_result"),
+        "last_successful_check": meta.get("last_successful_check"),
     }
 
 

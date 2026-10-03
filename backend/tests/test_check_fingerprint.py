@@ -50,6 +50,11 @@ def test_record_check_failed_keeps_note(meta_dir):
 
 def test_health_ok_when_checked_today_despite_old_data(meta_dir):
     import scheduler.update_data as ud
+    import sqlite3
+    from backend.database import init_db
+    conn = sqlite3.connect(meta_dir / "merchants.db")
+    init_db(conn)
+    conn.close()
 
     old = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
     with open(ud.META_FILE, "w", encoding="utf-8") as f:
@@ -78,11 +83,12 @@ def test_data_info_exposes_check_fields(meta_dir):
 
     with open(ud.META_FILE, "w", encoding="utf-8") as f:
         json.dump({"total_merchants": 7, "last_checked": "X", "last_check_result": "updated"}, f)
-    # DB 不存在 → total 取 meta，檢查欄位照透
+    # DB 不存在時數量未知，不能將過期的 metadata 偽裝為即時資料。
     assert not os.path.exists(str(meta_dir / "merchants.db"))
     r = TestClient(app).get("/api/data-info")
     assert r.status_code == 200
     data = r.json()
-    assert data["total_merchants"] == 7
+    assert data["total_merchants"] is None
+    assert data["database_ready"] is False
     assert data["last_checked"] == "X"
     assert data["last_check_result"] == "updated"

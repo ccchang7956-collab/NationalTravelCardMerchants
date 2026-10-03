@@ -17,12 +17,12 @@ from scheduler.update_data import space_segment as prod_segment
 
 
 def test_parse_search_query_cjk_splits_chars():
-    assert parse_search_query("牛肉麵") == '"牛" AND "肉" AND "麵"'
-    assert parse_search_query("台北") == '"台" AND "北"'
+    assert parse_search_query("牛肉麵") == '"牛 肉 麵"'
+    assert parse_search_query("台北") == '"台 北"'
     # ASCII 維持整詞 phrase
     assert parse_search_query("hotel") == '"hotel"'
     # 混合：ASCII 整詞 + CJK 逐字
-    assert parse_search_query("ABC牛肉麵") == '"ABC" AND "牛" AND "肉" AND "麵"'
+    assert parse_search_query("ABC牛肉麵") == '"ABC 牛 肉 麵"'
     # 空/標點 → None（呼叫端回空結果而非全表）
     assert parse_search_query("!!!") is None
     assert parse_search_query("") is None

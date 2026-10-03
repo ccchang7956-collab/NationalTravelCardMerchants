@@ -8,6 +8,9 @@ import type { FilterState } from "@/components/FilterSheet";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
 import { freshnessNote } from "@/utils/dataFreshness";
+import { loadHomeData } from "@/utils/homeData";
+import { mapSearchParams } from "@/utils/mapSearchParams";
+import { locationLabel, hasCoordinates } from "@/utils/coordinates";
 
 const TAIWAN_CITIES = [
   "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
@@ -30,6 +33,8 @@ interface Merchant {
   lat: number | null;
   lon: number | null;
   distance_km?: number;
+  coord_source?: string | null;
+  coord_accuracy?: string | null;
 }
 
 // 動態 metadata：有篩選條件時不索引（避免重複內容），並設定 canonical
@@ -93,12 +98,7 @@ export default async function Home({
   const geoLat = typeof resolvedParams.lat === "string" ? parseFloat(resolvedParams.lat) : NaN;
   const geoLon = typeof resolvedParams.lon === "string" ? parseFloat(resolvedParams.lon) : NaN;
   if (Number.isFinite(geoRadius) && Number.isFinite(geoLat) && Number.isFinite(geoLon)) {
-    const mapParams = new URLSearchParams();
-    mapParams.set("lat", geoLat.toFixed(5));
-    mapParams.set("lon", geoLon.toFixed(5));
-    mapParams.set("radius", String(geoRadius));
-    if (q) mapParams.set("q", q);
-    if (industryCode) mapParams.set("industry_code", industryCode);
+    const mapParams = mapSearchParams(geoLat, geoLon, geoRadius, q, industryCode, city, hasWebsite);
     redirect(`/map?${mapParams.toString()}`);
   }
 
@@ -112,24 +112,7 @@ export default async function Home({
 
   const API_URL = getBackendUrl();
   
-  let data = null;
-  let stats = null;
-  try {
-    const [mRes, sRes] = await Promise.all([
-      fetch(`${API_URL}/api/merchants?${query.toString()}`, {
-        next: { revalidate: 300 },
-        signal: AbortSignal.timeout(10000),
-      }),
-      fetch(`${API_URL}/api/stats`, {
-        next: { revalidate: 300 },
-        signal: AbortSignal.timeout(10000),
-      }),
-    ]);
-    if (mRes.ok) data = await mRes.json();
-    if (sRes.ok) stats = await sRes.json();
-  } catch (e) {
-    console.error("Backend fetch error", e);
-  }
+  const { data, stats } = await loadHomeData(API_URL, query);
 
   const merchants = data?.items || [];
   const _total = Number(data?.total ?? 0);
@@ -137,7 +120,7 @@ export default async function Home({
   const _tp = Number(data?.total_pages ?? 1);
   const totalPages = Number.isFinite(_tp) && _tp >= 1 ? Math.floor(_tp) : 1;
 
-  if (page > totalPages && totalPages > 0) {
+  if (data && page > totalPages && totalPages > 0) {
     const redirectQuery = new URLSearchParams();
     if (q) redirectQuery.append("q", q);
     if (city) redirectQuery.append("city", city);
@@ -217,18 +200,24 @@ export default async function Home({
       />
 
       {/* Results Meta */}
-      <div className="text-sm text-muted">
+      {data && <div className="text-sm text-muted">
         找到 {total.toLocaleString()} 筆符合的結果 (第 {page} / {totalPages} 頁)
-      </div>
+      </div>}
 
       {/* Merchant List */}
-      {merchants.length > 0 ? (
+      {!data ? (
+        <div role="alert" className="text-center py-16 px-4 bg-card rounded-2xl border border-border/60 space-y-4">
+          <h2 className="text-xl font-semibold">商店資料載入失敗</h2>
+          <p className="text-sm text-muted">目前無法取得搜尋結果，請稍後重試。</p>
+          <a href={buildPageUrl(page)} className="inline-flex px-4 py-2 rounded-xl bg-accent text-white text-sm">重新載入</a>
+        </div>
+      ) : merchants.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {merchants.map((m: Merchant) => {
             const mapParams = new URLSearchParams();
-            if (m.lat && m.lon) {
-              mapParams.set("lat", m.lat.toString());
-              mapParams.set("lon", m.lon.toString());
+            if (hasCoordinates(m)) {
+              mapParams.set("lat", String(m.lat));
+              mapParams.set("lon", String(m.lon));
               mapParams.set("radius", "1");
             } else if (city) {
               mapParams.set("city", city);
@@ -254,6 +243,7 @@ export default async function Home({
                           <MapPinIcon className="w-4 h-4 mt-0.5 shrink-0 opacity-70" />
                           <span>{String(m.zip_code ?? "")} {String(m.address ?? "")}</span>
                         </div>
+                        {locationLabel(m) && <p className="text-xs text-muted">{locationLabel(m)}</p>}
                         <div className="flex items-center gap-2">
                           <BuildingStorefrontIcon className="w-4 h-4 shrink-0 opacity-70" />
                           <span>統編：{m.tax_id}</span>

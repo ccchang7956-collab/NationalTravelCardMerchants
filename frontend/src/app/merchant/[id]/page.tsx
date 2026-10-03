@@ -8,6 +8,7 @@ import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
 import { sanitizeUrl } from "@/utils/sanitize";
 import { freshnessNote } from "@/utils/dataFreshness";
+import { hasCoordinates, locationLabel, navigationUrl } from "@/utils/coordinates";
 
 const TAIWAN_CITIES = [
   "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
@@ -117,7 +118,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
   const primaryIndustry: MerchantIndustry | undefined = industries[0];
 
   const pageUrl = `${SITE_URL}/merchant/${merchant.tax_id || resolvedParams.id}`;
-  const hasCoords = !!(merchant.lat && merchant.lon);
+  const hasCoords = hasCoordinates(merchant);
   const nearbyMapUrl = hasCoords
     ? `/map?lat=${merchant.lat}&lon=${merchant.lon}&radius=1`
     : null;
@@ -147,7 +148,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
       ...(city ? { addressRegion: city } : {}),
       addressCountry: "TW",
     },
-    ...(hasCoords && {
+    ...(hasCoords && merchant.coord_accuracy === "verified" && {
       geo: {
         "@type": "GeoCoordinates",
         latitude: merchant.lat,
@@ -239,7 +240,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
               <dd className="mt-1 text-muted">
                 <address className="not-italic">{merchant.zip_code} {merchant.address}</address>
                 <a 
-                  href={hasCoords ? `https://www.google.com/maps/dir/?api=1&destination=${merchant.lat},${merchant.lon}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(merchant.name + ' ' + merchant.address)}`}
+                  href={navigationUrl(merchant)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 mt-2 text-sm text-accent hover:underline"
@@ -247,6 +248,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
                   在 Google 地圖上查看 <ArrowTopRightOnSquareIcon className="w-3 h-3" />
                 </a>
               </dd>
+              {locationLabel(merchant) && <dd className="mt-2 text-xs text-muted">{locationLabel(merchant)}，導航以商店地址為準。</dd>}
             </div>
           </div>
           

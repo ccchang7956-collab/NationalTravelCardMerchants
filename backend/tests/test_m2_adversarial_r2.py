@@ -12,16 +12,16 @@ from backend.services.route_optimizer import optimize_route, haversine_distance,
 def test_fts_chinese_query_parsing():
     """Verify Chinese query parsing for '台北', '美食', and combinations."""
     q1 = parse_search_query("台北")
-    assert q1 == '"台北"'
+    assert q1 == '"台 北"'
     
     q2 = parse_search_query("美食")
-    assert q2 == '"美食"'
+    assert q2 == '"美 食"'
     
     q3 = parse_search_query("台北 美食")
-    assert q3 == '"台北" AND "美食"'
+    assert q3 == '"台 北" AND "美 食"'
     
     q4 = parse_search_query("臺北　美食")  # Fullwidth space + '臺' -> '台'
-    assert q4 == '"台北" AND "美食"'
+    assert q4 == '"台 北" AND "美 食"'
 
 
 def test_fts_special_punctuation_safety():

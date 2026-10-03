@@ -10,22 +10,61 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r backend/requirements.txt
-      - run: ./.venv/bin/pytest backend/tests -q || python -m pytest backend/tests -q
+      - run: python -m pytest backend/tests -q
         env:
           JWT_SECRET_KEY: dummy-ci-secret
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm --prefix frontend ci
       - name: Frontend tests (jest)
-        run: npm --prefix frontend test -- --ci --watchAll=false
+        run: npm --prefix frontend test -- --ci --watchAll=false --runInBand
+      - run: npm --prefix frontend run lint -- --max-warnings=0
+      - run: npm --prefix frontend run typecheck
 
-      - run: docker compose config
+      - run: docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
         env:
           JWT_SECRET_KEY: dummy-ci-secret
-      - run: docker compose build backend scheduler
+      - run: docker compose -f docker-compose.yml -f docker-compose.prod.yml build backend scheduler frontend
         env:
           JWT_SECRET_KEY: dummy-ci-secret
+          NEXT_PUBLIC_API_URL: http://localhost:18000
+          NEXT_PUBLIC_SITE_URL: http://localhost:13000
+      - name: Prepare disposable smoke API
+        run: |
+          python scripts/seed_smoke_data.py
+          python scripts/smoke_backend.py > /tmp/ntc-smoke-api.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fs http://127.0.0.1:18000/api/ready; then break; fi
+            sleep 1
+          done
+          curl -fs http://127.0.0.1:18000/api/ready
+        env:
+          DB_PATH: /tmp/ntc-smoke/merchants.db
+          CORS_ORIGINS: http://localhost:13000
+      - name: Start standalone production image
+        run: |
+          docker run -d --name ntc-smoke-frontend --network host -e PORT=13000 -e HOSTNAME=127.0.0.1 -e INTERNAL_API_URL=http://127.0.0.1:18000 ntc-frontend
+          for attempt in $(seq 1 30); do
+            if curl -fs http://127.0.0.1:13000/offline > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fs http://127.0.0.1:13000/offline > /dev/null
+      - name: Browser smoke (production image and PWA)
+        run: |
+          cd frontend
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+      - name: Smoke diagnostics
+        if: failure()
+        run: |
+          cat /tmp/ntc-smoke-api.log || true
+          docker logs ntc-smoke-frontend || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-traces
+          path: frontend/test-results

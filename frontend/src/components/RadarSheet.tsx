@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   XMarkIcon,
   MapPinIcon,
@@ -12,6 +12,7 @@ import {
   SparklesIcon,
 } from '@heroicons/react/24/outline';
 import { getPublicApiUrl } from '@/utils/env';
+import { distanceLabel, locationLabel, navigationUrl } from '@/utils/coordinates';
 
 interface RadarSheetProps {
   isOpen: boolean;
@@ -29,6 +30,8 @@ interface Merchant {
   lon: number | null;
   distance_km?: number;
   industry_name?: string;
+  coord_source?: string | null;
+  coord_accuracy?: string | null;
 }
 
 const RADIUS_OPTIONS = [
@@ -48,6 +51,28 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
   // 手動地址搜尋備援
   const [manualQuery, setManualQuery] = useState<string>('');
   const [isSearchingManual, setIsSearchingManual] = useState<boolean>(false);
+  const generation = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
+
+  const cancelRequest = useCallback(() => {
+    generation.current += 1;
+    activeRequest.current?.abort();
+  }, []);
+
+  const beginRequest = useCallback(() => {
+    cancelRequest();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    setLoading(true);
+    setIsSearchingManual(false);
+    setGeoError(null);
+    return { sequence: generation.current, controller };
+  }, [cancelRequest]);
+
+  const handleClose = useCallback(() => {
+    cancelRequest();
+    onClose();
+  }, [cancelRequest, onClose]);
 
   // 檢查網路連線狀態
   useEffect(() => {
@@ -68,21 +93,23 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
   }, []);
 
   // 抓取周邊店家 API
-  const fetchNearbyMerchants = useCallback(async (lat: number, lon: number, radiusKm: number) => {
-    setLoading(true);
-    setGeoError(null);
+  const fetchNearbyMerchants = useCallback(async (lat: number, lon: number, radiusKm: number, request = beginRequest()) => {
+    const current = () => generation.current === request.sequence && !request.controller.signal.aborted;
     try {
       const baseUrl = getPublicApiUrl();
       const res = await fetch(
-        `${baseUrl}/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${radiusKm}&limit=30`
+        `${baseUrl}/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${radiusKm}&limit=30`,
+        { signal: request.controller.signal }
       );
       if (!res.ok) {
         throw new Error(`伺服器回應錯誤 (${res.status})`);
       }
       const data: Merchant[] = await res.json();
+      if (!current()) return;
+      if (!Array.isArray(data)) throw new Error('店家回應格式錯誤');
       setMerchants(data);
     } catch (err: unknown) {
-      console.error('Fetch nearby merchants failed:', err);
+      if (!current()) return;
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         setIsOffline(true);
       } else {
@@ -90,28 +117,31 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
       }
       setMerchants([]);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, []);
+  }, [beginRequest]);
 
   // 觸發 GPS 定位與查詢
   const requestLocationAndFetch = useCallback(
     (selectedRadius: number) => {
       if (typeof window === 'undefined') return;
+      const request = beginRequest();
+      const current = () => generation.current === request.sequence && !request.controller.signal.aborted;
       if (!navigator.geolocation) {
         setGeoError('您的裝置或瀏覽器不支援 GPS 地理定位');
+        setLoading(false);
         return;
       }
-      setLoading(true);
-      setGeoError(null);
 
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          if (!current()) return;
           const newCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
           setCoords(newCoords);
-          fetchNearbyMerchants(newCoords.lat, newCoords.lon, selectedRadius);
+          fetchNearbyMerchants(newCoords.lat, newCoords.lon, selectedRadius, request);
         },
         (err) => {
+          if (!current()) return;
           setLoading(false);
           let errMsg = '無法取得 GPS 定位';
           if (err.code === err.PERMISSION_DENIED) {
@@ -126,17 +156,17 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     },
-    [fetchNearbyMerchants]
+    [beginRequest, fetchNearbyMerchants]
   );
 
   // 當開啟抽屜時自動取得定位與監聽 Esc 鍵。
   // 依賴只留 isOpen：半徑切換走 handleRadiusChange 顯式抓取，coords 寫入不重打
   //（舊版依賴 coords/radius，切半徑與定位回來都會再打一次）。
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    let cancelled = false;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        handleClose();
       }
     };
 
@@ -144,6 +174,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
       Promise.resolve().then(() => {
+        if (cancelled) return;
         if (!coords) {
           requestLocationAndFetch(radius);
         } else {
@@ -154,6 +185,8 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
       document.body.style.overflow = '';
     }
     return () => {
+      cancelled = true;
+      cancelRequest();
       document.body.style.overflow = '';
       window.removeEventListener('keydown', handleKeyDown);
     };
@@ -174,22 +207,30 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
   const handleManualSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualQuery.trim()) return;
+    const request = beginRequest();
+    const current = () => generation.current === request.sequence && !request.controller.signal.aborted;
     setIsSearchingManual(true);
-    setLoading(true);
-    setGeoError(null);
+    setCoords(null);
     try {
       const baseUrl = getPublicApiUrl();
       const res = await fetch(
-        `${baseUrl}/api/merchants?q=${encodeURIComponent(manualQuery.trim())}&per_page=30`
+        `${baseUrl}/api/merchants?q=${encodeURIComponent(manualQuery.trim())}&per_page=30`,
+        { signal: request.controller.signal }
       );
       if (!res.ok) throw new Error('搜尋店家失敗');
       const data = await res.json();
-      setMerchants(data.items || []);
+      if (!current()) return;
+      if (!Array.isArray(data.items)) throw new Error('店家回應格式錯誤');
+      setMerchants(data.items);
     } catch (err: unknown) {
+      if (!current()) return;
+      setMerchants([]);
       setGeoError(err instanceof Error ? err.message : '手動搜尋發生錯誤');
     } finally {
-      setLoading(false);
-      setIsSearchingManual(false);
+      if (current()) {
+        setLoading(false);
+        setIsSearchingManual(false);
+      }
     }
   };
 
@@ -198,7 +239,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       {/* 點擊遮罩關閉 */}
-      <div className="flex-1" onClick={onClose} aria-hidden="true" />
+      <div className="flex-1" onClick={handleClose} aria-hidden="true" />
 
       {/* Sheet 底盤 Modal */}
       <div
@@ -208,7 +249,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
         className="bg-card border-t border-border shadow-2xl rounded-t-3xl max-h-[85vh] flex flex-col w-full max-w-2xl mx-auto overflow-hidden animate-in slide-in-from-bottom duration-300"
       >
         {/* Handle Bar 頂部拉桿 */}
-        <div className="w-full flex justify-center py-2.5 cursor-grab active:cursor-grabbing" onClick={onClose}>
+        <div className="w-full flex justify-center py-2.5 cursor-grab active:cursor-grabbing" onClick={handleClose}>
           <div className="w-12 h-1.5 bg-muted/40 rounded-full" />
         </div>
 
@@ -236,7 +277,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
               <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin text-accent' : ''}`} />
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 rounded-xl text-muted hover:text-foreground hover:bg-muted-bg transition-colors"
               aria-label="關閉周邊雷達"
             >
@@ -249,7 +290,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
         {isOffline && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs">
             <ExclamationTriangleIcon className="w-4 h-4 shrink-0" />
-            <span>目前處於離線狀態，若您先前載入過資料可檢視快取的周邊店家。</span>
+            <span>目前處於離線狀態，請恢復連線後重新搜尋。</span>
           </div>
         )}
 
@@ -330,11 +371,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
               </div>
 
               {merchants.map((merchant) => {
-                const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${
-                  merchant.lat && merchant.lon
-                    ? `${merchant.lat},${merchant.lon}`
-                    : encodeURIComponent(merchant.address || merchant.name)
-                }`;
+                const mapsUrl = navigationUrl(merchant);
 
                 return (
                   <div
@@ -347,9 +384,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
                         {merchant.distance_km != null && (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent bg-accent/10 px-2 py-0.5 rounded-full shrink-0">
                             <MapPinIcon className="w-3 h-3" />
-                            {merchant.distance_km < 1
-                              ? `${Math.round(merchant.distance_km * 1000)} m`
-                              : `${merchant.distance_km.toFixed(2)} km`}
+                            {distanceLabel(merchant)}
                           </span>
                         )}
                         {merchant.industry_name && (
@@ -367,6 +402,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
                       <h3 className="font-semibold text-sm text-foreground truncate group-hover:text-accent transition-colors">
                         {merchant.name}
                       </h3>
+                      {locationLabel(merchant) && <p className="text-xs text-muted">{locationLabel(merchant)}</p>}
 
                       <p className="text-xs text-muted truncate flex items-center gap-1">
                         <MapPinIcon className="w-3.5 h-3.5 shrink-0 text-muted/60" />

@@ -27,6 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY scheduler/update_data.py .
 COPY scheduler/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY backend/database.py ./vendor_backend_database.py
+COPY shared/ ./shared/
 COPY scheduler/crontab /etc/supercronic/crontab
 
 # 建立非 root 使用者並給予 /data 權限 (統一 UID/GID 1000 以避免 Volume 權限衝突)

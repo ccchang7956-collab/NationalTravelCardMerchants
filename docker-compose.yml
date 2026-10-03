@@ -15,11 +15,12 @@ services:
       DB_PATH: /data/merchants.db
       TZ: Asia/Taipei
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
+      DATA_STALE_AFTER_HOURS: "${DATA_STALE_AFTER_HOURS:-48}"
       # auth 已退役（純公開站，後端無任何 JWT 邏輯）：留空即可啟動，保留變數僅供未來啟用
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
     healthcheck:
-      # /  無 DB 也回 200，改打 /api/data-info（回應即代表 app 存活；total 欄位供外部監控）
-      test: ["CMD-SHELL", "curl -fs http://localhost:8000/api/data-info | grep -q total_merchants"]
+      # readiness 不受排程新鮮度影響；另以 /api/health 監控更新結果。
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/api/ready"]
       interval: 30s
       timeout: 10s
       start_period: 15s
@@ -64,6 +65,9 @@ services:
     environment:
       DB_PATH: /data/merchants.db
       TZ: Asia/Taipei
+      NOTIFY_WEBHOOK_URL: "${NOTIFY_WEBHOOK_URL:-}"
+      MASS_DELETE_MIN_OLD: "${MASS_DELETE_MIN_OLD:-100}"
+      MASS_DELETE_RATIO: "${MASS_DELETE_RATIO:-0.5}"
     healthcheck:
       # 查排程器進程存活（舊版查 update_meta.json 存在，首次灌資料前永遠紅燈）
       test: ["CMD-SHELL", "grep -qa supercronic /proc/[0-9]*/cmdline 2>/dev/null"]

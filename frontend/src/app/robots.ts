@@ -1,9 +1,12 @@
 import { MetadataRoute } from "next";
 import { getSiteUrl } from "@/utils/site";
-import { NUM_SITEMAPS } from "@/utils/sitemapShards";
+import { fetchSitemapManifest } from "@/utils/sitemapShards";
 
-export default function robots(): MetadataRoute.Robots {
+export const dynamic = "force-dynamic";
+
+export default async function robots(): Promise<MetadataRoute.Robots> {
   const SITE_URL = getSiteUrl();
+  const manifest = await fetchSitemapManifest();
   return {
     rules: [
       {
@@ -17,7 +20,7 @@ export default function robots(): MetadataRoute.Robots {
     // 根 sitemap 只含首頁；商家分片在 /merchants/sitemap/<id>.xml（片數見 sitemapShards）
     sitemap: [
       `${SITE_URL}/sitemap.xml`,
-      ...Array.from({ length: NUM_SITEMAPS }, (_, id) => `${SITE_URL}/merchants/sitemap/${id}.xml`),
+      ...manifest.shards.map(shard => `${SITE_URL}/merchants/sitemap/${shard.id}.xml`),
     ],
   };
 }

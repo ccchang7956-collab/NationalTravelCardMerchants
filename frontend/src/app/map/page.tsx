@@ -20,6 +20,8 @@ import AddressSearch from "@/components/AddressSearch";
 import FilterSheet, { FilterState, DEFAULT_FILTER_STATE } from "@/components/FilterSheet";
 import { getPublicApiUrl } from "@/utils/env";
 import { geoErrorMessage } from "@/utils/geolocation";
+import { DEFAULT_CENTER, clampLat, clampLon, clampRadiusKm, mapSearchParams, mapSearchKey, parseHasWebsite } from "@/utils/mapSearchParams";
+import { distanceLabel, locationLabel, navigationUrl } from "@/utils/coordinates";
 
 // Dynamically import the map to avoid SSR issues (Leaflet needs window)
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -44,23 +46,8 @@ interface Merchant {
   lat: number | null;
   lon: number | null;
   distance_km?: number;
-}
-
-const DEFAULT_CENTER: [number, number] = [25.0339, 121.5645];
-
-export function clampLat(v: number): number {
-  if (!Number.isFinite(v)) return DEFAULT_CENTER[0];
-  return Math.min(90, Math.max(-90, v));
-}
-
-export function clampLon(v: number): number {
-  if (!Number.isFinite(v)) return DEFAULT_CENTER[1];
-  return Math.min(180, Math.max(-180, v));
-}
-
-export function clampRadiusKm(v: number): number {
-  if (!Number.isFinite(v) || v <= 0) return 2;
-  return Math.min(10, v);
+  coord_source?: string | null;
+  coord_accuracy?: string | null;
 }
 
 function MapContent() {
@@ -88,40 +75,20 @@ function MapContent() {
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
   const [locationStatus, setLocationStatus] = useState<string>("請輸入地址、定位，或點擊地圖搜尋");
   const [geoError, setGeoError] = useState<string | null>(null);
-  const [filterState, setFilterState] = useState<FilterState>(DEFAULT_FILTER_STATE);
+  const [filterState, setFilterState] = useState<FilterState>({ ...DEFAULT_FILTER_STATE, radiusKm: 2 });
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationGeoError, setLocationGeoError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
   // Sync state to URL
-  const updateURL = useCallback((lat: number, lon: number, r: number, q: string, indCode: string = "") => {
-    const currentLat = searchParams.get("lat");
-    const currentLon = searchParams.get("lon");
-    const currentR = searchParams.get("radius");
-    const currentQ = searchParams.get("q") || "";
-    const currentIndCode = searchParams.get("industry_code") || "";
-
-    if (
-      currentLat && parseFloat(currentLat).toFixed(5) === lat.toFixed(5) &&
-      currentLon && parseFloat(currentLon).toFixed(5) === lon.toFixed(5) &&
-      currentR && parseFloat(currentR) === r &&
-      currentQ === q &&
-      currentIndCode === indCode
-    ) {
-      return;
-    }
-
-    const params = new URLSearchParams();
-    params.set("lat", lat.toFixed(5));
-    params.set("lon", lon.toFixed(5));
-    params.set("radius", r.toString());
-    if (q) params.set("q", q);
-    if (indCode) params.set("industry_code", indCode);
+  const updateURL = useCallback((lat: number, lon: number, r: number, q: string, indCode = "", city = "", hasWebsite: boolean | null = null) => {
+    const params = mapSearchParams(lat, lon, r, q, indCode, city, hasWebsite);
+    if (searchParams.toString() === params.toString()) return;
     router.replace(`/map?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
 
-  const fetchNearby = useCallback(async (lat: number, lon: number, r: number, q: string, indCode: string = "") => {
-    const fetchKey = `${lat.toFixed(5)},${lon.toFixed(5)},${r},${q},${indCode}`;
+  const fetchNearby = useCallback(async (lat: number, lon: number, r: number, q: string, indCode = "", city = "", hasWebsite: boolean | null = null) => {
+    const fetchKey = mapSearchKey(lat, lon, r, q, indCode, city, hasWebsite);
     lastFetchedRef.current = fetchKey;
 
     if (abortControllerRef.current) {
@@ -132,27 +99,28 @@ function MapContent() {
 
     setLoading(true);
     setApiError(null);
-    updateURL(lat, lon, r, q, indCode);
+    updateURL(lat, lon, r, q, indCode, city, hasWebsite);
     try {
       const API_URL = getPublicApiUrl();
-      const qParam = q ? `&q=${encodeURIComponent(q)}` : "";
-      const indParam = indCode ? `&industry_code=${encodeURIComponent(indCode)}` : "";
+      const params = mapSearchParams(lat, lon, r, q, indCode, city, hasWebsite);
+      params.delete("radius");
+      params.set("radius_km", String(clampRadiusKm(r)));
+      params.set("limit", "200");
       const res = await fetch(
-        `${API_URL}/api/merchants/nearby?lat=${lat}&lon=${lon}&radius_km=${r}&limit=200${qParam}${indParam}`,
+        `${API_URL}/api/merchants/nearby?${params}`,
         { signal: controller.signal }
       );
-      if (res.ok) {
-        const data: Merchant[] = await res.json();
-        setMerchants(data);
-        setLocationStatus(`找到 ${data.length} 間商店（半徑 ${r} km 內）`);
-      } else {
-        setLocationStatus("查詢失敗，請稍後再試");
-        setApiError(`後端 API 回應錯誤 (${res.status})`);
-      }
+      if (!res.ok) throw new Error(`後端 API 回應錯誤 (${res.status})`);
+      const data: Merchant[] = await res.json();
+      if (controller.signal.aborted || abortControllerRef.current !== controller) return;
+      if (!Array.isArray(data)) throw new Error("後端 API 回應格式錯誤");
+      setMerchants(data);
+      setLocationStatus(`找到 ${data.length} 間商店（半徑 ${r} km 內）`);
     } catch (e: unknown) {
-      if (e instanceof Error && e.name === 'AbortError') return;
-      setLocationStatus("無法連線後端 API");
-      setApiError("無法連線後端 API，請確認網路連線或後端服務狀態");
+      if (controller.signal.aborted || abortControllerRef.current !== controller) return;
+      setMerchants([]);
+      setLocationStatus("查詢失敗，請稍後再試");
+      setApiError(e instanceof Error ? e.message : "無法連線後端 API");
     } finally {
       if (abortControllerRef.current === controller) {
         setLoading(false);
@@ -166,6 +134,8 @@ function MapContent() {
   const radiusParam = searchParams.get("radius");
   const qParam = searchParams.get("q");
   const indCodeParam = searchParams.get("industry_code");
+  const targetCity = searchParams.get("city") || "";
+  const targetHasWebsite = parseHasWebsite(searchParams.get("has_website"));
 
   const parsedLat = latParam ? parseFloat(latParam) : DEFAULT_CENTER[0];
   const parsedLon = lonParam ? parseFloat(lonParam) : DEFAULT_CENTER[1];
@@ -178,7 +148,7 @@ function MapContent() {
   const targetIndCode = indCodeParam || "";
 
   const [prevParamsKey, setPrevParamsKey] = useState<string>("");
-  const currentParamsKey = `${targetLat.toFixed(5)},${targetLon.toFixed(5)},${targetRadius},${targetKeyword},${targetIndCode}`;
+  const currentParamsKey = mapSearchKey(targetLat, targetLon, targetRadius, targetKeyword, targetIndCode, targetCity, targetHasWebsite);
 
   // URL 參數同步至 state：必須在 useEffect 內執行，避免 render 期 setState
   /* eslint-disable react-hooks/set-state-in-effect -- URL query params → state 單向同步 */
@@ -189,8 +159,8 @@ function MapContent() {
     setRadius(targetRadius);
     setTempRadius(targetRadius);
     setKeyword(targetKeyword);
-    setFilterState(prev => prev.industryCode === targetIndCode ? prev : { ...prev, industryCode: targetIndCode });
-  }, [currentParamsKey, prevParamsKey, targetLat, targetLon, targetRadius, targetKeyword, targetIndCode]);
+    setFilterState({ city: targetCity, hasWebsite: targetHasWebsite, radiusKm: targetRadius, industryCode: targetIndCode });
+  }, [currentParamsKey, prevParamsKey, targetLat, targetLon, targetRadius, targetKeyword, targetIndCode, targetCity, targetHasWebsite]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Trigger fetch when URL parameters change or initial load.
@@ -200,13 +170,13 @@ function MapContent() {
     let isCancelled = false;
     Promise.resolve().then(() => {
       if (!isCancelled) {
-        fetchNearby(targetLat, targetLon, targetRadius, targetKeyword, targetIndCode);
+        fetchNearby(targetLat, targetLon, targetRadius, targetKeyword, targetIndCode, targetCity, targetHasWebsite);
       }
     });
     return () => {
       isCancelled = true;
     };
-  }, [fetchNearby, currentParamsKey, targetLat, targetLon, targetRadius, targetKeyword, targetIndCode]);
+  }, [fetchNearby, currentParamsKey, targetLat, targetLon, targetRadius, targetKeyword, targetIndCode, targetCity, targetHasWebsite]);
 
   // Debounced radius slider effect：只改 URL，抓取交給 URL effect（單次）。
   // 舊版這裡直接 fetchNearby＋updateURL 改網址，URL effect 又打一次＝雙打。
@@ -215,11 +185,11 @@ function MapContent() {
 
     const timer = setTimeout(() => {
       setRadius(tempRadius);
-      updateURL(center[0], center[1], tempRadius, keyword, filterState.industryCode || "");
+      updateURL(center[0], center[1], tempRadius, keyword, filterState.industryCode || "", filterState.city, filterState.hasWebsite);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [tempRadius, radius, center, keyword, filterState.industryCode, updateURL]);
+  }, [tempRadius, radius, center, keyword, filterState.industryCode, filterState.city, filterState.hasWebsite, updateURL]);
 
   // Scroll active merchant item into view in sidebar
   useEffect(() => {
@@ -246,7 +216,7 @@ function MapContent() {
         const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
         setUserLocation(loc);
         setCenter(loc);
-        fetchNearby(loc[0], loc[1], radius, keyword, filterState.industryCode || "");
+        fetchNearby(loc[0], loc[1], radius, keyword, filterState.industryCode || "", filterState.city, filterState.hasWebsite);
       },
       (err) => {
         const msg = geoErrorMessage(err);
@@ -255,7 +225,7 @@ function MapContent() {
       },
       { enableHighAccuracy: false, timeout: 5000 }
     );
-  }, [fetchNearby, radius, keyword, filterState.industryCode]);
+  }, [fetchNearby, radius, keyword, filterState.industryCode, filterState.city, filterState.hasWebsite]);
 
   const handleFilterRequestLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -282,40 +252,38 @@ function MapContent() {
   const handleFilterChange = useCallback(
     (newFilters: FilterState) => {
       setFilterState(newFilters);
-      const newRadius = newFilters.radiusKm ?? radius;
-      if (newFilters.radiusKm !== null) {
-        setRadius(newFilters.radiusKm);
-        setTempRadius(newFilters.radiusKm);
-      }
-      fetchNearby(center[0], center[1], newRadius, keyword, newFilters.industryCode || "");
+      const newRadius = clampRadiusKm(newFilters.radiusKm ?? 2);
+      setRadius(newRadius);
+      setTempRadius(newRadius);
+      fetchNearby(center[0], center[1], newRadius, keyword, newFilters.industryCode || "", newFilters.city, newFilters.hasWebsite);
     },
-    [fetchNearby, center, radius, keyword]
+    [fetchNearby, center, keyword]
   );
 
   const handleMapClick = useCallback((clickLat: number, clickLon: number) => {
     setUserLocation(null);
     setCenter([clickLat, clickLon]);
-    fetchNearby(clickLat, clickLon, radius, keyword, filterState.industryCode || "");
+    fetchNearby(clickLat, clickLon, radius, keyword, filterState.industryCode || "", filterState.city, filterState.hasWebsite);
     setLocationStatus(`已選擇地點：${clickLat.toFixed(4)}, ${clickLon.toFixed(4)}`);
-  }, [fetchNearby, radius, keyword, filterState.industryCode]);
+  }, [fetchNearby, radius, keyword, filterState.industryCode, filterState.city, filterState.hasWebsite]);
 
   const handleAddressSelect = useCallback((selectLat: number, selectLon: number) => {
     setUserLocation(null);
     setCenter([selectLat, selectLon]);
-    fetchNearby(selectLat, selectLon, radius, keyword, filterState.industryCode || "");
+    fetchNearby(selectLat, selectLon, radius, keyword, filterState.industryCode || "", filterState.city, filterState.hasWebsite);
     setLocationStatus(`已切換至搜尋地址`);
-  }, [fetchNearby, radius, keyword, filterState.industryCode]);
+  }, [fetchNearby, radius, keyword, filterState.industryCode, filterState.city, filterState.hasWebsite]);
 
   const handleKeywordSearch = useCallback(() => {
-    fetchNearby(center[0], center[1], radius, keyword, filterState.industryCode || "");
-  }, [center, radius, keyword, filterState.industryCode, fetchNearby]);
+    fetchNearby(center[0], center[1], radius, keyword, filterState.industryCode || "", filterState.city, filterState.hasWebsite);
+  }, [center, radius, keyword, filterState.industryCode, filterState.city, filterState.hasWebsite, fetchNearby]);
 
   const handleResetFilters = useCallback(() => {
     setKeyword("");
     setTempRadius(2);
     setRadius(2);
     setCenter(DEFAULT_CENTER);
-    setFilterState(DEFAULT_FILTER_STATE);
+    setFilterState({ ...DEFAULT_FILTER_STATE, radiusKm: 2 });
     fetchNearby(DEFAULT_CENTER[0], DEFAULT_CENTER[1], 2, "", "");
   }, [fetchNearby]);
 
@@ -365,7 +333,8 @@ function MapContent() {
               搜尋
             </button>
             <FilterSheet
-              filters={filterState}
+              mode="map"
+              filters={{ ...filterState, radiusKm: radius }}
               cities={[
                 "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
                 "台中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "台南市",
@@ -386,7 +355,7 @@ function MapContent() {
             <input
               type="range"
               min={0.5}
-              max={10}
+              max={20}
               step={0.5}
               value={tempRadius}
               onChange={(e) => setTempRadius(parseFloat(e.target.value))}
@@ -418,7 +387,7 @@ function MapContent() {
             <span>{apiError}</span>
           </div>
           <button
-            onClick={() => fetchNearby(center[0], center[1], radius, keyword, filterState.industryCode || "")}
+            onClick={() => fetchNearby(center[0], center[1], radius, keyword, filterState.industryCode || "", filterState.city, filterState.hasWebsite)}
             className="inline-flex items-center gap-1 text-xs bg-red-100 hover:bg-red-200 text-red-800 px-2.5 py-1 rounded transition-colors cursor-pointer font-medium"
           >
             <ArrowPathIcon className="w-3.5 h-3.5" /> 重試
@@ -490,9 +459,10 @@ function MapContent() {
                   >
                     <p className="font-medium text-sm text-foreground truncate">{m.name}</p>
                     <p className="text-xs text-muted mt-1 truncate">{m.address}</p>
+                    {locationLabel(m) && <p className="text-xs text-muted mt-1">{locationLabel(m)}</p>}
                     <div className="flex items-center gap-3 mt-2">
                       {m.distance_km !== undefined && (
-                        <span className="text-xs text-accent font-medium">{m.distance_km.toFixed(2)} km</span>
+                        <span className="text-xs text-accent font-medium">{distanceLabel(m)}</span>
                       )}
                       {m.website && <GlobeAltIcon className="w-3 h-3 text-muted opacity-70" title="有專屬網站" />}
                     </div>
@@ -508,9 +478,9 @@ function MapContent() {
                     >
                       <ChevronRightIcon className="w-4 h-4" />
                     </Link>
-                    {m.lat && m.lon && (
+                    {(m.address || m.lat != null) && (
                       <Link
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lon}`}
+                        href={navigationUrl(m)}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Google 地圖導航"

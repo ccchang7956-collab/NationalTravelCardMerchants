@@ -15,10 +15,10 @@ $COMPOSE build
 echo "==> up -d"
 $COMPOSE up -d
 
-echo "==> 等 backend 健康（最多 120s）"
+echo "==> 等 backend 就緒（最多 120s）"
 for i in $(seq 1 60); do
-  if $COMPOSE exec -T backend curl -sf http://localhost:8000/api/health >/dev/null 2>&1; then
-    echo "backend healthy"
+  if $COMPOSE exec -T backend curl -sf http://localhost:8000/api/ready >/dev/null 2>&1; then
+    echo "backend ready"
     break
   fi
   sleep 2
@@ -26,14 +26,20 @@ for i in $(seq 1 60); do
 done
 
 echo "==> 驗收"
-curl -sf 127.0.0.1:8088/api/health | head -c 300; echo
+curl -sf 127.0.0.1:8088/api/ready
+if ! curl -fsS 127.0.0.1:8088/api/health; then
+  echo "資料健康檢查未通過，請檢查排程 logs；目前服務已可提供既有資料。"
+fi
 curl -sf 127.0.0.1:8088/api/data-info | head -c 300; echo
 for p in "/" "/sitemap.xml" "/robots.txt" "/llms.txt"; do
   printf "%s " "$p"
   curl -s -o /dev/null -w "%{http_code}\n" "127.0.0.1:8088$p"
 done
-for i in 0 1 2 3 4 5; do
+manifest_file=$(mktemp)
+trap 'rm -f "$manifest_file"' EXIT
+curl -fsS 127.0.0.1:8088/api/sitemaps/manifest > "$manifest_file"
+for i in $(python3 -c 'import json,sys; print(" ".join(str(s["id"]) for s in json.load(open(sys.argv[1]))["shards"]))' "$manifest_file"); do
   printf "/merchants/sitemap/%s.xml " "$i"
-  curl -s -o /dev/null -w "%{http_code}\n" "127.0.0.1:8088/merchants/sitemap/$i.xml"
+  curl -fsS -o /dev/null -w "%{http_code}\n" "127.0.0.1:8088/merchants/sitemap/$i.xml"
 done
 echo "deploy.sh 完成"

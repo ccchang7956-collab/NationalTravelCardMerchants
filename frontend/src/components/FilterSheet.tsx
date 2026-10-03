@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { AdjustmentsHorizontalIcon, XMarkIcon, MapPinIcon } from "@heroicons/react/24/outline";
+import { getPublicApiUrl } from "@/utils/env";
 
 export interface FilterState {
   city: string;
@@ -18,7 +19,6 @@ export const DEFAULT_FILTER_STATE: FilterState = {
 };
 
 const RADIUS_STEPS = [0.5, 1, 2, 5, 10, 20];
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 // /api/industries 全站共用、幾乎不變：模組級 promise 快取，首頁＋地圖頁只打一次
 export interface IndustryOption {
@@ -28,7 +28,7 @@ export interface IndustryOption {
 let industriesCache: Promise<IndustryOption[]> | null = null;
 function fetchIndustriesCached(): Promise<IndustryOption[]> {
   if (!industriesCache) {
-    industriesCache = fetch(`${API_URL}/api/industries`).then((res) => {
+    industriesCache = fetch(`${getPublicApiUrl()}/api/industries`).then((res) => {
       if (!res.ok) throw new Error(`industries API failed: ${res.status}`);
       return res.json();
     }).then((data) => {
@@ -51,6 +51,7 @@ interface FilterSheetProps {
   onRequestLocation: () => void;
   locationLoading: boolean;
   locationError: string | null;
+  mode?: "list" | "map";
 }
 
 function countActiveFilters(filters: FilterState): number {
@@ -62,7 +63,12 @@ function countActiveFilters(filters: FilterState): number {
   return count;
 }
 
-export default function FilterSheet({
+export default function FilterSheet(props: FilterSheetProps) {
+  const key = JSON.stringify([props.filters.city, props.filters.hasWebsite, props.filters.radiusKm, props.filters.industryCode || ""]);
+  return <FilterSheetPanel key={key} {...props} />;
+}
+
+function FilterSheetPanel({
   filters,
   cities,
   onChange,
@@ -70,10 +76,14 @@ export default function FilterSheet({
   onRequestLocation,
   locationLoading,
   locationError,
+  mode = "list",
 }: FilterSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [industries, setIndustries] = useState<Array<{ industry_code: string; industry_name: string }>>([]);
   const [industriesLoading, setIndustriesLoading] = useState(false);
+  const [industriesError, setIndustriesError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const industriesLoaded = useRef(false);
 
   // Local draft state — only committed on "套用"
   const [draft, setDraft] = useState<FilterState>(filters);
@@ -81,19 +91,21 @@ export default function FilterSheet({
   const touchStartY = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!isOpen || industries.length > 0 || industriesLoading) return;
+    if (!isOpen || industriesLoaded.current) return;
     let isMounted = true;
 
     Promise.resolve().then(() => {
       if (!isMounted) return;
       setIndustriesLoading(true);
+      setIndustriesError(false);
       fetchIndustriesCached()
         .then((data) => {
           if (isMounted) {
             setIndustries(data);
+            industriesLoaded.current = true;
           }
         })
-        .catch((err) => console.error("Failed to fetch industries:", err))
+        .catch(() => { if (isMounted) setIndustriesError(true); })
         .finally(() => {
           if (isMounted) setIndustriesLoading(false);
         });
@@ -102,22 +114,7 @@ export default function FilterSheet({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, industries.length, industriesLoading]);
-
-  // Sync draft when filters change externally (e.g. URL navigation).
-  // 必須在 useEffect 內：render 期直接 setState 在併發模式下可無限重渲染。
-  const [prevFilters, setPrevFilters] = useState<FilterState>(filters);
-  useEffect(() => {
-    if (
-      filters.city !== prevFilters.city ||
-      filters.hasWebsite !== prevFilters.hasWebsite ||
-      filters.radiusKm !== prevFilters.radiusKm ||
-      filters.industryCode !== prevFilters.industryCode
-    ) {
-      setPrevFilters(filters);
-      setDraft(filters);
-    }
-  }, [filters, prevFilters]);
+  }, [isOpen, retry]);
 
   const handleClose = useCallback(() => {
     setIsOpen(false);
@@ -149,8 +146,8 @@ export default function FilterSheet({
   }, [draft, onChange]);
 
   const handleClear = useCallback(() => {
-    setDraft(DEFAULT_FILTER_STATE);
-  }, []);
+    setDraft({ ...DEFAULT_FILTER_STATE, radiusKm: mode === "map" ? 2 : null });
+  }, [mode]);
 
   const handleOverlayClick = handleClose;
 
@@ -166,18 +163,13 @@ export default function FilterSheet({
     touchStartY.current = null;
   }, []);
 
-  const handleRadiusSliderClick = useCallback(() => {
-    if (!userLocation && !locationLoading) {
-      onRequestLocation();
-    }
-  }, [userLocation, locationLoading, onRequestLocation]);
-
   const activeCount = countActiveFilters(filters);
 
   return (
     <>
       {/* Trigger Button */}
       <button
+        type="button"
         id="filter-sheet-trigger"
         onClick={handleOpen}
         aria-haspopup="dialog"
@@ -231,6 +223,7 @@ export default function FilterSheet({
           <div className="flex items-center gap-3">
             {countActiveFilters(draft) > 0 && (
               <button
+                type="button"
                 onClick={handleClear}
                 className="text-sm text-muted hover:text-accent transition-colors cursor-pointer"
               >
@@ -238,6 +231,7 @@ export default function FilterSheet({
               </button>
             )}
             <button
+              type="button"
               onClick={handleClose}
               aria-label="關閉篩選面板"
               className="p-1 rounded-lg text-muted hover:text-foreground hover:bg-muted-bg transition-colors cursor-pointer"
@@ -277,6 +271,7 @@ export default function FilterSheet({
             </label>
             <select
               id="filter-industry"
+              disabled={industriesLoading}
               value={draft.industryCode || ""}
               onChange={(e) => setDraft({ ...draft, industryCode: e.target.value })}
               className="w-full px-3 py-2.5 bg-muted-bg border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all text-sm cursor-pointer"
@@ -288,6 +283,13 @@ export default function FilterSheet({
                 </option>
               ))}
             </select>
+            {industriesLoading && <p role="status" className="text-xs text-muted mt-2">載入行業別中…</p>}
+            {industriesError && (
+              <p role="alert" className="text-xs text-red-500 mt-2">
+                行業別載入失敗
+                <button type="button" onClick={() => setRetry(value => value + 1)} className="ml-2 underline">重試</button>
+              </p>
+            )}
           </div>
 
           {/* Has Website */}
@@ -300,6 +302,7 @@ export default function FilterSheet({
                 { label: "無", value: false },
               ].map(({ label, value }) => (
                 <button
+                  type="button"
                   key={label}
                   onClick={() => setDraft({ ...draft, hasWebsite: value })}
                   className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer border ${
@@ -323,9 +326,12 @@ export default function FilterSheet({
               )}
             </div>
 
-            {!userLocation && !locationLoading && (
+            {mode === "list" && !userLocation && !locationLoading && (
               <p className="text-xs text-muted mb-2">
                 需開啟位置權限才能使用距離篩選
+                <button type="button" onClick={onRequestLocation} className="ml-2 text-accent underline cursor-pointer">
+                  取得位置
+                </button>
               </p>
             )}
             {locationLoading && (
@@ -338,23 +344,19 @@ export default function FilterSheet({
               <p className="text-xs text-red-500 mb-2">{locationError}</p>
             )}
 
-            <div className="flex flex-wrap gap-2" onClick={handleRadiusSliderClick}>
+            <div className="flex flex-wrap gap-2">
               {RADIUS_STEPS.map((km) => (
                 <button
+                  type="button"
                   key={km}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!userLocation) {
-                      onRequestLocation();
-                      return;
-                    }
-                    setDraft({ ...draft, radiusKm: draft.radiusKm === km ? null : km });
+                  onClick={() => {
+                    setDraft({ ...draft, radiusKm: mode === "list" && draft.radiusKm === km ? null : km });
                   }}
-                  aria-disabled={!userLocation}
+                  disabled={mode === "list" && !userLocation}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-150 border ${
                     draft.radiusKm === km
                       ? 'bg-accent text-white border-accent cursor-pointer'
-                      : !userLocation
+                      : mode === "list" && !userLocation
                       ? 'bg-muted-bg text-muted/40 border-transparent cursor-not-allowed'
                       : 'bg-muted-bg text-muted border-transparent hover:border-border cursor-pointer'
                   }`}
@@ -362,8 +364,9 @@ export default function FilterSheet({
                   {km} km
                 </button>
               ))}
-              {draft.radiusKm !== null && (
+              {mode === "list" && draft.radiusKm !== null && (
                 <button
+                  type="button"
                   onClick={() => setDraft({ ...draft, radiusKm: null })}
                   className="px-3 py-1.5 rounded-lg text-sm text-muted border border-transparent hover:border-border bg-muted-bg transition-all cursor-pointer"
                 >
@@ -377,6 +380,7 @@ export default function FilterSheet({
         {/* Footer */}
         <div className="px-5 pb-6 pt-2">
           <button
+            type="button"
             id="filter-sheet-apply"
             onClick={handleApply}
             className="w-full py-3 bg-accent text-white rounded-xl font-semibold text-sm hover:bg-accent-hover transition-colors cursor-pointer"

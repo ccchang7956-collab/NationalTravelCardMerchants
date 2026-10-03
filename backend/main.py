@@ -1,12 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import os
 import json
 import sqlite3
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from shared.config import env_number
 
-from backend.routers import merchants
+from backend.routers import merchants, sitemaps
 from backend.database import DB_PATH, get_db_connection, init_db
 
 
@@ -39,23 +42,18 @@ app.add_middleware(
 )
 
 app.include_router(merchants.router, prefix="/api", tags=["merchants"])
+app.include_router(sitemaps.router, prefix="/api", tags=["sitemaps"])
 
 @app.get("/")
 def root():
-    db_exists = os.path.exists(DB_PATH)
+    db_exists, _ = _probe_database()
     return {
         "message": "Welcome to National Travel Card Merchants API",
         "database_ready": db_exists,
         "docs_url": "/docs"
     }
 
-# 資料新鮮度告警門檻（小時）：update_meta.json 的 last_updated 超過此值視為 stale。
-# 可用 DATA_STALE_AFTER_HOURS 環境變數覆寫，預設 48h。
-# 非數字時 fallback 48，避免 import 期直接 crash。
-try:
-    STALE_AFTER_HOURS = float(os.environ.get("DATA_STALE_AFTER_HOURS", "48"))
-except (ValueError, TypeError):
-    STALE_AFTER_HOURS = 48.0
+STALE_AFTER_HOURS = env_number("DATA_STALE_AFTER_HOURS", 48.0, 0.1, 8760)
 _TAIPEI_TZ = timezone(timedelta(hours=8))
 
 def _read_update_meta() -> dict:
@@ -69,17 +67,38 @@ def _read_update_meta() -> dict:
     except Exception:
         return {}
 
+def _probe_database(count=False):
+    conn = None
+    try:
+        uri = Path(DB_PATH).resolve().as_uri() + "?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, timeout=1)
+        conn.execute("SELECT id,name,address,lat,lon FROM merchants LIMIT 1").fetchone()
+        conn.execute("SELECT rowid FROM merchants_fts LIMIT 1").fetchone()
+        total = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0] if count else None
+        return True, total
+    except (sqlite3.DatabaseError, OSError):
+        return False, None
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/ready")
+def ready():
+    available, _ = _probe_database()
+    return JSONResponse({"status": "ready" if available else "unavailable", "database_ready": available}, status_code=200 if available else 503)
+
+
 @app.get("/api/health")
 def health():
-    """健康檢查 + 管線存活：最後「檢查」時間超過 STALE_AFTER_HOURS 視為 stale。
-
-    無變更也會每天留下 last_checked，因此看檢查時間而非資料時間；
-    舊版 meta 沒有該欄位才退回看 last_updated（行為與過去一致）。
-    """
+    """Readiness and last successful pipeline check are separate signals."""
     meta = _read_update_meta()
     last_updated = meta.get("last_updated")
     last_checked = meta.get("last_checked")
-    anchor = last_checked if isinstance(last_checked, str) and last_checked else last_updated
+    result = meta.get("last_check_result")
+    anchor = meta.get("last_successful_check")
+    if not isinstance(anchor, str) or not anchor:
+        anchor = last_checked if result in ("updated", "skipped_no_change") else last_updated
     age_hours = None
     stale = True
     if isinstance(anchor, str) and anchor:
@@ -89,52 +108,38 @@ def health():
                 ts = ts.replace(tzinfo=_TAIPEI_TZ)
             age_hours = (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds() / 3600
             age_hours = round(age_hours, 2)
-            stale = age_hours > STALE_AFTER_HOURS
+            stale = age_hours > STALE_AFTER_HOURS or age_hours < -1
         except (ValueError, TypeError, OverflowError):
             stale = True
-    return {
-        "status": "stale" if stale else "ok",
-        "database_ready": os.path.exists(DB_PATH),
+    available, _ = _probe_database()
+    status = "unavailable" if not available else "degraded" if result == "failed" else "stale" if stale else "ok"
+    return JSONResponse({
+        "status": status,
+        "database_ready": available,
         "last_updated": last_updated,
         "last_checked": last_checked,
-        "last_check_result": meta.get("last_check_result"),
+        "last_check_result": result,
+        "last_check_note": meta.get("last_check_note"),
+        "last_successful_check": anchor,
         "age_hours": age_hours,
         "stale": stale,
         "stale_after_hours": STALE_AFTER_HOURS,
-    }
+    }, status_code=200 if status == "ok" else 503)
 
 @app.get("/api/data-info")
 def data_info():
     """回傳資料最後更新時間、商家總數、PDF hash 等元資訊"""
-    # 讀取 scheduler 寫入的 metadata 檔案
-    meta_path = os.path.join(os.path.dirname(DB_PATH), "update_meta.json")
-    meta = {}
-    if os.path.exists(meta_path):
-        try:
-            with open(meta_path, "r", encoding="utf-8") as f:
-                meta = json.load(f)
-        except Exception:
-            meta = {}
-
-    # 從 DB 直接讀取最新商家數量（當作 fallback）
-    total_merchants = 0
-    if os.path.exists(DB_PATH):
-        conn = None
-        try:
-            conn = get_db_connection()
-            total_merchants = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
-        except Exception:
-            total_merchants = 0
-        finally:
-            if conn:
-                conn.close()
+    meta = _read_update_meta()
+    available, total_merchants = _probe_database(count=True)
 
     return {
-        "database_ready": os.path.exists(DB_PATH),
-        "total_merchants": meta.get("total_merchants", total_merchants),
+        "database_ready": available,
+        "total_merchants": total_merchants,
         "last_updated": meta.get("last_updated"),
         "last_checked": meta.get("last_checked"),
         "last_check_result": meta.get("last_check_result"),
+        "last_successful_check": meta.get("last_successful_check"),
+        "last_check_note": meta.get("last_check_note"),
         "pdf_hash": meta.get("pdf_hash"),
         "new_merchants": meta.get("new_merchants"),
         "removed_merchants": meta.get("removed_merchants"),

@@ -37,11 +37,11 @@ else
   fail "後端缺少 /api/health 或 update_meta 新鮮度邏輯"
 fi
 
-# 4. scheduler 有 healthcheck（檢查 /data/update_meta.json）
-if echo "$sched_block" | grep -q "healthcheck" && echo "$sched_block" | grep -q "update_meta.json"; then
-  ok "scheduler healthcheck 檢查 update_meta.json"
+# 4. scheduler healthcheck 檢查排程器存活；資料結果另由 API 監控。
+if echo "$sched_block" | grep -q "healthcheck" && echo "$sched_block" | grep -q "supercronic"; then
+  ok "scheduler healthcheck 檢查 supercronic"
 else
-  fail "scheduler 缺少 healthcheck / update_meta.json 檢查"
+  fail "scheduler 缺少 healthcheck / supercronic 檢查"
 fi
 
 # 5. /data 權限處理：entrypoint 或 Dockerfile 必須處理 chown /data
@@ -62,6 +62,9 @@ ci_file=".github/workflows/build.yml"
 if [ -f "$ci_file" ] \
   && grep -q "pytest" "$ci_file" \
   && grep -q "jest" "$ci_file" \
+  && grep -q "typecheck" "$ci_file" \
+  && grep -q "max-warnings=0" "$ci_file" \
+  && grep -q "test:e2e" "$ci_file" \
   && grep -q "compose.*build" "$ci_file"; then
   ok "CI build.yml 含 pytest + jest + compose build"
 else

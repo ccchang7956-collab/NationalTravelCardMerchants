@@ -6,6 +6,7 @@ import Form from "next/form";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import FilterSheet, { FilterState } from "@/components/FilterSheet";
 import { geoErrorMessage } from "@/utils/geolocation";
+import { mapSearchParams } from "@/utils/mapSearchParams";
 
 interface HomeSearchSectionProps {
   initialQ: string;
@@ -78,13 +79,7 @@ export default function HomeSearchSection({
 
       // 列表頁不做地理篩選：有定位＋距離一律導向 /map（參數名對齊 map 頁：radius/lat/lon）
       if (effective.radiusKm !== null && userLocation) {
-        const mapParams = new URLSearchParams();
-        mapParams.set("lat", userLocation.lat.toFixed(5));
-        mapParams.set("lon", userLocation.lon.toFixed(5));
-        mapParams.set("radius", String(effective.radiusKm));
-        if (q) mapParams.set("q", q);
-        if (effective.industryCode)
-          mapParams.set("industry_code", effective.industryCode);
+        const mapParams = mapSearchParams(userLocation.lat, userLocation.lon, effective.radiusKm, q, effective.industryCode, effective.city, effective.hasWebsite);
         router.push(`/map?${mapParams.toString()}`);
         return;
       }

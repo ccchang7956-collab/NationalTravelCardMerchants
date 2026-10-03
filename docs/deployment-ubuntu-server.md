@@ -123,8 +123,10 @@ curl https://ntc.shibaalin.com/api/health
 ## 8. 上線驗收
 
 - 開 `https://ntc.shibaalin.com`，店家列表有數字。
-- `/sitemap.xml`（首頁）、`/merchants/sitemap/0.xml`～`/5.xml`（6 片商家，共 54023 筆）、`/llms.txt`、`robots.txt`（列 7 條 sitemap）都是正式網域。
-- 去 Google Search Console 送 sitemap（index 沒有，7 個逐一送）。
+- `/sitemap.xml`（首頁）、`/llms.txt` 與 `robots.txt` 都使用正式網域。商家分片由 `/api/sitemaps/manifest` 決定，每片最多 10,000 筆，超過 60,000 筆會自動新增第 7 片。
+- `robots.txt` 列出目前所有 `/merchants/sitemap/<id>.xml`；Google Search Console 可使用這份動態清單提交。
+- `/api/ready` 回 200 表示資料庫可提供查詢；`/api/health` 另監控最後成功檢查。最近更新失敗為 degraded、超過 `DATA_STALE_AFTER_HOURS` 為 stale，皆回 503，但服務仍可提供既有資料。
+- `.env` 的 `DATA_STALE_AFTER_HOURS`、`NOTIFY_WEBHOOK_URL`、`MASS_DELETE_MIN_OLD`、`MASS_DELETE_RATIO` 已傳入對應容器。修改後重新建立容器讓設定生效；非法數值會告警並採預設。
 
 ## 日常維運
 

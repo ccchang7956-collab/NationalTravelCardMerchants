@@ -5,11 +5,15 @@ export function freshnessNote(
   result?: string | null
 ): string {
   if (!lastChecked) return "";
+  if (result === "failed") return "（最近檢查失敗，顯示既有資料）";
   // last_checked 是 +08:00 ISO，前 10 碼即台北日期；同樣基準算今天
   const todayTaipei = new Date(Date.now() + 8 * 3600 * 1000)
     .toISOString()
     .slice(0, 10);
-  if (lastChecked.slice(0, 10) !== todayTaipei) return "";
+  const checked = new Date(lastChecked);
+  if (!Number.isFinite(checked.getTime())) return "";
+  const checkedTaipei = new Date(checked.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  if (checkedTaipei !== todayTaipei) return "";
   if (result === "skipped_no_change") return "（今日已檢查，無新資料）";
   if (result === "updated") return "（今日已更新）";
   return "";

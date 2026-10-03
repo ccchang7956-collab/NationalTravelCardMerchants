@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 複製程式碼（保留目錄結構，uvicorn 執行 backend.main:app 需要）
 COPY backend/ ./backend/
+COPY shared/ ./shared/
 COPY backend/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # 建立非 root 使用者 (統一 UID/GID 1000 以避免 Volume 權限衝突)
@@ -26,6 +27,6 @@ ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
+    CMD curl -f http://localhost:8000/api/ready || exit 1
 
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

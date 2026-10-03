@@ -188,7 +188,7 @@ def test_null_tax_id_unbounded_duplication():
         
         # Test off-shelf cleanup (removal from temp_db)
         empty_temp_db = os.path.join(tmpdir, "empty_temp.db")
-        create_mock_temp_db(empty_temp_db, [])
+        create_mock_temp_db(empty_temp_db, [{"name":"Replacement","address":"Addr","zip_code":"100","tax_id":"99999999","lat":25.0,"lon":121.5}])
         transactional_sync_db(empty_temp_db, target_db)
         
         conn = sqlite3.connect(target_db)

@@ -4,9 +4,15 @@ import withPWAInit from "@ducanh2912/next-pwa";
 const withPWA = withPWAInit({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
+  // Automatic reload can interrupt an offline navigation and restore the previous URL.
+  reloadOnOnline: false,
   fallbacks: {
     document: "/offline",
   },
+  workboxOptions: {
+    runtimeCaching: [{ urlPattern: /\/api\//, handler: "NetworkOnly", method: "GET", options: { cacheName: "apis" } }],
+  },
+  extendDefaultRuntimeCaching: true,
 });
 
 const nextConfig: NextConfig = {

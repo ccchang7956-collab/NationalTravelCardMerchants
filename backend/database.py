@@ -1,6 +1,7 @@
 import sqlite3
 from typing import Generator
 import os
+from shared.schema import migrate_database
 
 # Docker 環境中由 DB_PATH 環境變數指定（預設 /data/merchants.db）
 # 本地開發時 fallback 到同目錄的 merchants.db
@@ -38,6 +39,9 @@ def init_db(conn: sqlite3.Connection = None):
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous = NORMAL;")
     cursor = conn.cursor()
+    existed = cursor.execute("SELECT 1 FROM sqlite_master WHERE name='merchants'").fetchone()
+    if existed:
+        migrate_database(conn)
     
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS merchants (
@@ -170,8 +174,9 @@ def init_db(conn: sqlite3.Connection = None):
         pass
 
     conn.commit()
+    if not existed:
+        migrate_database(conn, backup=False)
     if close_after:
         conn.close()
-
 
 

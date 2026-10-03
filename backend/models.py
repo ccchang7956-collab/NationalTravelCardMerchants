@@ -23,6 +23,9 @@ class MerchantListItem(MerchantBase):
     lat: Optional[float] = None
     lon: Optional[float] = None
     distance_km: Optional[float] = None
+    coord_source: Optional[str] = None
+    coord_accuracy: Optional[str] = None
+    geocoded_address: Optional[str] = None
 
 class MerchantDetail(MerchantListItem):
     industries: List[MerchantIndustry] = []
@@ -45,6 +48,7 @@ class Stats(BaseModel):
     last_updated: Optional[str] = None
     last_checked: Optional[str] = None
     last_check_result: Optional[str] = None
+    last_successful_check: Optional[str] = None
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -135,5 +139,4 @@ class ItineraryResponse(BaseModel):
     items: List[ItineraryItemResponse] = []
     total_tourist_quota: float = 0.0
     total_general_quota: float = 0.0
-
 

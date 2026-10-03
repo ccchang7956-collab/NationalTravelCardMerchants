@@ -1,6 +1,6 @@
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from "next/og";
 
-export const runtime = "edge";
+export const dynamic = "force-dynamic";
 export const alt = "國民旅遊卡特約商店詳情";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -106,11 +106,18 @@ export default async function OgImage({
           <div
             style={{
               fontSize: "22px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
               color: "rgba(255,255,255,0.65)",
               marginBottom: "16px",
             }}
           >
-            📍 {address}
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            {address}
           </div>
         )}
 
@@ -124,12 +131,12 @@ export default async function OgImage({
             border: "1px solid rgba(194,94,64,0.5)",
             borderRadius: "12px",
             padding: "16px 24px",
-            width: "fit-content",
+            alignSelf: "flex-start",
           }}
         >
-          <div style={{ fontSize: "24px", color: "#C25E40", fontWeight: "700" }}>
-            ✓
-          </div>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C25E40" strokeWidth="3">
+            <path d="m5 12 4 4 10-10" />
+          </svg>
           <div style={{ fontSize: "22px", color: "rgba(255,255,255,0.9)" }}>
             國民旅遊卡官方認定特約商店
           </div>

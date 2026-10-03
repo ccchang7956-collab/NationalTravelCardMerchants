@@ -185,7 +185,7 @@ describe("Phase2 Task4: next.config 安全標頭", () => {
 
 describe("Phase2 Task4: map/page 箝制 + a11y + useEffect", () => {
   it("lat/lon/radius 箝制在合法範圍", async () => {
-    const mod = (await import("@/app/map/page")) as unknown as {
+    const mod = (await import("@/utils/mapSearchParams")) as unknown as {
       clampLat: (v: number) => number;
       clampLon: (v: number) => number;
       clampRadiusKm: (v: number) => number;
@@ -194,7 +194,8 @@ describe("Phase2 Task4: map/page 箝制 + a11y + useEffect", () => {
     expect(mod.clampLat(-100)).toBe(-90);
     expect(mod.clampLon(200)).toBe(180);
     expect(mod.clampLon(-200)).toBe(-180);
-    expect(mod.clampRadiusKm(99)).toBeLessThanOrEqual(10);
+    expect(mod.clampRadiusKm(99)).toBe(20);
+    expect(mod.clampRadiusKm(0.1)).toBe(0.5);
     expect(mod.clampRadiusKm(0)).toBe(2);
   });
 

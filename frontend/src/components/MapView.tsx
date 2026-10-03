@@ -2,6 +2,7 @@ import type * as L from "leaflet";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { escapeHtml, sanitizeUrl } from "../utils/sanitize";
+import { distanceLabel, locationLabel, hasCoordinates } from "@/utils/coordinates";
 
 // Static CSS imports — must be at top level (Turbopack requirement)
 import "leaflet/dist/leaflet.css";
@@ -18,6 +19,8 @@ interface Merchant {
   lat: number | null;
   lon: number | null;
   distance_km?: number;
+  coord_source?: string | null;
+  coord_accuracy?: string | null;
 }
 
 interface MapViewProps {
@@ -150,12 +153,12 @@ export default function MapView({
     });
 
     merchants.forEach((m) => {
-      if (!m.lat || !m.lon) return;
-      const marker = L.marker([m.lat, m.lon], { icon: merchantIcon });
+      if (!hasCoordinates(m)) return;
+      const marker = L.marker([m.lat!, m.lon!], { icon: merchantIcon });
 
       const distText =
         m.distance_km !== undefined
-          ? `<span style="color:#C25E40;font-weight:500">${m.distance_km.toFixed(2)} km</span>`
+          ? `<span style="color:#C25E40;font-weight:500">${escapeHtml(distanceLabel(m))}</span>`
           : "";
 
       const websiteLink = m.website
@@ -172,6 +175,7 @@ export default function MapView({
         `<div style="min-width:200px;font-family:system-ui;padding:4px 0">
           <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:4px">${safeName}</div>
           <div style="font-size:12px;color:#666;margin-bottom:4px">${safeAddress}</div>
+          ${locationLabel(m) ? `<div style="font-size:11px;color:#888">${escapeHtml(locationLabel(m)!)}</div>` : ""}
           <div style="font-size:11px;color:#888">統編：${safeTaxId}</div>
           ${websiteLink}
           ${distText ? `<div style="margin-top:4px;font-size:11px">${distText} 外</div>` : ""}
