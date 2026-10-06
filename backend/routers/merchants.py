@@ -56,7 +56,11 @@ def append_industry_filter(clauses, params, industry_code):
     """)
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate distance in km between two lat/lon points. Missing/invalid -> inf (excluded)."""
+    """Calculate distance in km between two lat/lon points. Missing/invalid -> inf (excluded).
+
+    注意：與 services/route_optimizer.haversine_distance 語意相反（該死碼回 0.0，為相容保留）。
+    nearby 必須用本函式（inf 才會被 dist<=radius 排除）；route_optimizer 未被 router 使用，勿混用。
+    """
     if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
         return float("inf")
     try:
@@ -157,7 +161,8 @@ def get_merchants(
     }
 
 
-@router.get("/merchants/nearby", response_model=List[MerchantListItem])
+@router.get("/merchants/nearby", response_model=List[MerchantListItem],
+             description="附近搜尋：bbox 候選上限 5000 筆（近似語意，密集區 X-Total-Count 可能低估），精算 haversine 後排序切片。")
 def get_nearby_merchants(
     lat: float = Query(..., description="Latitude of center point"),
     lon: float = Query(..., description="Longitude of center point"),
@@ -283,21 +288,25 @@ def get_merchant(merchant_id_or_tax_id: str, db: sqlite3.Connection = Depends(ge
         raise HTTPException(status_code=503, detail="Database temporarily unavailable")
     if not row:
         raise HTTPException(status_code=404, detail="Merchant not found")
-    
+
     merchant = dict(row)
-    
+
     # 撈取該店家的行業別，依 priority 排序
-    tax_id = merchant.get("tax_id")
-    if not tax_id:
-        merchant["industries"] = []
-    else:
-        ind_cursor = db.cursor()
-        ind_cursor.execute(
-            "SELECT industry_code, industry_name, priority FROM merchant_industries WHERE tax_id = ? ORDER BY priority ASC",
-            (tax_id,)
-        )
-        industries = [dict(r) for r in ind_cursor.fetchall()]
-        merchant["industries"] = industries
+    try:
+        tax_id = merchant.get("tax_id")
+        if not tax_id:
+            merchant["industries"] = []
+        else:
+            ind_cursor = db.cursor()
+            ind_cursor.execute(
+                "SELECT industry_code, industry_name, priority FROM merchant_industries WHERE tax_id = ? ORDER BY priority ASC",
+                (tax_id,)
+            )
+            industries = [dict(r) for r in ind_cursor.fetchall()]
+            merchant["industries"] = industries
+    except sqlite3.OperationalError as e:
+        log.error(f"get_merchant industries OperationalError: {e}")
+        raise HTTPException(status_code=503, detail="Database temporarily unavailable")
     return merchant
 
 
@@ -384,11 +393,12 @@ def get_industries(db: sqlite3.Connection = Depends(get_db)):
             WHERE mi.industry_code != '' AND mi.industry_name != ''
             ORDER BY mi.industry_code ASC
         """)
+        rows = cursor.fetchall()
     except sqlite3.OperationalError as e:
         log.error(f"get_industries OperationalError: {e}")
         raise HTTPException(status_code=503, detail="Database temporarily unavailable")
     industries = []
-    for row in cursor.fetchall():
+    for row in rows:
         code = row["industry_code"]
         group_code, group_name, order = industry_group_for(code)
         industries.append({

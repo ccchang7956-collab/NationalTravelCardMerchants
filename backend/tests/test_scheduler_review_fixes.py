@@ -14,6 +14,5 @@ def test_parse_search_query_caps_terms():
     assert parsed is not None
     # 最多 10 個短語
     assert parsed.count(" AND ") + 1 <= 10
-    assert len("a" * 500) > 0  # placeholder
     capped = parse_search_query("x" * 500)
     assert capped is None or len(capped) <= 1200
