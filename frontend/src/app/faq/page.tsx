@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
+import { escapeJsonLd } from "@/utils/jsonld";
 import { freshnessNote } from "@/utils/dataFreshness";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -186,7 +187,7 @@ export default async function FaqPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: escapeJsonLd({
             "@context": "https://schema.org",
             "@type": "FAQPage",
             mainEntity: faqItems.map((f) => ({

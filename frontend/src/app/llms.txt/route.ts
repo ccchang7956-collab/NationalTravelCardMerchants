@@ -1,6 +1,7 @@
 import { getSiteUrl } from "@/utils/site";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
+export const revalidate = 86400;
 
 export async function GET() {
   const SITE_URL = getSiteUrl();
@@ -11,7 +12,7 @@ export async function GET() {
 資料來源：人事行政總處開放資料，每日比對更新；商家頁載明資料更新時間。
 API: /api/stats /api/data-info
 查詢: /?q=關鍵字&city=台北市
-商家頁: /merchant/{tax_id}
+商家頁: /merchant/{id}（舊 /merchant/{tax_id} 會 301 轉址）
 網站說明（給 AI 摘要用）: /llms.txt
 `;
   return new Response(body, {

@@ -3,10 +3,17 @@ import { getSiteUrl } from "@/utils/site";
 import { fetchSitemapManifest } from "@/utils/sitemapShards";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const SITE_URL = getSiteUrl();
-  const manifest = await fetchSitemapManifest();
+  let shards: string[] = [];
+  try {
+    const manifest = await fetchSitemapManifest();
+    shards = manifest.shards.map(shard => `${SITE_URL}/merchants/sitemap/${shard.id}.xml`);
+  } catch {
+    shards = [];
+  }
   return {
     rules: [
       {
@@ -20,7 +27,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     // 根 sitemap 只含首頁；商家分片在 /merchants/sitemap/<id>.xml（片數見 sitemapShards）
     sitemap: [
       `${SITE_URL}/sitemap.xml`,
-      ...manifest.shards.map(shard => `${SITE_URL}/merchants/sitemap/${shard.id}.xml`),
+      ...shards,
     ],
   };
 }

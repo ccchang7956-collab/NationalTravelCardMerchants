@@ -10,6 +10,7 @@ import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
 import { freshnessNote } from "@/utils/dataFreshness";
 import { loadHomeData } from "@/utils/homeData";
+import { escapeJsonLd } from "@/utils/jsonld";
 import { mapSearchParams } from "@/utils/mapSearchParams";
 import { normalizeIndustryCode } from "@/utils/industryTaxonomy";
 import { locationLabel, hasCoordinates } from "@/utils/coordinates";
@@ -57,11 +58,12 @@ export async function generateMetadata({
   // canonical 只收白名單參數（junk param 不照抄，避免污染與重複內容）
   // 地理參數只影響 noindex（會 client 導向 /map），不進 canonical
   const hasGeoParams = !!(resolved.radius_km || resolved.lat || resolved.lon);
-  const hasFilters = !!(q || city || resolved.has_website || industryCode || hasGeoParams || (resolved.page && resolved.page !== "1"));
+  const pageParam = Array.isArray(resolved.page) ? resolved.page[0] : resolved.page;
+  const hasFilters = !!(q || city || resolved.has_website || industryCode || hasGeoParams || (pageParam && pageParam !== "1"));
   const canonicalParams = new URLSearchParams();
   if (q) canonicalParams.set("q", q);
   if (city) canonicalParams.set("city", city);
-  if (typeof resolved.has_website === "string") canonicalParams.set("has_website", resolved.has_website);
+  if (resolved.has_website === "true" || resolved.has_website === "false") canonicalParams.set("has_website", resolved.has_website);
   if (industryCode) canonicalParams.set("industry_code", industryCode);
   if (page > 1) canonicalParams.set("page", String(page));
 
@@ -412,6 +414,7 @@ export default async function Home({
               <input
                 type="number"
                 name="page"
+                aria-label="跳至頁碼"
                 min={1}
                 max={totalPages}
                 placeholder={String(page)}
@@ -552,7 +555,7 @@ export default async function Home({
           <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{
-              __html: JSON.stringify({
+              __html: escapeJsonLd({
                 "@context": "https://schema.org",
                 "@type": "FAQPage",
                 mainEntity: [

@@ -5,6 +5,7 @@ import GlobalRadar from "@/components/GlobalRadar";
 import PWAOfflineBanner from "@/components/PWAOfflineBanner";
 import { ToastProvider } from "@/components/Toast";
 import { getSiteUrl } from "@/utils/site";
+import { escapeJsonLd } from "@/utils/jsonld";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -82,7 +83,7 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: escapeJsonLd({
               "@context": "https://schema.org",
               "@type": "WebSite",
               name: "國民旅遊卡特約商店查詢",
@@ -93,7 +94,7 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: escapeJsonLd({
               "@context": "https://schema.org",
               "@type": "Organization",
               name: "國民旅遊卡特約商店查詢",

@@ -1,12 +1,13 @@
 import { Metadata } from "next";
 import { cache } from "react";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { ArrowLeftIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, ArrowTopRightOnSquareIcon, MapIcon } from "@heroicons/react/24/outline";
 import MerchantMapSection from "@/components/MerchantMapSection";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
 import { sanitizeUrl } from "@/utils/sanitize";
+import { escapeJsonLd } from "@/utils/jsonld";
 import { freshnessNote } from "@/utils/dataFreshness";
 import { hasCoordinates, locationLabel, navigationUrl } from "@/utils/coordinates";
 
@@ -92,7 +93,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
 
   // 使用商家主鍵區分同一統編的不同分店；舊統編網址導向第一個對應分店。
   if (resolvedParams.id !== String(merchant.id)) {
-    redirect(`/merchant/${merchant.id}`);
+    permanentRedirect(`/merchant/${merchant.id}`);
   }
 
   const last_updated: string | null =
@@ -341,12 +342,12 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
       {/* LocalBusiness 結構化資料 */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: escapeJsonLd(jsonLd) }}
       />
       {/* BreadcrumbList 結構化資料 */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+        dangerouslySetInnerHTML={{ __html: escapeJsonLd(breadcrumbLd) }}
       />
     </div>
   );

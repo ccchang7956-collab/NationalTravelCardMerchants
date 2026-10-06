@@ -46,6 +46,7 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
     if (!query.trim()) return;
 
     const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new Error("timeout")), 8000);
 
     const delayDebounceFn = setTimeout(async () => {
       setLoading(true);
@@ -57,7 +58,6 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
             headers: {
               // 瀏覽器禁 User-Agent（forbidden header，送了也到不了 Nominatim）：改用 Referer 政策註明來源
               "Accept-Language": "zh-TW,zh;q=0.9",
-              "Referer": window.location.origin,
             },
             signal: controller.signal,
           }
@@ -82,6 +82,7 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
 
     return () => {
       clearTimeout(delayDebounceFn);
+      clearTimeout(timeout);
       controller.abort(); // 同時取消 in-flight 請求，避免 race condition
     };
   }, [query]);

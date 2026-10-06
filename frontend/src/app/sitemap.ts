@@ -6,6 +6,7 @@ import { getSiteUrl } from "@/utils/site";
 // 避免單檔超過 Google 50000 URL 上限，且避開 Next.js 16 metadata 與
 // app/sitemap.xml/route.ts 共佔 /sitemap.xml 的衝突。
 export const dynamic = "force-dynamic";
+export const revalidate = 86400;
 
 async function fetchDataLastUpdated(): Promise<string | undefined> {
   const API_URL =
