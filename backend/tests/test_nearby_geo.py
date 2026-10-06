@@ -84,6 +84,23 @@ def test_nearby_limit_returns_nearest():
     assert [m["name"] for m in r.json()] == ["台北A"]
 
 
+def test_nearby_pagination_returns_complete_stable_pages_and_counts():
+    client = TestClient(app)
+    params = {"lat": 25.0339, "lon": 121.5645, "radius_km": 5, "limit": 2}
+
+    first = client.get("/api/merchants/nearby", params={**params, "offset": 0})
+    second = client.get("/api/merchants/nearby", params={**params, "offset": 2})
+    empty = client.get("/api/merchants/nearby", params={**params, "offset": 4})
+
+    assert first.status_code == second.status_code == empty.status_code == 200
+    assert [m["name"] for m in first.json()] == ["台北A", "台北B"]
+    assert [m["name"] for m in second.json()] == ["台北C"]
+    assert empty.json() == []
+    assert first.headers["X-Total-Count"] == second.headers["X-Total-Count"] == "3"
+    assert first.headers["X-Has-More"] == "true"
+    assert second.headers["X-Has-More"] == "false"
+
+
 def test_nearby_dateline_wrap():
     client = TestClient(app)
     r = client.get("/api/merchants/nearby", params={"lat": 0.0, "lon": 179.95, "radius_km": 20})

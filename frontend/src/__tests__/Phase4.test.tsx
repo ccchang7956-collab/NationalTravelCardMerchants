@@ -53,6 +53,13 @@ describe("Phase4 Task4: API_URL 解凍（每次請求時取值）", () => {
     expect(s).toContain("const API_URL = getBackendUrl()");
   });
 
+  it("附近商家使用分頁並讀取完整筆數標頭", () => {
+    const s = readSrc("../app/map/page.tsx");
+    expect(s).toContain('params.set("offset", String(offset))');
+    expect(s).toContain('res.headers.get("X-Total-Count")');
+    expect(s).toContain("handleLoadMore");
+  });
+
   it("商家詳情 canonical 使用商家 ID，確保同統編分店網址唯一", () => {
     const s = readSrc("../app/merchant/[id]/page.tsx");
     expect(s).toContain("/merchant/${merchant.id}");

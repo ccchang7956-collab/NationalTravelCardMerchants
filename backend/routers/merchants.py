@@ -3,7 +3,7 @@ import logging
 import math
 import os
 import json
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Response
 from typing import Optional, List, Tuple
 from backend.database import get_db, DB_PATH
 from backend.models import MerchantListItem, MerchantDetail, PaginatedMerchants, Stats, CityStat, IndustryInfo
@@ -167,7 +167,9 @@ def get_nearby_merchants(
     has_website: Optional[bool] = Query(None, description="Filter by website availability"),
     industry_code: Optional[str] = Query(None, description="Filter by industry code (supports prefix wildcard matching)"),
     limit: int = Query(100, ge=1, le=500, description="Max number of results"),
-    db: sqlite3.Connection = Depends(get_db)
+    offset: int = Query(0, ge=0, le=1_000_000, description="Number of nearest results to skip"),
+    db: sqlite3.Connection = Depends(get_db),
+    response: Response = None,
 ):
     if math.isnan(lat) or math.isnan(lon) or math.isinf(lat) or math.isinf(lon):
         raise HTTPException(status_code=400, detail="Invalid latitude or longitude")
@@ -184,8 +186,6 @@ def get_nearby_merchants(
         lon_delta = min(radius_km / (111.0 * abs_cos), 180.0)
 
     lat_delta = radius_km / 111.0
-    cos_lat_sq = cos_val * cos_val
-
     min_lat = max(-90.0, lat - lat_delta)
     max_lat = min(90.0, lat + lat_delta)
     if abs_cos < 1e-9 or lon_delta >= 180.0:
@@ -195,17 +195,13 @@ def get_nearby_merchants(
         min_lon = lon - lon_delta
         max_lon = lon + lon_delta
 
-    query = """
-        SELECT m.*,
-               ((m.lat - ?) * (m.lat - ?) + (m.lon - ?) * (m.lon - ?) * ?) AS _proxy_dist
-        FROM merchants m
-    """
+    query = "SELECT m.* FROM merchants m"
     joins = []
     where_clauses = [
         "m.lat IS NOT NULL",
         "m.lat BETWEEN ? AND ?",
     ]
-    params = [lat, lat, lon, lon, cos_lat_sq, min_lat, max_lat]
+    params = [min_lat, max_lat]
     # 換日線包裹：min/max 超出 ±180 時 BETWEEN 會漏掉另一側，拆成 OR
     #（台灣本島碰不到，純正確性；極地 abs_cos≈0 已在上方收斂為全經度）
     if min_lon < -180.0:
@@ -221,6 +217,8 @@ def get_nearby_merchants(
     if q is not None and q.strip() != "":
         fts_query = parse_search_query(q)
         if not fts_query:
+            response.headers["X-Total-Count"] = "0"
+            response.headers["X-Has-More"] = "false"
             return []
         joins.append("JOIN merchants_fts f ON m.id = f.rowid")
         where_clauses.append("f.merchants_fts MATCH ?")
@@ -234,11 +232,6 @@ def get_nearby_merchants(
         query += " " + " ".join(joins)
     if where_clauses:
         query += " WHERE " + " AND ".join(where_clauses)
-
-    # 候選放大：proxy 排序截尾會丟掉半徑內較遠者（市區高密度），候選取足再精算
-    candidate_limit = max(limit * 5, 1000)
-    query += " ORDER BY _proxy_dist ASC LIMIT ?"
-    params.append(candidate_limit)
 
     cursor = db.cursor()
     try:
@@ -256,8 +249,10 @@ def get_nearby_merchants(
             m["distance_km"] = round(dist, 3)
             results.append(m)
 
-    results.sort(key=lambda x: x["distance_km"])
-    return results[:limit]
+    results.sort(key=lambda x: (x["distance_km"], x["id"]))
+    response.headers["X-Total-Count"] = str(len(results))
+    response.headers["X-Has-More"] = "true" if offset + limit < len(results) else "false"
+    return results[offset:offset + limit]
 
 
 @router.get("/merchants/{merchant_id_or_tax_id}", response_model=MerchantDetail)

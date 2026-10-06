@@ -37,6 +37,8 @@ const MapView = dynamic(() => import("@/components/MapView"), {
   ),
 });
 
+const NEARBY_PAGE_SIZE = 200;
+
 interface Merchant {
   id: number;
   name: string;
@@ -69,6 +71,8 @@ function MapContent() {
   const [center, setCenter] = useState<[number, number]>(DEFAULT_CENTER);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [hasMoreMerchants, setHasMoreMerchants] = useState(false);
+  const [totalNearbyMerchants, setTotalNearbyMerchants] = useState(0);
   const [loading, setLoading] = useState(false);
   const [radius, setRadius] = useState(2);
   const [tempRadius, setTempRadius] = useState(2);
@@ -88,7 +92,7 @@ function MapContent() {
     router.replace(`/map?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
 
-  const fetchNearby = useCallback(async (lat: number, lon: number, r: number, q: string, indCode = "", city = "", hasWebsite: boolean | null = null) => {
+  const fetchNearby = useCallback(async (lat: number, lon: number, r: number, q: string, indCode = "", city = "", hasWebsite: boolean | null = null, offset = 0) => {
     const fetchKey = mapSearchKey(lat, lon, r, q, indCode, city, hasWebsite);
     lastFetchedRef.current = fetchKey;
 
@@ -100,13 +104,19 @@ function MapContent() {
 
     setLoading(true);
     setApiError(null);
+    if (offset === 0) {
+      setMerchants([]);
+      setHasMoreMerchants(false);
+      setTotalNearbyMerchants(0);
+    }
     updateURL(lat, lon, r, q, indCode, city, hasWebsite);
     try {
       const API_URL = getPublicApiUrl();
       const params = mapSearchParams(lat, lon, r, q, indCode, city, hasWebsite);
       params.delete("radius");
       params.set("radius_km", String(clampRadiusKm(r)));
-      params.set("limit", "200");
+      params.set("limit", String(NEARBY_PAGE_SIZE));
+      params.set("offset", String(offset));
       const res = await fetch(
         `${API_URL}/api/merchants/nearby?${params}`,
         { signal: controller.signal }
@@ -115,12 +125,25 @@ function MapContent() {
       const data: Merchant[] = await res.json();
       if (controller.signal.aborted || abortControllerRef.current !== controller) return;
       if (!Array.isArray(data)) throw new Error("後端 API 回應格式錯誤");
-      setMerchants(data);
-      setLocationStatus(`找到 ${data.length} 間商店（半徑 ${r} km 內）`);
+      const totalHeader = res.headers.get("X-Total-Count");
+      const parsedTotal = totalHeader === null ? NaN : Number(totalHeader);
+      const total = Number.isSafeInteger(parsedTotal) && parsedTotal >= 0 ? parsedTotal : offset + data.length;
+      const hasMore = res.headers.get("X-Has-More") === "true" || (totalHeader === null && data.length === NEARBY_PAGE_SIZE);
+      setMerchants((current) => offset === 0 ? data : [...current, ...data]);
+      setTotalNearbyMerchants(total);
+      setHasMoreMerchants(hasMore);
+      const statusText = hasMore
+        ? `共找到 ${total} 間商店，目前已載入 ${offset + data.length} 間（半徑 ${r} km 內）`
+        : `找到 ${offset + data.length} 間商店（半徑 ${r} km 內）`;
+      setLocationStatus(statusText);
     } catch (e: unknown) {
       if (controller.signal.aborted || abortControllerRef.current !== controller) return;
-      setMerchants([]);
-      setLocationStatus("查詢失敗，請稍後再試");
+      if (offset === 0) {
+        setMerchants([]);
+        setHasMoreMerchants(false);
+        setTotalNearbyMerchants(0);
+      }
+      setLocationStatus(offset === 0 ? "查詢失敗，請稍後再試" : "載入更多商店失敗，請重試");
       setApiError(e instanceof Error ? e.message : "無法連線後端 API");
     } finally {
       if (abortControllerRef.current === controller) {
@@ -278,6 +301,11 @@ function MapContent() {
     fetchNearby(center[0], center[1], radius, keyword, filterState.industryCode || "", filterState.city, filterState.hasWebsite);
   }, [center, radius, keyword, filterState.industryCode, filterState.city, filterState.hasWebsite, fetchNearby]);
 
+  const handleLoadMore = useCallback(() => {
+    if (loading || !hasMoreMerchants) return;
+    fetchNearby(center[0], center[1], radius, keyword, filterState.industryCode || "", filterState.city, filterState.hasWebsite, merchants.length);
+  }, [loading, hasMoreMerchants, fetchNearby, center, radius, keyword, filterState.industryCode, filterState.city, filterState.hasWebsite, merchants.length]);
+
   const handleResetFilters = useCallback(() => {
     setKeyword("");
     setTempRadius(2);
@@ -413,7 +441,7 @@ function MapContent() {
 
         {/* Sidebar merchant list */}
         <div className="lg:w-80 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "520px" }}>
-          {loading ? (
+          {loading && merchants.length === 0 ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="bg-card rounded-xl border border-border/50 p-4 animate-pulse space-y-2.5">
                 <div className="h-4 bg-muted-bg rounded w-3/4"></div>
@@ -439,7 +467,8 @@ function MapContent() {
               </button>
             </div>
           ) : (
-            merchants.map((m) => (
+            <>
+            {merchants.map((m) => (
               <article
                 key={m.id}
                 aria-label={m.name}
@@ -469,7 +498,7 @@ function MapContent() {
                   </button>
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <Link
-                      href={`/merchant/${m.tax_id || m.id}`}
+                      href={`/merchant/${m.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="查看商店詳情"
@@ -493,7 +522,18 @@ function MapContent() {
                   </div>
                 </div>
               </article>
-            ))
+            ))}
+            {hasMoreMerchants && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loading}
+                className="w-full rounded-xl border border-border/60 bg-card px-4 py-3 text-sm font-medium text-accent hover:bg-accent/5 disabled:cursor-wait disabled:opacity-60"
+              >
+                {loading ? "載入中…" : `載入更多（已載入 ${merchants.length} / ${totalNearbyMerchants} 間）`}
+              </button>
+            )}
+            </>
           )}
         </div>
       </div>
