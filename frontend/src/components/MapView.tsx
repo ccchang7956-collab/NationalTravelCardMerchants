@@ -169,7 +169,7 @@ export default function MapView({
       const safeAddress = escapeHtml(m.address || "");
       const safeTaxId = escapeHtml(m.tax_id || "");
       // href 上下文要 URL encode（escapeHtml 不夠）：統編含 / ? # 即斷鏈
-      const detailHref = `/merchant/${encodeURIComponent(m.tax_id || String(m.id))}`;
+      const detailHref = `/merchant/${encodeURIComponent(String(m.id))}`;
 
       marker.bindPopup(
         `<div style="min-width:200px;font-family:system-ui;padding:4px 0">
@@ -256,7 +256,7 @@ export default function MapView({
         )
         .addTo(mapRef.current);
     }
-  }, [userLocation]);
+  }, [userLocation, mapReady]);
 
   // Show center pin when not using user location
   useEffect(() => {
@@ -291,7 +291,7 @@ export default function MapView({
         )
         .addTo(mapRef.current);
     }
-  }, [center, userLocation]);
+  }, [center, userLocation, mapReady]);
 
   // Hook 1: Draw/update circle position, radius and styling based on tempRadius
   useEffect(() => {

@@ -150,6 +150,76 @@ def test_import_official_zip_and_reject_invalid_snapshot():
         assert rows == [("11111111", "551011")]
 
 
+def test_import_rejects_short_snapshot_without_replacing_existing_rows():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "short_snapshot.db")
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE merchants (id INTEGER PRIMARY KEY, name TEXT, tax_id TEXT UNIQUE)")
+        conn.execute("""
+            CREATE TABLE merchant_industries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_id TEXT NOT NULL, industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL, priority INTEGER NOT NULL,
+                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("INSERT INTO merchants VALUES (1, 'Hotel', '11111111')")
+        conn.execute("INSERT INTO merchant_industries(tax_id,industry_code,industry_name,priority) VALUES ('11111111','999999','舊旅宿分類',1)")
+        conn.commit()
+        conn.close()
+
+        csv_path = os.path.join(tmpdir, "short.csv")
+        with open(csv_path, "w", encoding="utf-8") as source:
+            source.write("統一編號,行業代號,名稱,行業代號1,名稱1,行業代號2,名稱2,行業代號3,名稱3\n")
+            source.write("11111111,551011,旅館業,,,,,,\n")
+
+        from scripts.import_industry import import_csv_to_db
+        with pytest.raises(ValueError, match="筆數異常"):
+            import_csv_to_db(csv_path, db_path, min_source_rows=2)
+
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute("SELECT tax_id,industry_code,industry_name,priority FROM merchant_industries").fetchall()
+        conn.close()
+        assert rows == [("11111111", "999999", "舊旅宿分類", 1)]
+
+
+def test_import_rejects_major_coverage_drop_and_keeps_existing_classifications():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "coverage_drop.db")
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE merchants (id INTEGER PRIMARY KEY, name TEXT, tax_id TEXT UNIQUE)")
+        conn.execute("""
+            CREATE TABLE merchant_industries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_id TEXT NOT NULL, industry_code TEXT NOT NULL,
+                industry_name TEXT NOT NULL, priority INTEGER NOT NULL,
+                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+            )
+        """)
+        merchants = [(i, f"Hotel {i}", f"{i:08d}") for i in range(1000, 2000)]
+        conn.executemany("INSERT INTO merchants VALUES (?, ?, ?)", merchants)
+        conn.executemany(
+            "INSERT INTO merchant_industries(tax_id,industry_code,industry_name,priority) VALUES (?, '551011', '旅館業', 1)",
+            [(row[2],) for row in merchants],
+        )
+        conn.commit()
+        conn.close()
+
+        csv_path = os.path.join(tmpdir, "partial.csv")
+        with open(csv_path, "w", encoding="utf-8") as source:
+            source.write("統一編號,行業代號,名稱,行業代號1,名稱1,行業代號2,名稱2,行業代號3,名稱3\n")
+            source.write("00001000,551012,旅館服務業,,,,,,\n")
+
+        from scripts.import_industry import import_csv_to_db
+        with pytest.raises(ValueError, match="涵蓋率異常"):
+            import_csv_to_db(csv_path, db_path)
+
+        conn = sqlite3.connect(db_path)
+        assert conn.execute("SELECT COUNT(*) FROM merchant_industries").fetchone()[0] == 1000
+        assert conn.execute("SELECT industry_code FROM merchant_industries WHERE tax_id='00001000'").fetchone()[0] == "551011"
+        conn.close()
+
+
 def test_foreign_key_cascade_delete():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test_fk.db")

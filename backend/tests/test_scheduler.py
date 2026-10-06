@@ -318,4 +318,84 @@ def test_transactional_sync_db_preserves_user_data():
         res_conn.close()
 
 
+def test_pdf_parser_keeps_distinct_branches_with_same_tax_id():
+    import fitz
+    from scheduler.update_data import parse_pdf_to_db
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pdf_path = os.path.join(tmpdir, "branches.pdf")
+        db_path = os.path.join(tmpdir, "branches.db")
+        doc = fitz.open()
+        page = doc.new_page()
+        lines = [
+            "Alpha Branch", "Address One", "100", "12345678",
+            "Alpha Branch", "Address Two", "100", "12345678",
+        ]
+        for index, line in enumerate(lines):
+            page.insert_text((40, 40 + index * 18), line)
+        doc.save(pdf_path)
+        doc.close()
+
+        assert parse_pdf_to_db(pdf_path, db_path) == 2
+        assert parse_pdf_to_db(pdf_path, db_path) == 2
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute("SELECT name,address,tax_id FROM merchants ORDER BY id").fetchall()
+        assert rows == [
+            ("Alpha Branch", "Address One", "12345678"),
+            ("Alpha Branch", "Address Two", "12345678"),
+        ]
+        conn.close()
+
+
+def test_transactional_sync_preserves_duplicate_tax_id_branches_and_classifies_them():
+    from backend.database import init_db
+    from scheduler.update_data import transactional_sync_db
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        target_db = os.path.join(tmpdir, "target.db")
+        temp_db = os.path.join(tmpdir, "incoming.db")
+
+        target = sqlite3.connect(target_db)
+        target.execute("PRAGMA foreign_keys=ON")
+        init_db(target)
+        target.execute("INSERT INTO merchant_tax_ids(tax_id) VALUES ('12345678')")
+        target.execute("INSERT INTO merchants(id,name,address,tax_id) VALUES (41,'Alpha Branch','台北市中正區','12345678')")
+        target.execute("INSERT INTO merchant_industries(tax_id,industry_code,industry_name,priority) VALUES ('12345678','551011','旅館業',1)")
+        target.execute("INSERT INTO users(id,email,hashed_password,name) VALUES (7,'user@example.test','hash','User')")
+        target.execute("INSERT INTO user_favorites(user_id,merchant_id) VALUES (7,41)")
+        target.commit()
+        target.close()
+
+        incoming = sqlite3.connect(temp_db)
+        incoming.execute("PRAGMA foreign_keys=ON")
+        init_db(incoming)
+        incoming.execute("INSERT INTO merchant_tax_ids(tax_id) VALUES ('12345678')")
+        incoming.executemany(
+            "INSERT INTO merchants(name,address,tax_id) VALUES (?,?,?)",
+            [
+                ('Alpha Branch', '台北市中正區', '12345678'),
+                ('Alpha Branch', '新北市板橋區', '12345678'),
+            ],
+        )
+        incoming.execute("INSERT INTO merchant_industries(tax_id,industry_code,industry_name,priority) VALUES ('12345678','551011','旅館業',1)")
+        incoming.commit()
+        incoming.close()
+
+        transactional_sync_db(temp_db, target_db)
+
+        conn = sqlite3.connect(target_db)
+        conn.row_factory = sqlite3.Row
+        branches = conn.execute("SELECT id,name,address,tax_id FROM merchants ORDER BY id").fetchall()
+        assert len(branches) == 2
+        assert branches[0]["id"] == 41
+        assert branches[1]["address"] == "新北市板橋區"
+        assert {row["tax_id"] for row in branches} == {"12345678"}
+        classified_branches = conn.execute("""
+            SELECT COUNT(*) FROM merchants m
+            WHERE EXISTS (SELECT 1 FROM merchant_industries i WHERE i.tax_id=m.tax_id AND i.industry_code LIKE '55%')
+        """).fetchone()[0]
+        assert classified_branches == 2
+        assert conn.execute("SELECT merchant_id FROM user_favorites WHERE user_id=7").fetchone()[0] == 41
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        conn.close()
 

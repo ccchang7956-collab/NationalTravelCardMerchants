@@ -49,10 +49,16 @@ def init_db(conn: sqlite3.Connection = None):
         name TEXT NOT NULL,
         address TEXT,
         zip_code TEXT,
-        tax_id TEXT UNIQUE,
+        tax_id TEXT,
         website TEXT,
         lat REAL,
         lon REAL
+    );
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS merchant_tax_ids (
+        tax_id TEXT PRIMARY KEY
     );
     """)
 
@@ -63,7 +69,7 @@ def init_db(conn: sqlite3.Connection = None):
         industry_code TEXT NOT NULL,
         industry_name TEXT NOT NULL,
         priority INTEGER NOT NULL,
-        FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+        FOREIGN KEY(tax_id) REFERENCES merchant_tax_ids(tax_id) ON DELETE CASCADE
     );
     """)
 
@@ -145,7 +151,7 @@ def init_db(conn: sqlite3.Connection = None):
     """)
 
     # 建立特約商店與索引
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_merchants_tax_id ON merchants(tax_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_merchants_tax_id ON merchants(tax_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_merchants_zip_code ON merchants(zip_code);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_merchants_lat_lon ON merchants(lat, lon);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_merchants_address ON merchants(address);")
@@ -178,5 +184,4 @@ def init_db(conn: sqlite3.Connection = None):
         migrate_database(conn, backup=False)
     if close_after:
         conn.close()
-
 

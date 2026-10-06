@@ -18,6 +18,12 @@ from shared.locking import database_lock
 
 SOURCE_URL = "https://eip.fia.gov.tw/data/BGMOPEN1.zip"
 MAX_DOWNLOAD_BYTES = 250 * 1024 * 1024
+# The official full snapshot has well over a million valid tax IDs. Keep a
+# conservative floor so a syntactically valid but truncated ZIP cannot seed or
+# replace production classifications.
+MIN_SOURCE_ROWS = 500_000
+MIN_EXISTING_COVERAGE = 0.75
+MIN_COVERAGE_BASE = 1_000
 
 
 def normalize_tax_id(value):
@@ -108,10 +114,14 @@ def _load_merchant_tax_ids(db_path):
         conn.close()
 
 
-def import_csv_to_db(csv_path, db_path):
+def import_csv_to_db(csv_path, db_path, *, min_source_rows=0):
     """Atomically replace local industry rows from a CSV or ZIP source file."""
     merchant_ids = _load_merchant_tax_ids(db_path)
     records, matched_tax_ids, source_rows = _parse_source(csv_path, merchant_ids)
+    if source_rows < min_source_rows:
+        raise ValueError(
+            f"官方行業資料筆數異常：{source_rows} < {min_source_rows}，保留既有資料"
+        )
     if not records:
         raise ValueError("官方資料未對應到任何本地商家行業，保留既有資料")
 
@@ -135,6 +145,19 @@ def import_csv_to_db(csv_path, db_path):
             valid_records = sorted(record for record in records if record[0] in current_tax_ids)
             if not valid_records:
                 raise ValueError("匯入前沒有可對應的本地商家，保留既有行業資料")
+            existing_classified = {
+                record[0] for record in current_records
+            }
+            incoming_classified = {record[0] for record in valid_records}
+            if (
+                len(existing_classified) >= MIN_COVERAGE_BASE
+                and len(incoming_classified) < len(existing_classified) * MIN_EXISTING_COVERAGE
+            ):
+                raise ValueError(
+                    "行業資料涵蓋率異常："
+                    f"{len(incoming_classified)} < {MIN_EXISTING_COVERAGE:.0%} of "
+                    f"{len(existing_classified)}，保留既有資料"
+                )
             if current_records == set(valid_records):
                 print(f"Industry data is current: {len(valid_records)} records, {len(matched_tax_ids)} matched merchants.")
                 return len(valid_records)
@@ -181,7 +204,7 @@ def import_source_url(url, db_path):
                     archive_file.write(chunk)
         if not zipfile.is_zipfile(archive_path):
             raise ValueError("官方行業資料下載內容不是有效 ZIP")
-        return import_csv_to_db(archive_path, db_path)
+        return import_csv_to_db(archive_path, db_path, min_source_rows=MIN_SOURCE_ROWS)
 
 
 if __name__ == "__main__":

@@ -41,8 +41,9 @@ test("new shards can be discovered without a rebuild", async () => {
   expect((await fetchSitemapManifest("http://test")).shards).toHaveLength(7);
 });
 
-test("untrusted URL parts are encoded and invalid dates are omitted", () => {
-  const xml = sitemapXml("https://test",{ ...manifest,last_updated:"invalid" },[{id:1,tax_id:"a&b"}]);
+test("merchant IDs are encoded and invalid dates are omitted", () => {
+  const xml = sitemapXml("https://test",{ ...manifest,last_updated:"invalid" },[{id:"a&b" as unknown as number,tax_id:"legacy-tax-id"}]);
   expect(xml).toContain("a%26b");
+  expect(xml).not.toContain("legacy-tax-id");
   expect(xml).not.toContain("<lastmod>");
 });

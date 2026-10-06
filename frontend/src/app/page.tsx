@@ -233,13 +233,13 @@ export default async function Home({
                 <article className="bg-card p-5 rounded-xl border border-border/50 shadow-sm hover:shadow-md hover:border-accent/40 transition-all duration-200 h-full flex flex-col justify-between">
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <Link href={`/merchant/${m.tax_id || m.id}`} className="block flex-1 group-hover:text-accent transition-colors">
+                      <Link href={`/merchant/${m.id}`} className="block flex-1 group-hover:text-accent transition-colors">
                         <h2 className="text-lg font-medium text-foreground pr-2">
                           {m.name}
                         </h2>
                       </Link>
                     </div>
-                    <Link href={`/merchant/${m.tax_id || m.id}`} className="block mt-3">
+                    <Link href={`/merchant/${m.id}`} className="block mt-3">
                       <div className="space-y-2 text-sm text-muted">
                         <div className="flex items-start gap-2">
                           <MapPinIcon className="w-4 h-4 mt-0.5 shrink-0 opacity-70" />

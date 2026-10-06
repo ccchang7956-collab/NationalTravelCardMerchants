@@ -26,6 +26,16 @@ describe("Phase4 Task4: MapView 選店連動（flyTo + openPopup）", () => {
     expect(s).toContain("flyTo");
     expect(s).toContain("openPopup");
   });
+
+  it("地圖載入完成後會重新建立定位標記與搜尋中心標記", () => {
+    const s = src();
+    expect(s).toMatch(/\}, \[userLocation, mapReady\]\);/);
+    expect(s).toMatch(/\}, \[center, userLocation, mapReady\]\);/);
+  });
+
+  it("商家彈出視窗以分店 ID 建立詳情連結", () => {
+    expect(src()).toContain("/merchant/${encodeURIComponent(String(m.id))}");
+  });
 });
 
 describe("Phase4 Task4: API_URL 解凍（每次請求時取值）", () => {
@@ -41,5 +51,11 @@ describe("Phase4 Task4: API_URL 解凍（每次請求時取值）", () => {
     const s = readSrc("../app/merchant/[id]/page.tsx");
     expect(s).not.toMatch(/^const API_URL/m);
     expect(s).toContain("const API_URL = getBackendUrl()");
+  });
+
+  it("商家詳情 canonical 使用商家 ID，確保同統編分店網址唯一", () => {
+    const s = readSrc("../app/merchant/[id]/page.tsx");
+    expect(s).toContain("/merchant/${merchant.id}");
+    expect(s).toContain("redirect(`/merchant/${merchant.id}`)");
   });
 });

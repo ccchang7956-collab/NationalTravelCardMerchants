@@ -38,7 +38,7 @@ import fitz  # PyMuPDF
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from shared.backups import backup_database
-from shared.coordinates import same_address, valid_coordinates, preservable_coordinates
+from shared.coordinates import same_address, valid_coordinates, preservable_coordinates, normalize_address
 from shared.search import space_segment, normalize_text
 from shared.schema import ensure_schema, rebuild_search_index, bump_dataset_version, migrate_database, set_metadata
 from shared.config import env_number
@@ -309,6 +309,7 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
         conn.execute("PRAGMA synchronous = NORMAL;")
         cursor = conn.cursor()
         cursor.execute("DROP TABLE IF EXISTS merchant_industries")
+        cursor.execute("DROP TABLE IF EXISTS merchant_tax_ids")
         cursor.execute("DROP TABLE IF EXISTS merchants")
         cursor.execute("""
             CREATE TABLE merchants (
@@ -316,7 +317,7 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
                 name TEXT NOT NULL,
                 address TEXT,
                 zip_code TEXT,
-                tax_id TEXT UNIQUE,
+                tax_id TEXT,
                 website TEXT,
                 lat REAL,
                 lon REAL
@@ -326,6 +327,7 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
         cursor.execute("CREATE INDEX idx_zip_code ON merchants(zip_code)")
         cursor.execute("CREATE INDEX idx_tax_id ON merchants(tax_id)")
         cursor.execute("CREATE INDEX idx_lat_lon ON merchants(lat, lon)")
+        cursor.execute("CREATE TABLE merchant_tax_ids (tax_id TEXT PRIMARY KEY)")
         
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS merchant_industries (
@@ -334,7 +336,7 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
                 industry_code TEXT NOT NULL,
                 industry_name TEXT NOT NULL,
                 priority INTEGER NOT NULL,
-                FOREIGN KEY(tax_id) REFERENCES merchants(tax_id) ON DELETE CASCADE
+                FOREIGN KEY(tax_id) REFERENCES merchant_tax_ids(tax_id) ON DELETE CASCADE
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_merchant_industries_tax_id ON merchant_industries(tax_id)")
@@ -458,20 +460,22 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
             if last_items and is_website(last_items[0]):
                 records[-1]["website"] = last_items[0]
 
-        insert_data = [
-            (
-                r["name"],
-                r["address"],
-                r["zip_code"],
-                normalize_tax_id(r["tax_id"]),
-                r["website"]
-            )
-            for r in records
-        ]
+        insert_data = []
+        seen_records = set()
+        for record in records:
+            tax_id = normalize_tax_id(record["tax_id"])
+            identity = (tax_id, normalize_text(record["name"]), normalize_address(record["address"]))
+            if identity in seen_records:
+                continue
+            seen_records.add(identity)
+            insert_data.append((
+                record["name"], record["address"], record["zip_code"], tax_id, record["website"]
+            ))
         cursor.executemany(
-            "INSERT OR IGNORE INTO merchants (name, address, zip_code, tax_id, website) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO merchants (name, address, zip_code, tax_id, website) VALUES (?, ?, ?, ?, ?)",
             insert_data
         )
+        cursor.execute("INSERT OR IGNORE INTO merchant_tax_ids(tax_id) SELECT DISTINCT tax_id FROM merchants WHERE tax_id IS NOT NULL AND tax_id <> ''")
         conn.commit()
 
         # 同步寫入 FTS5
@@ -485,10 +489,10 @@ def parse_pdf_to_db(pdf_path: str, db_path: str) -> int:
         conn.commit()
 
         count = conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
-        ignored = len(insert_data) - count
+        ignored = len(records) - len(insert_data)
         if ignored > 0:
-            # 同稅號多分店只留第一家（UNIQUE＋OR IGNORE）：有數就告警，不再無聲丟
-            log.warning(f"⚠️ {ignored} 筆因 tax_id 重複被忽略（一稅號只留第一家）")
+            # 相同統編仍可有多家分店；只記錄完全相同的資料列去重數。
+            log.warning(f"⚠️ {ignored} 筆完全重複的商家記錄已去重")
         doc.close()
         log.info(f"✅ 解析完成，寫入 {count} 筆")
         return count
@@ -655,6 +659,82 @@ def prune_backups(target_db_path: str, keep: int = 7) -> int:
     return removed
 
 
+def _branch_identity(name, address):
+    return normalize_text(name), normalize_address(address)
+
+
+def _match_branch_rows(existing_rows, incoming_rows):
+    """Match branches within one tax ID, preferring exact records and stable location/name."""
+    old = {row["id"]: dict(row) for row in existing_rows}
+    new = set(range(len(incoming_rows)))
+    matches = []
+
+    key_functions = (
+        lambda row: _branch_identity(row.get("name"), row.get("address")),
+        lambda row: normalize_address(row.get("address")),
+        lambda row: normalize_text(row.get("name")),
+    )
+    for key_for in key_functions:
+        old_by_key = {}
+        new_by_key = {}
+        for merchant_id, row in old.items():
+            key = key_for(row)
+            if key and (not isinstance(key, tuple) or any(key)):
+                old_by_key.setdefault(key, []).append(merchant_id)
+        for index in sorted(new):
+            key = key_for(incoming_rows[index])
+            if key and (not isinstance(key, tuple) or any(key)):
+                new_by_key.setdefault(key, []).append(index)
+        for key in old_by_key.keys() & new_by_key.keys():
+            # Ambiguous same-name or same-address branches are matched in source order
+            # only when both sides have the same multiplicity.
+            old_ids, new_ids = old_by_key[key], new_by_key[key]
+            if len(old_ids) != len(new_ids):
+                continue
+            for merchant_id, index in zip(sorted(old_ids), sorted(new_ids)):
+                matches.append((old[merchant_id], index))
+                del old[merchant_id]
+                new.remove(index)
+
+    if len(old) == 1 and len(new) == 1:
+        merchant_id = next(iter(old))
+        index = next(iter(new))
+        matches.append((old.pop(merchant_id), index))
+        new.remove(index)
+    return matches, list(old.values()), sorted(new)
+
+
+def _update_merchant_row(cursor, merchant_id, merchant):
+    cursor.execute("""
+        UPDATE merchants SET
+            name=:name, address=:address, zip_code=:zip_code, tax_id=:tax_id, website=:website,
+            lat=CASE WHEN :lat IS NOT NULL THEN :lat
+                WHEN same_address(address,:address) AND preservable_coordinates(lat,lon,address,geocoded_address) THEN lat END,
+            lon=CASE WHEN :lat IS NOT NULL THEN :lon
+                WHEN same_address(address,:address) AND preservable_coordinates(lat,lon,address,geocoded_address) THEN lon END,
+            coord_source=CASE WHEN :lat IS NOT NULL THEN :coord_source
+                WHEN same_address(address,:address) AND preservable_coordinates(lat,lon,address,geocoded_address) THEN COALESCE(coord_source,'legacy_unknown') END,
+            coord_accuracy=CASE WHEN :lat IS NOT NULL THEN :coord_accuracy
+                WHEN same_address(address,:address) AND preservable_coordinates(lat,lon,address,geocoded_address) THEN COALESCE(coord_accuracy,'unknown') END,
+            geocoded_address=CASE WHEN :lat IS NOT NULL THEN :geocoded_address
+                WHEN same_address(address,:address) AND preservable_coordinates(lat,lon,address,geocoded_address) THEN COALESCE(geocoded_address,address) END
+        WHERE id=:id
+    """, {
+        **merchant,
+        "id": merchant_id,
+    })
+
+
+def _delete_ids(cursor, table, id_column, ids):
+    ids = list(ids)
+    for start in range(0, len(ids), 900):
+        chunk = ids[start:start + 900]
+        if not chunk:
+            continue
+        placeholders = ",".join("?" for _ in chunk)
+        cursor.execute(f"DELETE FROM {table} WHERE {id_column} IN ({placeholders})", chunk)
+
+
 def transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
     with database_lock(target_db_path):
         return _transactional_sync_db(temp_db_path, target_db_path)
@@ -662,7 +742,7 @@ def transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
 
 def _transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
     """
-    將剛解析建好的 temp_db_path 資料以 SQLite 交易與 UPSERT 方式同步更新至 target_db_path。
+    將剛解析建好的 temp_db_path 資料以 SQLite 交易同步更新至 target_db_path。
     此方式可完整保留 target_db_path 中 users, user_expenses, user_favorites,
     user_itineraries, itinerary_items 等 5 張使用者個人資料表，
     並且維持既有特約商店之 id 主鍵與外鍵關聯不變。
@@ -729,6 +809,7 @@ def _transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
 
     # 3. 連接 target_db 並在單一 BEGIN IMMEDIATE 交易中完成同步
     target_conn = sqlite3.connect(target_db_path, isolation_level=None, timeout=10.0)
+    target_conn.row_factory = sqlite3.Row
     target_conn.execute("PRAGMA journal_mode = WAL;")
     target_conn.execute("PRAGMA busy_timeout = 5000;")
     target_conn.execute("PRAGMA foreign_keys = ON;")
@@ -743,8 +824,15 @@ def _transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
         init_db(target_conn)
         old_count = 0
     else:
+        migrate_database(target_conn)
         old_count = target_conn.execute("SELECT COUNT(*) FROM merchants").fetchone()[0]
-    new_count = len({m["tax_id"] if m["tax_id"] is not None else (m["name"],m["address"] or "") for m in normalized_temp_merchants})
+    unique_merchants = {}
+    for merchant in normalized_temp_merchants:
+        identity = _branch_identity(merchant["name"], merchant["address"])
+        key = ("tax", merchant["tax_id"], *identity) if merchant["tax_id"] is not None else ("name", *identity)
+        unique_merchants.setdefault(key, merchant)
+    normalized_temp_merchants = list(unique_merchants.values())
+    new_count = len(normalized_temp_merchants)
     if new_count == 0:
         target_conn.close()
         raise RuntimeError("Abort: incoming merchant dataset is empty")
@@ -775,42 +863,37 @@ def _transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
         ensure_schema(target_conn)
         removed_favorites = 0
 
-        # 0. 規範化 target_db 既有資料的 tax_id
-        # 規範化既有 tax_id：Python 側 normalize_tax_id 清所有 \s（含 \t\n\r＋全形空白），
-        # SQL 側同步清掉這些，避免兩側對不上誤判下架。清完若撞 UNIQUE（同稅號並存兩列），
-        # 讓它在交易內報錯 ROLLBACK（下方 except），不靜默洗庫。
+        # 規範化既有統編；商家以分店資料匹配，統編只用來連結行業分類。
         cursor.execute(
             "UPDATE merchants SET tax_id = NULLIF(TRIM("
             "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(tax_id, CHAR(12288), ''), ' ', ''), CHAR(9), ''), CHAR(10), ''), CHAR(13), '')"
             "), '');"
         )
 
-        # 1. 有 tax_id 商家 UPSERT
+        # 1. 以統編分組，按名稱與地址配對分店，保留現有 merchant IDs 和使用者關聯。
         valid_tax_merchants = [m for m in normalized_temp_merchants if m["tax_id"] is not None]
-        new_tax_ids = {m["tax_id"] for m in valid_tax_merchants}
+        existing_tax_rows = cursor.execute("SELECT * FROM merchants WHERE tax_id IS NOT NULL").fetchall()
+        existing_by_tax = {}
+        incoming_by_tax = {}
+        for row in existing_tax_rows:
+            existing_by_tax.setdefault(row["tax_id"], []).append(row)
+        for merchant in valid_tax_merchants:
+            incoming_by_tax.setdefault(merchant["tax_id"], []).append(merchant)
 
-        cursor.executemany("""
-            INSERT INTO merchants (name, address, zip_code, tax_id, website, lat, lon,coord_source,coord_accuracy,geocoded_address)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(tax_id) DO UPDATE SET
-                name = excluded.name,
-                address = excluded.address,
-                zip_code = excluded.zip_code,
-                website = excluded.website,
-                lat = CASE WHEN excluded.lat IS NOT NULL THEN excluded.lat
-                    WHEN same_address(merchants.address, excluded.address) AND preservable_coordinates(merchants.lat,merchants.lon,merchants.address,merchants.geocoded_address) THEN merchants.lat END,
-                lon = CASE WHEN excluded.lon IS NOT NULL THEN excluded.lon
-                    WHEN same_address(merchants.address, excluded.address) AND preservable_coordinates(merchants.lat,merchants.lon,merchants.address,merchants.geocoded_address) THEN merchants.lon END,
-                coord_source = CASE WHEN excluded.lat IS NOT NULL THEN excluded.coord_source
-                    WHEN same_address(merchants.address, excluded.address) AND preservable_coordinates(merchants.lat,merchants.lon,merchants.address,merchants.geocoded_address) THEN COALESCE(merchants.coord_source,'legacy_unknown') END,
-                coord_accuracy = CASE WHEN excluded.lat IS NOT NULL THEN excluded.coord_accuracy
-                    WHEN same_address(merchants.address, excluded.address) AND preservable_coordinates(merchants.lat,merchants.lon,merchants.address,merchants.geocoded_address) THEN COALESCE(merchants.coord_accuracy,'unknown') END,
-                geocoded_address = CASE WHEN excluded.lat IS NOT NULL THEN excluded.geocoded_address
-                    WHEN same_address(merchants.address, excluded.address) AND preservable_coordinates(merchants.lat,merchants.lon,merchants.address,merchants.geocoded_address) THEN COALESCE(merchants.geocoded_address,merchants.address) END;
-        """, [
-            (m["name"], m["address"], m["zip_code"], m["tax_id"], m["website"], m["lat"], m["lon"],m["coord_source"],m["coord_accuracy"],m["geocoded_address"])
-            for m in valid_tax_merchants
-        ])
+        stale_tax_ids = []
+        for tax_id in existing_by_tax.keys() | incoming_by_tax.keys():
+            matches, old_unmatched, new_unmatched = _match_branch_rows(
+                existing_by_tax.get(tax_id, []), incoming_by_tax.get(tax_id, [])
+            )
+            for old_row, new_index in matches:
+                _update_merchant_row(cursor, old_row["id"], incoming_by_tax[tax_id][new_index])
+            stale_tax_ids.extend(row["id"] for row in old_unmatched)
+            for new_index in new_unmatched:
+                merchant = incoming_by_tax[tax_id][new_index]
+                cursor.execute("""
+                    INSERT INTO merchants (name,address,zip_code,tax_id,website,lat,lon,coord_source,coord_accuracy,geocoded_address)
+                    VALUES (:name,:address,:zip_code,:tax_id,:website,:lat,:lon,:coord_source,:coord_accuracy,:geocoded_address)
+                """, merchant)
 
         # 2. 無 tax_id 商家更新與新增
         no_tax_merchants = [m for m in normalized_temp_merchants if m["tax_id"] is None]
@@ -840,49 +923,37 @@ def _transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
                     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
                 """, (m["name"], m["address"], m["zip_code"], m["website"], m["lat"], m["lon"],m["coord_source"],m["coord_accuracy"],m["geocoded_address"]))
 
-        # 3. 刪除下架商家（先統計受影響 favorites，FK CASCADE 會連帶刪除）
+        # 3. 刪除下架分店，統計並保留現有 FK cascade 行為。
         fav_exists = cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='user_favorites'"
         ).fetchone()
         if fav_exists:
-            if new_tax_ids:
-                placeholders = ",".join("?" for _ in new_tax_ids)
-                doomed_ids = cursor.execute(
-                    f"SELECT id FROM merchants WHERE tax_id IS NOT NULL AND tax_id NOT IN ({placeholders})",
-                    list(new_tax_ids),
-                ).fetchall()
-            else:
-                doomed_ids = cursor.execute(
-                    "SELECT id FROM merchants WHERE tax_id IS NOT NULL"
-                ).fetchall()
-            if doomed_ids:
-                ids = [r[0] for r in doomed_ids]
-                qmarks = ",".join("?" for _ in ids)
-                fav_count = cursor.execute(
-                    f"SELECT COUNT(*) FROM user_favorites WHERE merchant_id IN ({qmarks})",
-                    ids,
-                ).fetchone()[0]
-                removed_favorites = fav_count
+            if stale_tax_ids:
+                removed_favorites = 0
+                for start in range(0, len(stale_tax_ids), 900):
+                    chunk = stale_tax_ids[start:start + 900]
+                    placeholders = ",".join("?" for _ in chunk)
+                    removed_favorites += cursor.execute(
+                        f"SELECT COUNT(*) FROM user_favorites WHERE merchant_id IN ({placeholders})", chunk
+                    ).fetchone()[0]
                 log.warning(
-                    f"⚠️ 將刪除 {len(ids)} 間下架商家，影響 {fav_count} 筆 user_favorites 收藏（CASCADE 連帶刪除）"
+                    f"⚠️ 將刪除 {len(stale_tax_ids)} 間下架分店，影響 {removed_favorites} 筆 user_favorites 收藏（CASCADE 連帶刪除）"
                 )
             else:
                 removed_favorites = 0
-                log.info("ℹ️ 無下架商家，無 favorites 受影響")
         else:
             removed_favorites = 0
-
-        if new_tax_ids:
-            placeholders = ",".join("?" for _ in new_tax_ids)
-            cursor.execute(f"DELETE FROM merchants WHERE tax_id IS NOT NULL AND tax_id NOT IN ({placeholders})", list(new_tax_ids))
-        else:
-            cursor.execute("DELETE FROM merchants WHERE tax_id IS NOT NULL")
+        _delete_ids(cursor, "merchants", "id", stale_tax_ids)
 
         no_tax_keys = {(m["name"], m["address"] or "") for m in unique_no_tax_merchants}
         existing_no_tax = cursor.execute("SELECT id, name, address FROM merchants WHERE tax_id IS NULL").fetchall()
         for eid, ename, eaddr in existing_no_tax:
             if (ename, eaddr or "") not in no_tax_keys:
                 cursor.execute("DELETE FROM merchants WHERE id = ?", (eid,))
+
+        # 維護行業分類的統編父表；一個統編可對應多間分店。
+        cursor.execute("INSERT OR IGNORE INTO merchant_tax_ids(tax_id) SELECT DISTINCT tax_id FROM merchants WHERE tax_id IS NOT NULL AND tax_id <> ''")
+        cursor.execute("DELETE FROM merchant_tax_ids WHERE NOT EXISTS (SELECT 1 FROM merchants m WHERE m.tax_id=merchant_tax_ids.tax_id)")
 
         # 4. 同步 merchant_industries — temp 為空則跳過以保護現有資料
         if normalized_temp_industries:

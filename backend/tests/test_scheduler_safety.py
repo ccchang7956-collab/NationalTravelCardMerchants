@@ -67,6 +67,7 @@ def test_skip_industries_when_temp_empty(tmp_path):
     conn = sqlite3.connect(target_db)
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("INSERT INTO merchants (name, tax_id) VALUES ('A', '11111111')")
+    conn.execute("INSERT INTO merchant_tax_ids (tax_id) VALUES ('11111111')")
     conn.execute(
         "INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES ('11111111', '561115', '餐館業', 1)"
     )
@@ -93,6 +94,7 @@ def test_skip_industries_when_temp_table_empty(tmp_path):
     conn = sqlite3.connect(target_db)
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("INSERT INTO merchants (name, tax_id) VALUES ('A', '11111111')")
+    conn.execute("INSERT INTO merchant_tax_ids (tax_id) VALUES ('11111111')")
     conn.execute(
         "INSERT INTO merchant_industries (tax_id, industry_code, industry_name, priority) VALUES ('11111111', '561115', '餐館業', 1)"
     )

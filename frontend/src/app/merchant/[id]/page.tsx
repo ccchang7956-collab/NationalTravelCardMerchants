@@ -54,7 +54,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const cityName = merchant.address ? merchant.address.substring(0, 3) : "";
   const title = `${merchant.name}｜${cityName}國旅卡特約商店`;
   const description = `${merchant.name}（${merchant.zip_code ? merchant.zip_code + " " : ""}${merchant.address}）是國民旅遊卡特約商店，統一編號 ${merchant.tax_id}。${merchant.website ? `官方網站：${merchant.website}` : ""}`;
-  const pageUrl = `${SITE_URL}/merchant/${merchant.tax_id || resolvedParams.id}`;
+  const pageUrl = `${SITE_URL}/merchant/${merchant.id}`;
 
   return {
     title,
@@ -90,10 +90,9 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
     notFound();
   }
 
-  // /merchant/<id> 與 /merchant/<tax_id> 雙 URL 並存會重複內容：
-  // 有 tax 一律 301 到 tax slug（canonical 一致；無 tax 才留數字 id）
-  if (merchant.tax_id && resolvedParams.id !== String(merchant.tax_id)) {
-    redirect(`/merchant/${merchant.tax_id}`);
+  // 使用商家主鍵區分同一統編的不同分店；舊統編網址導向第一個對應分店。
+  if (resolvedParams.id !== String(merchant.id)) {
+    redirect(`/merchant/${merchant.id}`);
   }
 
   const last_updated: string | null =
@@ -117,7 +116,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
     : [];
   const primaryIndustry: MerchantIndustry | undefined = industries[0];
 
-  const pageUrl = `${SITE_URL}/merchant/${merchant.tax_id || resolvedParams.id}`;
+  const pageUrl = `${SITE_URL}/merchant/${merchant.id}`;
   const hasCoords = hasCoordinates(merchant);
   const nearbyMapUrl = hasCoords
     ? `/map?lat=${merchant.lat}&lon=${merchant.lon}&radius=1`
