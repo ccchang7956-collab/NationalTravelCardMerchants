@@ -13,11 +13,17 @@ def same_address(left, right):
 
 def valid_coordinates(lat, lon):
     try:
-        return (
-            lat is not None and lon is not None
-            and math.isfinite(float(lat)) and math.isfinite(float(lon))
-            and -90 <= float(lat) <= 90 and -180 <= float(lon) <= 180
-        )
+        if lat is None or lon is None:
+            return False
+        flat, flon = float(lat), float(lon)
+        if not (math.isfinite(flat) and math.isfinite(flon)):
+            return False
+        if not (-90 <= flat <= 90 and -180 <= flon <= 180):
+            return False
+        # Null Island 明確拒絕（舊資料髒座標不保留）
+        if flat == 0.0 and flon == 0.0:
+            return False
+        return True
     except (TypeError, ValueError):
         return False
 

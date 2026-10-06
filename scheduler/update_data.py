@@ -52,7 +52,7 @@ DATA_DIR     = str(Path(DB_PATH).parent)
 HASH_FILE    = os.path.join(DATA_DIR, "pdf_hash.txt")
 META_FILE    = os.path.join(DATA_DIR, "update_meta.json")
 
-# 大量刪除安全閘門（可用環境變數覆寫）
+# 大量刪除安全閘門（環境變數 MASS_DELETE_MIN_OLD / MASS_DELETE_RATIO 即時覆寫）
 MASS_MIN_OLD = 100
 MASS_RATIO = 0.5
 
@@ -187,8 +187,6 @@ def atomic_write_text(path: str, data: str) -> None:
 
 def download_zip(dest: str) -> bool:
     """從政府開放資料下載 ZIP 檔，回傳是否成功。"""
-    import socket
-    socket.setdefaulttimeout(60)
     log.info(f"📥 下載資料：{DOWNLOAD_URL}")
     headers = {
         "User-Agent": "NationalTravelCardBot/1.0 (automated data update)"
@@ -906,16 +904,17 @@ def _transactional_sync_db(temp_db_path: str, target_db_path: str) -> int:
                 unique_no_tax_merchants.append(m)
 
         for m in unique_no_tax_merchants:
+            # 無統編搬遷守衛：地址不同則不保留舊座標（比照 _update_merchant_row 的 same_address 守衛）
             updated = cursor.execute("""
                 UPDATE merchants
                 SET zip_code = ?, website = ?,
-                    lat = CASE WHEN ? IS NOT NULL THEN ? WHEN preservable_coordinates(lat,lon,address,geocoded_address) THEN lat END,
-                    lon = CASE WHEN ? IS NOT NULL THEN ? WHEN preservable_coordinates(lat,lon,address,geocoded_address) THEN lon END,
-                    coord_source = CASE WHEN ? IS NOT NULL THEN ? WHEN preservable_coordinates(lat,lon,address,geocoded_address) THEN COALESCE(coord_source,'legacy_unknown') END,
-                    coord_accuracy = CASE WHEN ? IS NOT NULL THEN ? WHEN preservable_coordinates(lat,lon,address,geocoded_address) THEN COALESCE(coord_accuracy,'unknown') END,
-                    geocoded_address = CASE WHEN ? IS NOT NULL THEN ? WHEN preservable_coordinates(lat,lon,address,geocoded_address) THEN COALESCE(geocoded_address,address) END
+                    lat = CASE WHEN ? IS NOT NULL THEN ? WHEN same_address(address,?) AND preservable_coordinates(lat,lon,address,geocoded_address) THEN lat END,
+                    lon = CASE WHEN ? IS NOT NULL THEN ? WHEN same_address(address,?) AND preservable_coordinates(lat,lon,address,geocoded_address) THEN lon END,
+                    coord_source = CASE WHEN ? IS NOT NULL THEN ? WHEN same_address(address,?) AND preservable_coordinates(lat,lon,address,geocoded_address) THEN COALESCE(coord_source,'legacy_unknown') END,
+                    coord_accuracy = CASE WHEN ? IS NOT NULL THEN ? WHEN same_address(address,?) AND preservable_coordinates(lat,lon,address,geocoded_address) THEN COALESCE(coord_accuracy,'unknown') END,
+                    geocoded_address = CASE WHEN ? IS NOT NULL THEN ? WHEN same_address(address,?) AND preservable_coordinates(lat,lon,address,geocoded_address) THEN COALESCE(geocoded_address,address) END
                 WHERE tax_id IS NULL AND name = ? AND COALESCE(address, '') = COALESCE(?, '')
-            """, (m["zip_code"], m["website"], m["lat"], m["lat"], m["lon"], m["lon"],m["lat"],m["coord_source"],m["lat"],m["coord_accuracy"],m["lat"],m["geocoded_address"], m["name"], m["address"])).rowcount
+            """, (m["zip_code"], m["website"], m["lat"], m["lat"], m["address"], m["lon"], m["lon"], m["address"], m["lat"], m["coord_source"], m["address"], m["lat"], m["coord_accuracy"], m["address"], m["lat"], m["geocoded_address"], m["address"], m["name"], m["address"])).rowcount
 
             if updated == 0:
                 cursor.execute("""

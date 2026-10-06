@@ -18,11 +18,17 @@ def space_segment(text: Optional[str], generate_ngrams: bool = False) -> str:
 
 
 def parse_search_query(query: Optional[str]) -> Optional[str]:
+    # DoS 防護：單查詢最多 100 字、10 個短語（超出的截斷）
+    text = normalize_text(query)
+    if len(text) > 100:
+        text = text[:100]
     phrases = []
-    for term in normalize_text(query).split():
+    for term in text.split():
         tokens = space_segment(term)
         if tokens:
             phrase = '"' + tokens.replace('"', '""') + '"'
             if phrase not in phrases:
                 phrases.append(phrase)
+        if len(phrases) >= 10:
+            break
     return " AND ".join(phrases) or None
