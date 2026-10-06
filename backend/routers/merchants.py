@@ -56,17 +56,17 @@ def append_industry_filter(clauses, params, industry_code):
     """)
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate distance in km between two lat/lon points."""
+    """Calculate distance in km between two lat/lon points. Missing/invalid -> inf (excluded)."""
     if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
-        return 0.0
+        return float("inf")
     try:
         lat1, lon1, lat2, lon2 = float(lat1), float(lon1), float(lat2), float(lon2)
     except (ValueError, TypeError):
-        return 0.0
+        return float("inf")
 
     if math.isnan(lat1) or math.isnan(lon1) or math.isnan(lat2) or math.isnan(lon2) or \
        math.isinf(lat1) or math.isinf(lon1) or math.isinf(lat2) or math.isinf(lon2):
-        return 0.0
+        return float("inf")
 
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -83,7 +83,7 @@ def get_merchants(
     zip_code: Optional[str] = Query(None, description="Exact match zip code"),
     has_website: Optional[bool] = Query(None, description="Filter only stores with website"),
     industry_code: Optional[str] = Query(None, description="Filter by industry code (supports prefix wildcard matching)"),
-    page: int = Query(1, ge=1, description="Page number"),
+    page: int = Query(1, ge=1, le=10000, description="Page number"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page"),
     db: sqlite3.Connection = Depends(get_db)
 ):
@@ -169,7 +169,7 @@ def get_nearby_merchants(
     limit: int = Query(100, ge=1, le=500, description="Max number of results"),
     offset: int = Query(0, ge=0, le=1_000_000, description="Number of nearest results to skip"),
     db: sqlite3.Connection = Depends(get_db),
-    response: Response = None,
+    response: Response = None,  # type: ignore[assignment] - FastAPI injects; direct calls may pass None
 ):
     if math.isnan(lat) or math.isnan(lon) or math.isinf(lat) or math.isinf(lon):
         raise HTTPException(status_code=400, detail="Invalid latitude or longitude")
@@ -199,6 +199,7 @@ def get_nearby_merchants(
     joins = []
     where_clauses = [
         "m.lat IS NOT NULL",
+        "m.lon IS NOT NULL",
         "m.lat BETWEEN ? AND ?",
     ]
     params = [min_lat, max_lat]
@@ -217,8 +218,9 @@ def get_nearby_merchants(
     if q is not None and q.strip() != "":
         fts_query = parse_search_query(q)
         if not fts_query:
-            response.headers["X-Total-Count"] = "0"
-            response.headers["X-Has-More"] = "false"
+            if response is not None:
+                response.headers["X-Total-Count"] = "0"
+                response.headers["X-Has-More"] = "false"
             return []
         joins.append("JOIN merchants_fts f ON m.id = f.rowid")
         where_clauses.append("f.merchants_fts MATCH ?")
@@ -232,6 +234,8 @@ def get_nearby_merchants(
         query += " " + " ".join(joins)
     if where_clauses:
         query += " WHERE " + " AND ".join(where_clauses)
+    # 候選上限：bbox 內可能數萬筆，全量 haversine 會爆記憶體；5000 為近似語意，文件化
+    query += " LIMIT 5000"
 
     cursor = db.cursor()
     try:
@@ -250,28 +254,33 @@ def get_nearby_merchants(
             results.append(m)
 
     results.sort(key=lambda x: (x["distance_km"], x["id"]))
-    response.headers["X-Total-Count"] = str(len(results))
-    response.headers["X-Has-More"] = "true" if offset + limit < len(results) else "false"
+    if response is not None:
+        response.headers["X-Total-Count"] = str(len(results))
+        response.headers["X-Has-More"] = "true" if offset + limit < len(results) else "false"
     return results[offset:offset + limit]
 
 
 @router.get("/merchants/{merchant_id_or_tax_id}", response_model=MerchantDetail)
 def get_merchant(merchant_id_or_tax_id: str, db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    row = None
-    key = merchant_id_or_tax_id
-    # 超長數字（>18 位不可能是 id；Python 3.11+ int() 4300 位上限會直接 ValueError）
-    # 直接走 tax_id 查，查無即 404，避免掃描器輕易打爆 500
-    if key.isdigit() and len(key) <= 18:
-        cursor.execute("SELECT * FROM merchants WHERE id = ?", (int(key),))
-        row = cursor.fetchone()
-        if row is None:
-            # 純數字亦可能是 tax_id（本國統編為 8 位數字），fallback 查 tax_id
-            cursor.execute("SELECT * FROM merchants WHERE tax_id = ?", (key,))
+    try:
+        cursor = db.cursor()
+        row = None
+        key = merchant_id_or_tax_id
+        # 超長數字（>18 位不可能是 id；Python 3.11+ int() 4300 位上限會直接 ValueError）
+        # 直接走 tax_id 查，查無即 404，避免掃描器輕易打爆 500
+        if key.isdigit() and len(key) <= 18:
+            cursor.execute("SELECT * FROM merchants WHERE id = ?", (int(key),))
             row = cursor.fetchone()
-    else:
-        cursor.execute("SELECT * FROM merchants WHERE tax_id = ?", (key,))
-        row = cursor.fetchone()
+            if row is None:
+                # 純數字亦可能是 tax_id（本國統編為 8 位數字），fallback 查 tax_id，確定性取最小 id
+                cursor.execute("SELECT * FROM merchants WHERE tax_id = ? ORDER BY id ASC LIMIT 1", (key,))
+                row = cursor.fetchone()
+        else:
+            cursor.execute("SELECT * FROM merchants WHERE tax_id = ? ORDER BY id ASC LIMIT 1", (key,))
+            row = cursor.fetchone()
+    except sqlite3.OperationalError as e:
+        log.error(f"get_merchant OperationalError: {e}")
+        raise HTTPException(status_code=503, detail="Database temporarily unavailable")
     if not row:
         raise HTTPException(status_code=404, detail="Merchant not found")
     
@@ -313,34 +322,38 @@ def _read_stats_last_updated() -> Optional[str]:
 
 @router.get("/stats", response_model=Stats)
 def get_stats(db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
+    try:
+        cursor = db.cursor()
 
-    # 一次掃表拿兩個總數（舊版三次掃表＋全量地址拉進 Python）
-    cursor.execute("""
-        SELECT COUNT(*),
-               SUM(website IS NOT NULL AND website <> '')
-        FROM merchants
-    """)
-    row = cursor.fetchone()
-    total = row[0]
-    has_website = row[1] or 0
+        # 一次掃表拿兩個總數（舊版三次掃表＋全量地址拉進 Python）
+        cursor.execute("""
+            SELECT COUNT(*),
+                   SUM(website IS NOT NULL AND website <> '')
+            FROM merchants
+        """)
+        row = cursor.fetchone()
+        total = row[0]
+        has_website = row[1] or 0
 
-    # 城市分桶：DB 側 GROUP BY 前三字（縣市皆三字），Python 只歸納 ≤23 個桶
-    # （舊版 54k 地址全拉回 Python 逐筆 startswith，慢兩個量級）
-    cursor.execute("""
-        SELECT substr(address, 1, 3) AS city3, COUNT(*)
-        FROM merchants
-        WHERE address IS NOT NULL AND address <> ''
-        GROUP BY city3
-    """)
-    counts = {c: 0 for c in TAIWAN_CITIES}
-    other = 0
-    for r in cursor.fetchall():
-        c3 = r["city3"] or ""
-        if c3 in counts:
-            counts[c3] += r[1]
-        else:
-            other += r[1]
+        # 城市分桶：DB 側 GROUP BY 前三字（縣市皆三字），Python 只歸納 ≤23 個桶
+        # （舊版 54k 地址全拉回 Python 逐筆 startswith，慢兩個量級）
+        cursor.execute("""
+            SELECT substr(address, 1, 3) AS city3, COUNT(*)
+            FROM merchants
+            WHERE address IS NOT NULL AND address <> ''
+            GROUP BY city3
+        """)
+        counts = {c: 0 for c in TAIWAN_CITIES}
+        other = 0
+        for r in cursor.fetchall():
+            c3 = (r["city3"] or "").replace("臺", "台")
+            if c3 in counts:
+                counts[c3] += r[1]
+            else:
+                other += r[1]
+    except sqlite3.OperationalError as e:
+        log.error(f"get_stats OperationalError: {e}")
+        raise HTTPException(status_code=503, detail="Database temporarily unavailable")
     valid_cities = [
         {"city": c, "count": n} for c, n in counts.items() if n > 0
     ]
@@ -362,14 +375,18 @@ def get_stats(db: sqlite3.Connection = Depends(get_db)):
 
 @router.get("/industries", response_model=List[IndustryInfo])
 def get_industries(db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("""
-        SELECT DISTINCT mi.industry_code, mi.industry_name
-        FROM merchant_industries mi
-        JOIN merchants m ON mi.tax_id = m.tax_id
-        WHERE mi.industry_code != '' AND mi.industry_name != ''
-        ORDER BY mi.industry_code ASC
-    """)
+    try:
+        cursor = db.cursor()
+        cursor.execute("""
+            SELECT DISTINCT mi.industry_code, mi.industry_name
+            FROM merchant_industries mi
+            JOIN merchants m ON mi.tax_id = m.tax_id
+            WHERE mi.industry_code != '' AND mi.industry_name != ''
+            ORDER BY mi.industry_code ASC
+        """)
+    except sqlite3.OperationalError as e:
+        log.error(f"get_industries OperationalError: {e}")
+        raise HTTPException(status_code=503, detail="Database temporarily unavailable")
     industries = []
     for row in cursor.fetchall():
         code = row["industry_code"]

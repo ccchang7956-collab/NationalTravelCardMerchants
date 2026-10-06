@@ -77,8 +77,10 @@ def test_haversine_extreme_precision():
 
 def test_haversine_nan_and_inf_inputs():
     """Verify haversine function handles NaN and Infinity inputs gracefully without crashing."""
-    assert haversine(float("nan"), 121.5, 25.0, 121.5) == 0.0
-    assert haversine(25.0, float("inf"), 25.0, 121.5) == 0.0
+    # merchants.haversine: invalid -> inf (excluded from nearby, never 0-cost)
+    assert math.isinf(haversine(float("nan"), 121.5, 25.0, 121.5))
+    assert math.isinf(haversine(25.0, float("inf"), 25.0, 121.5))
+    # route_optimizer (dead code, kept 0.0 for compat)
     assert haversine_distance(float("nan"), 121.5, 25.0, 121.5) == 0.0
     assert haversine_distance(25.0, float("-inf"), 25.0, 121.5) == 0.0
 
