@@ -18,6 +18,7 @@ import {
 } from "@heroicons/react/24/outline";
 import AddressSearch from "@/components/AddressSearch";
 import FilterSheet, { FilterState, DEFAULT_FILTER_STATE } from "@/components/FilterSheet";
+import { useToast } from "@/components/Toast";
 import { getPublicApiUrl } from "@/utils/env";
 import { geoErrorMessage } from "@/utils/geolocation";
 import { DEFAULT_CENTER, clampLat, clampLon, clampRadiusKm, mapSearchParams, mapSearchKey, parseHasWebsite } from "@/utils/mapSearchParams";
@@ -84,6 +85,7 @@ function MapContent() {
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationGeoError, setLocationGeoError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   // Sync state to URL
   const updateURL = useCallback((lat: number, lon: number, r: number, q: string, indCode = "", city = "", hasWebsite: boolean | null = null) => {
@@ -136,6 +138,13 @@ function MapContent() {
         ? `共找到 ${total} 間商店，目前已載入 ${offset + data.length} 間（半徑 ${r} km 內）`
         : `找到 ${offset + data.length} 間商店（半徑 ${r} km 內）`;
       setLocationStatus(statusText);
+      if (offset === 0) {
+        if (offset + data.length === 0) {
+          toast.info("搜尋完成", `半徑 ${r} km 內沒有符合的結果`);
+        } else {
+          toast.success("搜尋完成", statusText);
+        }
+      }
     } catch (e: unknown) {
       if (controller.signal.aborted || abortControllerRef.current !== controller) return;
       if (offset === 0) {
@@ -144,13 +153,17 @@ function MapContent() {
         setTotalNearbyMerchants(0);
       }
       setLocationStatus(offset === 0 ? "查詢失敗，請稍後再試" : "載入更多商店失敗，請重試");
-      setApiError(e instanceof Error ? e.message : "無法連線後端 API");
+      const message = e instanceof Error ? e.message : "無法連線後端 API";
+      setApiError(message);
+      if (offset === 0) {
+        toast.error("搜尋失敗", message);
+      }
     } finally {
       if (abortControllerRef.current === controller) {
         setLoading(false);
       }
     }
-  }, [updateURL]);
+  }, [updateURL, toast]);
 
   // Parse URL query params
   const latParam = searchParams.get("lat");
@@ -356,9 +369,11 @@ function MapContent() {
             />
             <button
               onClick={handleKeywordSearch}
-              className="shrink-0 bg-accent px-4 py-2 rounded-lg text-sm text-white font-medium hover:bg-accent-hover transition-colors cursor-pointer"
+              disabled={loading}
+              aria-live="polite"
+              className="shrink-0 bg-accent px-4 py-2 rounded-lg text-sm text-white font-medium hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-70 disabled:cursor-wait inline-flex items-center gap-1.5"
             >
-              搜尋
+              {loading ? "搜尋中" : "搜尋"}
             </button>
             <FilterSheet
               mode="map"

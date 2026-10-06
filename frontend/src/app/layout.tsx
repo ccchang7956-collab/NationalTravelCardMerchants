@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import GlobalRadar from "@/components/GlobalRadar";
 import PWAOfflineBanner from "@/components/PWAOfflineBanner";
+import { ToastProvider } from "@/components/Toast";
 import { getSiteUrl } from "@/utils/site";
 import "./globals.css";
 
@@ -102,7 +103,8 @@ export default function RootLayout({
             }),
           }}
         />
-        <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-200">
+        <ToastProvider>
+          <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-200">
           <Navbar />
           <main className="flex-1 max-w-5xl w-full mx-auto p-6 md:py-10">
             {children}
@@ -125,8 +127,9 @@ export default function RootLayout({
               </a>
             </p>
           </footer>
-          <GlobalRadar />
-        </div>
+            <GlobalRadar />
+          </div>
+        </ToastProvider>
       </body>
     </html>
   );

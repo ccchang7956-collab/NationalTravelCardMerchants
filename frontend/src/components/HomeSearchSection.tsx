@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Form from "next/form";
+import { useFormStatus } from "react-dom";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import FilterSheet, { FilterState } from "@/components/FilterSheet";
 import { geoErrorMessage } from "@/utils/geolocation";
@@ -12,6 +13,26 @@ interface HomeSearchSectionProps {
   initialQ: string;
   initialFilters: FilterState;
   cities: string[];
+}
+
+function SearchSubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      aria-live="polite"
+      className="bg-accent text-white px-6 py-2.5 rounded-lg hover:bg-accent-hover transition-colors font-medium disabled:opacity-70 disabled:cursor-wait inline-flex items-center justify-center gap-2 min-w-[88px]"
+    >
+      {pending && (
+        <span
+          aria-hidden="true"
+          className="w-4 h-4 border-2 border-white/60 border-t-white rounded-full animate-spin"
+        />
+      )}
+      {pending ? "搜尋中" : "搜尋"}
+    </button>
+  );
 }
 
 export default function HomeSearchSection({
@@ -143,12 +164,7 @@ export default function HomeSearchSection({
           locationError={locationError}
         />
 
-        <button
-          type="submit"
-          className="bg-accent text-white px-6 py-2.5 rounded-lg hover:bg-accent-hover transition-colors font-medium"
-        >
-          搜尋
-        </button>
+        <SearchSubmitButton />
       </div>
     </Form>
   );

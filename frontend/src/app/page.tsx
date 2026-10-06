@@ -4,6 +4,7 @@ import Form from "next/form";
 import { redirect } from "next/navigation";
 import { MagnifyingGlassIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, MapIcon } from "@heroicons/react/24/outline";
 import HomeSearchSection from "@/components/HomeSearchSection";
+import SearchCompleteToast from "@/components/SearchCompleteToast";
 import type { FilterState } from "@/components/FilterSheet";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
@@ -139,6 +140,10 @@ export default async function Home({
     industryCode,
   };
 
+  // 搜尋完成 toast：首訪無參數時不打擾；換頁/篩選視為新的搜尋 key
+  const hasSearched = !!(q || city || hasWebsite !== null || industryCode || page > 1);
+  const searchKey = [q, city, String(hasWebsite), industryCode, String(page)].join("|");
+
   const buildPageUrl = (targetPage: number) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -199,6 +204,12 @@ export default async function Home({
         initialQ={q}
         initialFilters={initialFilters}
         cities={TAIWAN_CITIES}
+      />
+      <SearchCompleteToast
+        total={total}
+        searchKey={searchKey}
+        active={hasSearched}
+        failed={!data}
       />
 
       {/* Results Meta */}
