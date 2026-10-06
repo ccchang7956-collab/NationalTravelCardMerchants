@@ -7,6 +7,11 @@ services:
       dockerfile: backend/Dockerfile
     image: ntc-backend
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
@@ -36,6 +41,11 @@ services:
         NEXT_PUBLIC_SITE_URL: "${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}"
     image: ntc-frontend
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
@@ -60,6 +70,11 @@ services:
       dockerfile: scheduler/Dockerfile
     image: ntc-scheduler
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - ntc_data:/data
     environment:

@@ -2,6 +2,13 @@ services:
   nginx:
     image: nginx:alpine
     restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
     ports:
       - "127.0.0.1:8088:80"
     volumes:

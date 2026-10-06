@@ -41,6 +41,9 @@ RUN groupadd -g 1000 ntcuser && useradd -u 1000 -g ntcuser -s /bin/sh ntcuser \
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
+HEALTHCHECK --interval=1m --timeout=10s --start-period=30s --retries=3 \
+  CMD grep -qa supercronic /proc/[0-9]*/cmdline 2>/dev/null || exit 1
+
 # 預設以 supercronic 排程模式運行
 # 手動測試請執行：docker compose exec scheduler python /app/update_data.py
 CMD ["supercronic", "/etc/supercronic/crontab"]

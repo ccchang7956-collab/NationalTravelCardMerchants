@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import os
@@ -37,9 +38,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
     expose_headers=["X-Total-Count", "X-Has-More"],
+)
+
+# 防 Host header 污染：僅允許本站 + 本地 + docker 內網服務名（healthcheck 用）
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["ntc.shibaalin.com", "localhost", "127.0.0.1", "backend", "frontend", "testserver", "*.localhost"],
 )
 
 app.include_router(merchants.router, prefix="/api", tags=["merchants"])
