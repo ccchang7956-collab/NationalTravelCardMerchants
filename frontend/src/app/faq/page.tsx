@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CARD_ELIGIBILITY, CARD_ALLOWANCE, POLICY_SOURCE_URL, POLICY_CHECKED_DATE } from "@/utils/travelPolicy";
 import { getBackendUrl } from "@/utils/env";
 import { getSiteUrl } from "@/utils/site";
 import { escapeJsonLd } from "@/utils/jsonld";
@@ -10,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "常見問題",
   description:
-    "國民旅遊卡常見問題：8000 元額度區分、特約商店查詢、刷卡失敗處理、統編查詢、外島商店與行業分類選項說明。",
+    "國民旅遊卡常見問題：16,000 元補助與兩類額度、特約商店查詢、刷卡失敗處理、統編查詢、外島商店與行業分類選項說明。",
   alternates: {
     canonical: `${SITE_URL}/faq`,
   },
@@ -84,7 +85,7 @@ export default async function FaqPage() {
     {
       id: "faq-3",
       question: "國民旅遊卡特約商店資料多久更新一次？",
-      answer: `本系統資料來源為政府開放資料，系統每日自動比對更新，確保提供最新的特約商店清單${lastUpdatedDate ? `（截至 ${lastUpdatedDate}，共 ${statsTotal.toLocaleString()} 間）` : ""}。`,
+      answer: `本系統資料來源為政府開放資料，系統每日檢查來源，有新資料且成功匯入時更新名單${lastUpdatedDate ? `（截至 ${lastUpdatedDate}，共 ${statsTotal.toLocaleString()} 間）` : ""}。`,
     },
     {
       id: "faq-4",
@@ -98,13 +99,13 @@ export default async function FaqPage() {
       id: "faq-5",
       question: "誰可以使用國民旅遊卡？",
       answer:
-        "國民旅遊卡（National Travel Card）由行政院人事行政總處推動，適用於全體公務人員及其眷屬，用於國內旅遊相關消費補助。",
+        CARD_ELIGIBILITY,
     },
     {
       id: "faq-6",
-      question: "國旅卡 8000 元額度如何區分觀光旅遊與自行運用？",
+      question: "國旅卡最高 16,000 元補助與兩類各 8000 元額度如何區分？",
       answer:
-        "國旅卡每年 8000 元補助額度分為「觀光旅遊」與「自行運用」兩類：觀光旅遊額度須用於旅遊相關消費（如住宿、觀光景點），自行運用額度使用範圍較廣。兩類額度的適用店家與當年度規定請以行政院人事行政總處官方公告為準。",
+        CARD_ALLOWANCE,
     },
     {
       id: "faq-7",
@@ -115,7 +116,7 @@ export default async function FaqPage() {
       id: "faq-8",
       question: "如何用統一編號（統編）查詢特約商店？",
       answer:
-        "在本系統首頁搜尋框直接輸入 8 碼統一編號即可找到對應商店；或直接開啟該店詳情頁（網址格式為 /merchant/{統一編號}），查看地址與地圖位置。詳情頁同時標示統編，方便核對是否為同一店家。行業別對照資料目前尚未建置。",
+        "在首頁搜尋框輸入 8 碼統一編號，查看對應商店與分店，再開啟詳情頁核對店名、地址與統編。正式商家網址使用 /merchant/{id}，其中 id 為本站商家識別碼；同一統編可能有多間分店，不能只以統編判定同一營業地點。",
     },
     {
       id: "faq-9",
@@ -128,7 +129,7 @@ export default async function FaqPage() {
     {
       id: "faq-10",
       question: "特約商店的行業類別有哪些？如何篩選？",
-      answer: `本站提供官方行業別大類與細項分類選單供參考；目前商家行業對照資料尚未建置，選取分類暫不會篩選結果${hasWebsiteCount > 0 ? `。另有約 ${hasWebsiteCount.toLocaleString()} 間商店提供官方網站${cutoff}，可進一步篩選查看` : "。商店仍可依其他條件查詢"}`,
+      answer: `本站提供行業別大類與細項分類篩選，結果以已匯入的商家行業對照資料為準；未分類商家可能不會出現在分類結果中，找不到時可改用店名、地址或統編查詢${hasWebsiteCount > 0 ? `。另有約 ${hasWebsiteCount.toLocaleString()} 間商店提供官方網站${cutoff}，可進一步篩選查看` : "。商店仍可依其他條件查詢"}`,
     },
   ];
 
@@ -150,6 +151,11 @@ export default async function FaqPage() {
           )}
         </p>
       </div>
+
+      <p className="text-sm text-muted leading-relaxed">
+        資格與額度說明依<a href={POLICY_SOURCE_URL} className="text-accent underline">官方 114 年 12 月版 Q&A</a>整理；政策查核日期：<time dateTime={POLICY_CHECKED_DATE}>{POLICY_CHECKED_DATE}</time>。
+        個人核定條件請向服務機關人事單位確認。<Link href="/about" className="text-accent underline">資料來源與更新方式</Link>
+      </p>
 
       <nav aria-label="問題目錄" className="text-sm">
         <ul className="list-disc list-inside space-y-1 text-accent">

@@ -15,10 +15,12 @@ function codeLines(src: string): string[] {
 }
 
 describe("Phase5 Task1: 索引正確性", () => {
-  it("robots.ts 用 /*?param= 擋查詢頁，無裸 /?q= disallow", () => {
+  it("公開頁允許爬取，搜尋結果以 noindex 控制索引", () => {
     const s = readSrc("../app/robots.ts");
-    expect(s).toContain("/*?q=");
-    expect(s).not.toContain('"/?q="');
+    expect(s).toContain('allow: "/"');
+    expect(s).not.toContain("disallow:");
+    const home = readSrc("../app/page.tsx");
+    expect(home).toContain("googleBot: { index: false, follow: true }");
   });
 
   it("page.tsx 將行業篩選結果設為 noindex，並保留分類於 canonical", () => {

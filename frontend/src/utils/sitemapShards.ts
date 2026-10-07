@@ -71,7 +71,8 @@ export function escapeXml(value: string): string {
 }
 
 export function sitemapXml(siteUrl: string, manifest: SitemapManifest, items: SitemapMerchant[]): string {
-  const modified = manifest.last_updated && Number.isFinite(Date.parse(manifest.last_updated)) ? `<lastmod>${escapeXml(manifest.last_updated)}</lastmod>` : "";
-  const urls = items.map(item => `<url><loc>${escapeXml(`${siteUrl}/merchant/${encodeURIComponent(String(item.id))}`)}</loc>${modified}<changefreq>monthly</changefreq><priority>0.7</priority></url>`).join("");
+  // Dataset import time is not evidence that each merchant page changed.
+  void manifest;
+  const urls = items.map(item => `<url><loc>${escapeXml(`${siteUrl}/merchant/${encodeURIComponent(String(item.id))}`)}</loc></url>`).join("");
   return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`;
 }

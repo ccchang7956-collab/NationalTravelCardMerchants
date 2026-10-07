@@ -3,6 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "目前處於離線狀態",
+  robots: { index: false, follow: true, googleBot: { index: false, follow: true } },
   description: "您目前處於離線狀態，請檢查您的網路連線。",
 };
 

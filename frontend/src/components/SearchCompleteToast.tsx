@@ -21,9 +21,10 @@ export default function SearchCompleteToast({
   const lastKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!active) return;
-    if (lastKeyRef.current === searchKey) return;
-    lastKeyRef.current = searchKey;
+    if (!active && !failed) return;
+    const resultKey = `${searchKey}|${failed ? "failed" : total}`;
+    if (lastKeyRef.current === resultKey) return;
+    lastKeyRef.current = resultKey;
 
     if (failed) {
       toast.error("搜尋失敗", "目前無法取得搜尋結果，請稍後重試");

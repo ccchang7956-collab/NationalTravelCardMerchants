@@ -3,6 +3,8 @@ import Link from "next/link";
 import Form from "next/form";
 import { redirect } from "next/navigation";
 import { MagnifyingGlassIcon, MapPinIcon, BuildingStorefrontIcon, GlobeAltIcon, MapIcon } from "@heroicons/react/24/outline";
+import CityDirectory from "@/components/CityDirectory";
+import { CARD_ELIGIBILITY } from "@/utils/travelPolicy";
 import HomeSearchSection from "@/components/HomeSearchSection";
 import SearchCompleteToast from "@/components/SearchCompleteToast";
 import type { FilterState } from "@/components/FilterSheet";
@@ -72,7 +74,7 @@ export async function generateMetadata({
       canonical: hasFilters || page > 1 ? `${SITE_URL}/?${canonicalParams.toString()}` : SITE_URL + "/",
     },
     ...((hasFilters || page > 1) && {
-      robots: { index: false, follow: true },
+      robots: { index: false, follow: true, googleBot: { index: false, follow: true } },
     }),
     ...(q && {
       title: `搜尋「${q}」的特約商店結果`,
@@ -435,6 +437,7 @@ export default async function Home({
       {/* SEO 靜態說明區塊 + FAQ Schema */}
       {!q && !city && page === 1 && (
         <>
+          <CityDirectory counts={sortedCities} />
           <section
             aria-label="關於國民旅遊卡特約商店"
             className="seo-intro mt-12 pt-8 border-t border-border/40 text-sm text-muted space-y-4 leading-relaxed"
@@ -444,9 +447,9 @@ export default async function Home({
             </h2>
             <p>
               <strong>國民旅遊卡（National Travel Card）</strong>
-              為行政院人事行政總處推動之國內旅遊補助方案，全體公務人員及其眷屬可持國旅卡於全台
+              用於符合規定的公務人員休假補助。本站收錄全台
               {stats ? `超過 ${statsTotal.toLocaleString()} 間` : "眾多"}
-              特約商店消費
+              特約商店名單
               {lastUpdatedDate ? `（截至 ${lastUpdatedDate}）` : ""}。
             </p>
             <p>
@@ -460,13 +463,13 @@ export default async function Home({
               <li>🛍️ 文化體育（書店、運動中心）</li>
             </ul>
             <p>
-              本系統收錄最新政府開放資料，每日自動比對更新，提供全台特約商店即時查詢服務，
+              本系統整理政府開放資料，每日檢查來源是否更新，提供全台特約商店名單查詢服務，
               支援店名搜尋、縣市篩選，以及地圖定位查看附近商店。
             </p>
             <p className="text-xs text-muted/60">
               資料來源：行政院人事行政總處
               <a
-                href="https://travel.nccc.com.tw/"
+                href="https://data.gov.tw/dataset/12982"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline hover:text-foreground"
@@ -519,7 +522,7 @@ export default async function Home({
                   國民旅遊卡特約商店資料多久更新一次？
                 </summary>
                 <p className="mt-2 ml-4">
-                  本系統資料來源為政府開放資料，系統每日自動比對更新，確保提供最新的特約商店清單
+                  本系統資料來源為政府開放資料，系統每日檢查來源，有新資料且成功匯入時更新名單
                   {lastUpdatedDate ? `（截至 ${lastUpdatedDate}，共 ${statsTotal.toLocaleString()} 間）` : ""}。
                 </p>
               </details>
@@ -540,7 +543,7 @@ export default async function Home({
                   誰可以使用國民旅遊卡？
                 </summary>
                 <p className="mt-2 ml-4">
-                  國民旅遊卡（National Travel Card）由行政院人事行政總處推動，適用於全體公務人員及其眷屬，用於國內旅遊相關消費補助。
+                  {CARD_ELIGIBILITY}
                 </p>
               </details>
             </div>
@@ -580,7 +583,7 @@ export default async function Home({
                     name: "國民旅遊卡特約商店資料多久更新一次？",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: `本系統資料來源為政府開放資料，系統每日自動比對更新，確保提供最新的特約商店清單${lastUpdatedDate ? `（截至 ${lastUpdatedDate}，共 ${statsTotal.toLocaleString()} 間）` : ""}。`,
+                      text: `本系統資料來源為政府開放資料，系統每日檢查來源，有新資料且成功匯入時更新名單${lastUpdatedDate ? `（截至 ${lastUpdatedDate}，共 ${statsTotal.toLocaleString()} 間）` : ""}。`,
                     },
                   },
                   {
@@ -598,7 +601,7 @@ export default async function Home({
                     name: "誰可以使用國民旅遊卡？",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: "國民旅遊卡（National Travel Card）由行政院人事行政總處推動，適用於全體公務人員及其眷屬，用於國內旅遊相關消費補助。",
+                      text: CARD_ELIGIBILITY,
                     },
                   },
                 ],

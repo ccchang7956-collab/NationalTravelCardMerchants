@@ -27,11 +27,12 @@ describe("Phase5 Task5: GEO 內容", () => {
     expect(s).toContain("未分類");
   });
 
-  it("詳情頁 JSON-LD 含 category + dateModified + speakable", () => {
+  it("詳情頁 JSON-LD 分開商家與網頁，不把全站匯入日期當作商家異動日期", () => {
     const s = readSrc("../app/merchant/[id]/page.tsx");
     expect(s).toMatch(/categor/);
-    expect(s).toContain("dateModified");
-    expect(s).toContain("speakable");
+    expect(s).not.toContain("dateModified:");
+    expect(s).toContain('"@type": "WebPage"');
+    expect(s).not.toContain('"@type": "GovernmentService"');
   });
 
   it("列表卡用 article 語意標籤", () => {
@@ -67,8 +68,10 @@ describe("Phase5 Task5: GEO 內容", () => {
   it("FAQ 含額度 8000 觀光/自行運用、刷卡失敗、統編查詢、外島", () => {
     const s = readSrc("../app/faq/page.tsx");
     expect(s).toContain("8000");
-    expect(s).toContain("觀光");
-    expect(s).toContain("自行運用");
+    const policy = readSrc("../utils/travelPolicy.ts");
+    expect(policy).toContain("觀光");
+    expect(policy).toContain("自行運用");
+    expect(s).toContain("CARD_ALLOWANCE");
     expect(s).toMatch(/刷卡失敗|刷卡|請款失敗/);
     expect(s).toMatch(/統編|統一編號/);
     expect(s).toMatch(/外島|澎湖|金門|馬祖|離島/);

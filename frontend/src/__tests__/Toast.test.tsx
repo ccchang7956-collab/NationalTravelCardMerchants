@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { ToastProvider, useToast } from "@/components/Toast";
 import SearchCompleteToast from "@/components/SearchCompleteToast";
 
@@ -74,10 +74,10 @@ describe("Toast", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "觸發失敗" }));
-    expect(screen.getByRole("status")).toHaveTextContent("搜尋失敗");
+    expect(screen.getByRole("alert")).toHaveTextContent("搜尋失敗");
 
     fireEvent.click(screen.getByRole("button", { name: "關閉通知" }));
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("在 Provider 外使用會拋出清楚錯誤", () => {
@@ -125,7 +125,7 @@ describe("SearchCompleteToast", () => {
       </ToastProvider>
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("搜尋失敗");
+    expect(screen.getByRole("alert")).toHaveTextContent("搜尋失敗");
   });
 
   it("首訪無參數時不打擾", () => {
@@ -136,5 +136,64 @@ describe("SearchCompleteToast", () => {
     );
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+});
+
+
+describe("通知閱讀與去重", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it("相同通知只出現一次，只有一個關閉計時器", () => {
+    render(<ToastProvider><Trigger /></ToastProvider>);
+    const button = screen.getByRole("button", { name: "觸發搜尋完成" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(jest.getTimerCount()).toBe(1);
+  });
+
+  it("成功 4 秒關閉，錯誤保留 8 秒", () => {
+    render(<ToastProvider><Trigger /><TriggerError /></ToastProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "觸發搜尋完成" }));
+    fireEvent.click(screen.getByRole("button", { name: "觸發失敗" }));
+    act(() => jest.advanceTimersByTime(4000));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    act(() => jest.advanceTimersByTime(4000));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("滑鼠或鍵盤焦點停留時暫停，兩者離開後繼續倒數", () => {
+    render(<ToastProvider><Trigger /></ToastProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "觸發搜尋完成" }));
+    act(() => jest.advanceTimersByTime(2000));
+    const notice = screen.getByRole("status");
+    fireEvent.mouseEnter(notice);
+    const close = screen.getByRole("button", { name: "關閉通知" });
+    act(() => close.focus());
+    act(() => jest.advanceTimersByTime(10000));
+    fireEvent.mouseLeave(notice);
+    act(() => jest.advanceTimersByTime(10000));
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    act(() => close.blur());
+    act(() => jest.advanceTimersByTime(1999));
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    act(() => jest.advanceTimersByTime(1));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("Strict Mode effect replay 後仍會自動關閉通知", () => {
+    render(<React.StrictMode><ToastProvider><SearchCompleteToast total={1} searchKey="retry" active /></ToastProvider></React.StrictMode>);
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    act(() => jest.advanceTimersByTime(4000));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("相同搜尋失敗後重試成功仍給予回饋", () => {
+    const { rerender } = render(<ToastProvider><SearchCompleteToast total={0} searchKey="same" active failed /></ToastProvider>);
+    expect(screen.getByRole("alert")).toHaveTextContent("搜尋失敗");
+    rerender(<ToastProvider><SearchCompleteToast total={2} searchKey="same" active failed={false} /></ToastProvider>);
+    expect(screen.getByRole("status")).toHaveTextContent("共 2 筆");
   });
 });

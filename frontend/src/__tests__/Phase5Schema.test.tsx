@@ -49,7 +49,7 @@ describe("Phase5 Task2: 卡片與結構化資料", () => {
     expect(s).toMatch(/export\s+const\s+alt\s*=/);
   });
 
-  it("layout WebSite 無 SearchAction（robots 已 disallow /*?q=，避免自相矛盾）", () => {
+  it("layout WebSite 不宣告搜尋結果功能", () => {
     const s = readSrc("../app/layout.tsx");
     expect(s).toContain('"@type": "WebSite"');
     expect(s).not.toContain("SearchAction");

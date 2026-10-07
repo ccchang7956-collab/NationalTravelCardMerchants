@@ -11,6 +11,7 @@ import {
   BuildingStorefrontIcon,
   RadioIcon,
 } from '@heroicons/react/24/outline';
+import { useToast } from '@/components/Toast';
 import { getPublicApiUrl } from '@/utils/env';
 import { distanceLabel, locationLabel, navigationUrl } from '@/utils/coordinates';
 
@@ -41,6 +42,7 @@ const RADIUS_OPTIONS = [
 ];
 
 export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
+  const { toast } = useToast();
   const [radius, setRadius] = useState<number>(1.0);
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
@@ -108,18 +110,22 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
       if (!current()) return;
       if (!Array.isArray(data)) throw new Error('店家回應格式錯誤');
       setMerchants(data);
-    } catch (err: unknown) {
+      if (data.length) toast.success('已找到附近商店', `顯示 ${data.length} 間商店，搜尋範圍 ${radiusKm} km`);
+      else toast.info('附近沒有符合的商店', '試試擴大範圍，或使用店名、地址搜尋');
+    } catch {
       if (!current()) return;
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         setIsOffline(true);
+        toast.error('目前無法連線', '請恢復網路連線後重新搜尋');
       } else {
-        setGeoError(err instanceof Error ? err.message : '載入周邊店家失敗');
+        setGeoError('目前無法載入附近商店，請稍後重試');
+        toast.error('附近商店載入失敗', '請檢查網路連線後重試');
       }
       setMerchants([]);
     } finally {
       if (current()) setLoading(false);
     }
-  }, [beginRequest]);
+  }, [beginRequest, toast]);
 
   // 觸發 GPS 定位與查詢
   const requestLocationAndFetch = useCallback(
@@ -129,6 +135,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
       const current = () => generation.current === request.sequence && !request.controller.signal.aborted;
       if (!navigator.geolocation) {
         setGeoError('您的裝置或瀏覽器不支援 GPS 地理定位');
+        toast.error('無法取得位置', '請改用下方店名或地址搜尋');
         setLoading(false);
         return;
       }
@@ -152,11 +159,12 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
             errMsg = 'GPS 定位逾時，請再試一次或手動輸入搜尋';
           }
           setGeoError(errMsg);
+          toast.error('定位失敗', errMsg);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     },
-    [beginRequest, fetchNearbyMerchants]
+    [beginRequest, fetchNearbyMerchants, toast]
   );
 
   // 當開啟抽屜時自動取得定位與監聽 Esc 鍵。
@@ -222,10 +230,13 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
       if (!current()) return;
       if (!Array.isArray(data.items)) throw new Error('店家回應格式錯誤');
       setMerchants(data.items);
-    } catch (err: unknown) {
+      if (data.items.length) toast.success('搜尋完成', `顯示 ${data.items.length} 間符合的商店`);
+      else toast.info('沒有符合的商店', '試試簡化店名、地址，或改用統一編號搜尋');
+    } catch {
       if (!current()) return;
       setMerchants([]);
-      setGeoError(err instanceof Error ? err.message : '手動搜尋發生錯誤');
+      setGeoError('目前無法取得搜尋結果，請稍後重試');
+      toast.error('搜尋失敗', '請檢查網路連線後重試');
     } finally {
       if (current()) {
         setLoading(false);
@@ -237,19 +248,20 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      {/* 點擊遮罩關閉 */}
-      <div className="flex-1" onClick={handleClose} aria-hidden="true" />
-
-      {/* Sheet 底盤 Modal */}
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 sm:p-6"
+      onClick={handleClose}
+    >
+      {/* Sheet 底盤 Modal：手機版底部抽屜，桌機版置中對話框 */}
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="radar-sheet-title"
-        className="bg-card border-t border-border shadow-2xl rounded-t-3xl max-h-[85vh] flex flex-col w-full max-w-2xl mx-auto overflow-hidden animate-in slide-in-from-bottom duration-300"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-card border border-border shadow-2xl rounded-t-3xl sm:rounded-3xl max-h-[92dvh] sm:max-h-[85vh] flex flex-col w-full max-w-2xl mx-auto overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-300"
       >
-        {/* Handle Bar 頂部拉桿 */}
-        <div className="w-full flex justify-center py-2.5 cursor-grab active:cursor-grabbing" onClick={handleClose}>
+        {/* Handle Bar 頂部拉桿（僅手機版顯示） */}
+        <div className="w-full flex justify-center py-2.5 cursor-grab active:cursor-grabbing sm:hidden" onClick={handleClose}>
           <div className="w-12 h-1.5 bg-muted/40 rounded-full" />
         </div>
 

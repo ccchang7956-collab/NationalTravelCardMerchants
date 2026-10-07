@@ -1,3 +1,4 @@
+import { cityFromAddress, cityPageUrl } from "@/utils/cities";
 import { Metadata } from "next";
 import { cache } from "react";
 import Link from "next/link";
@@ -11,16 +12,10 @@ import { escapeJsonLd } from "@/utils/jsonld";
 import { freshnessNote } from "@/utils/dataFreshness";
 import { hasCoordinates, locationLabel, navigationUrl } from "@/utils/coordinates";
 
-const TAIWAN_CITIES = [
-  "基隆市", "台北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
-  "台中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "台南市",
-  "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "台東縣", "澎湖縣", "金門縣", "連江縣",
-];
-
 // Fetch merchant data（react cache：metadata＋page 同請求只打一次後端）
 const getMerchant = cache(async (id: string) => {
   const API_URL = getBackendUrl();
-  const res = await fetch(`${API_URL}/api/merchants/${encodeURIComponent(id)}`, { next: { revalidate: 3600 } });
+  const res = await fetch(`${API_URL}/api/merchants/${encodeURIComponent(id)}`, { next: { revalidate: 300 }, signal: AbortSignal.timeout(10000) });
   // 404 才回 null（→ notFound）；後端 500/超時直接 throw，不偽裝成 404
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`merchant API failed: ${res.status}`);
@@ -31,7 +26,7 @@ const getMerchant = cache(async (id: string) => {
 async function getStats() {
   const API_URL = getBackendUrl();
   try {
-    const res = await fetch(`${API_URL}/api/stats`, { next: { revalidate: 300 } });
+    const res = await fetch(`${API_URL}/api/stats`, { next: { revalidate: 300 }, signal: AbortSignal.timeout(10000) });
     if (!res.ok) return null;
     return res.json();
   } catch {
@@ -48,17 +43,17 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!merchant) {
     return {
       title: "找不到商店",
-      robots: { index: false },
+      robots: { index: false, follow: true, googleBot: { index: false, follow: true } },
     };
   }
 
-  const cityName = merchant.address ? merchant.address.substring(0, 3) : "";
+  const cityName = cityFromAddress(merchant.address, merchant.city)?.name ?? "";
   const title = `${merchant.name}｜${cityName}國旅卡特約商店`;
-  const description = `${merchant.name}（${merchant.zip_code ? merchant.zip_code + " " : ""}${merchant.address}）是國民旅遊卡特約商店，統一編號 ${merchant.tax_id}。${merchant.website ? `官方網站：${merchant.website}` : ""}`;
+  const description = `${merchant.name}是國民旅遊卡特約商店。${merchant.address ? `地址：${merchant.zip_code ? merchant.zip_code + " " : ""}${merchant.address}。` : "來源名單未提供地址，請向商店核對分店位置。"}${merchant.tax_id ? `統一編號 ${merchant.tax_id}。` : ""}`;
   const pageUrl = `${SITE_URL}/merchant/${merchant.id}`;
 
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: {
       canonical: pageUrl,
@@ -123,12 +118,8 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
     ? `/map?lat=${merchant.lat}&lon=${merchant.lon}&radius=1`
     : null;
 
-  // 縣市正規化：city 欄位優先，其次地址前綴比對縣市表，取不到則省略
-  const city: string | undefined = (() => {
-    if (merchant.city && TAIWAN_CITIES.includes(merchant.city)) return merchant.city;
-    const addr: string = merchant.address || "";
-    return TAIWAN_CITIES.find((c) => addr.startsWith(c));
-  })();
+  const cityEntry = cityFromAddress(merchant.address, merchant.city);
+  const city = cityEntry?.name;
   const websiteUrl: string | undefined = merchant.website
     ? sanitizeUrl(merchant.website)
     : undefined;
@@ -136,18 +127,18 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
   // 完整的 LocalBusiness 結構化資料
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "@id": pageUrl,
+    "@type": merchant.address?.trim() ? "LocalBusiness" : "Organization",
+    "@id": `${pageUrl}#business`,
     name: merchant.name,
     url: pageUrl,
     ...(websiteUrl && websiteUrl !== "about:blank" ? { sameAs: [websiteUrl] } : {}),
-    address: {
+    ...(merchant.address?.trim() ? { address: {
       "@type": "PostalAddress",
       streetAddress: merchant.address,
       postalCode: merchant.zip_code,
       ...(city ? { addressRegion: city } : {}),
       addressCountry: "TW",
-    },
+    } } : {}),
     ...(hasCoords && merchant.coord_accuracy === "verified" && {
       geo: {
         "@type": "GeoCoordinates",
@@ -156,29 +147,26 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
       },
       hasMap: `https://www.google.com/maps?q=${merchant.lat},${merchant.lon}`,
     }),
-    taxID: merchant.tax_id,
+    ...(merchant.tax_id ? { taxID: merchant.tax_id,
     identifier: {
       "@type": "PropertyValue",
       name: "統一編號",
       value: merchant.tax_id,
-    },
-    description: `國民旅遊卡特約商店：${merchant.name}，位於${merchant.address}。`,
+    } } : {}),
+    description: `國民旅遊卡特約商店：${merchant.name}${merchant.address ? `，位於${merchant.address}` : "；來源名單未提供地址"}。`,
     ...(primaryIndustry?.industry_name
       ? { category: primaryIndustry.industry_name }
       : {}),
-    ...(last_updated ? { dateModified: last_updated } : {}),
-    speakable: {
-      "@type": "SpeakableSpecification",
-      cssSelector: ["h1", "address"],
-    },
-    isPartOf: {
-      "@type": "GovernmentService",
-      name: "國民旅遊卡特約商店計畫",
-      provider: {
-        "@type": "GovernmentOrganization",
-        name: "行政院人事行政總處",
-      },
-    },
+  };
+  const webPageLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": pageUrl,
+    url: pageUrl,
+    name: merchant.name,
+    mainEntity: { "@id": `${pageUrl}#business` },
+    // The visible dataset date is not a per-merchant modification timestamp.
+    isPartOf: { "@type": "WebSite", url: SITE_URL },
   };
 
   // 麵包屑結構化資料：首頁 > {city} > {店名}（固定 3 項）
@@ -196,8 +184,8 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
         "@type": "ListItem",
         position: 2,
         name: city ? `${city}特約商店` : "特約商店",
-        item: city
-          ? `${SITE_URL}/?city=${encodeURIComponent(city)}`
+        item: cityEntry
+          ? `${SITE_URL}${cityPageUrl(cityEntry.slug)}`
           : SITE_URL,
       },
       {
@@ -215,6 +203,11 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
         <ArrowLeftIcon className="w-4 h-4" /> 返回列表
       </Link>
       
+      <nav aria-label="麵包屑" className="flex flex-wrap gap-2 text-sm text-muted mb-5">
+        <Link href="/">首頁</Link><span aria-hidden="true">／</span>
+        {cityEntry && <><Link href={cityPageUrl(cityEntry.slug)}>{cityEntry.name}特約商店</Link><span aria-hidden="true">／</span></>}
+        <span>{merchant.name}</span>
+      </nav>
       <article className="bg-card rounded-2xl p-8 md:p-10 shadow-sm border border-border/60">
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
@@ -232,21 +225,27 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
           </div>
         </header>
         
+        <section aria-labelledby="merchant-card-question" className="merchant-confirm mb-8 space-y-3 text-sm text-muted leading-relaxed">
+          <h2 id="merchant-card-question" className="text-lg font-medium text-foreground">{merchant.name}可以使用國旅卡嗎？</h2>
+          <p>依本站{lastUpdatedDate ? `於 ${lastUpdatedDate} 更新的` : "目前收錄的"}政府開放資料，{merchant.name}列於國民旅遊卡特約商店名單。請核對下方地址與統編，確認是預計消費的分店。</p>
+          <p>消費前請向店家或<a href="https://travel.nccc.com.tw/" className="text-accent underline">官方查詢系統</a>再次確認；是否可請領補助仍依個人資格、消費內容及核銷規定辦理。<Link href="/about" className="text-accent underline">資料來源與更新方式</Link></p>
+          {cityEntry && <Link href={cityPageUrl(cityEntry.slug)} className="inline-block text-accent hover:underline">查看其他{cityEntry.name}國旅卡特約商店 →</Link>}
+        </section>
         <dl className="space-y-6 text-base text-foreground/80">
           <div className="flex items-start gap-3">
             <MapPinIcon className="w-5 h-5 mt-0.5 text-muted shrink-0" />
             <div>
               <dt className="font-medium text-foreground">商店地址</dt>
               <dd className="mt-1 text-muted">
-                <address className="not-italic">{merchant.zip_code} {merchant.address}</address>
-                <a 
+                <address className="not-italic">{merchant.zip_code} {merchant.address || "來源名單未提供地址，請向商店核對。"}</address>
+                {(merchant.address || hasCoords) && <a
                   href={navigationUrl(merchant)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 mt-2 text-sm text-accent hover:underline"
                 >
                   在 Google 地圖上查看 <ArrowTopRightOnSquareIcon className="w-3 h-3" />
-                </a>
+                </a>}
               </dd>
               {locationLabel(merchant) && <dd className="mt-2 text-xs text-muted">{locationLabel(merchant)}，導航以商店地址為準。</dd>}
             </div>
@@ -344,6 +343,7 @@ export default async function MerchantPage({ params }: { params: Promise<{ id: s
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: escapeJsonLd(jsonLd) }}
       />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: escapeJsonLd(webPageLd) }} />
       {/* BreadcrumbList 結構化資料 */}
       <script
         type="application/ld+json"

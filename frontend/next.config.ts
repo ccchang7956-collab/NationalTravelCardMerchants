@@ -29,7 +29,13 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // 保留 Next 16.3.8 預設 HTML bots，加入搜尋／AI 爬蟲，讓初始 head 含完整 metadata。
+  // 升級 Next 時應對照 htmlLimitedBots 文件，保留預設分享預覽爬蟲。
+  htmlLimitedBots: /[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight|Googlebot|OAI-SearchBot|ChatGPT-User|GPTBot|PerplexityBot|Perplexity-User|ClaudeBot|Claude-SearchBot|Claude-User/i,
   turbopack: {},
+  async rewrites() {
+    return [{ source: "/sitemap-merchants-:id(\\d+).xml", destination: "/merchants/sitemap/:id.xml" }];
+  },
   async headers() {
     return [
       {

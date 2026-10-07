@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import GlobalRadar from "@/components/GlobalRadar";
 import PWAOfflineBanner from "@/components/PWAOfflineBanner";
@@ -122,6 +123,12 @@ export default function RootLayout({
                 政府開放資料
               </a>
             </p>
+            <nav aria-label="網站資訊" className="flex flex-wrap justify-center gap-4 mt-3">
+              <Link href="/city" className="underline hover:text-foreground">全台縣市商店</Link>
+              <Link href="/faq" className="underline hover:text-foreground">常見問題</Link>
+              <Link href="/about" className="underline hover:text-foreground">關於本站與資料來源</Link>
+            </nav>
+            <p className="mt-2">本站為非官方查詢工具，名單依政府開放資料整理。</p>
             <p className="mt-2">
               <a href="/llms.txt" className="underline hover:text-foreground">
                 給 AI 的本站說明

@@ -1,5 +1,6 @@
+import { ToastProvider } from "@/components/Toast";
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render as baseRender, screen, waitFor } from "@testing-library/react";
 import RadarSheet from "@/components/RadarSheet";
 
 test("older nearby responses cannot overwrite a newer radius search", async () => {
@@ -34,3 +35,7 @@ test("late GPS callbacks are ignored after manual search and closing", async () 
   await act(async () => { gps({ coords: { latitude: 25, longitude: 121 } } as GeolocationPosition); });
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+function render(...args: Parameters<typeof baseRender>) {
+  return baseRender(args[0], { wrapper: ToastProvider, ...args[1] });
+}

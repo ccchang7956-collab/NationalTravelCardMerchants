@@ -155,9 +155,7 @@ function MapContent() {
       setLocationStatus(offset === 0 ? "查詢失敗，請稍後再試" : "載入更多商店失敗，請重試");
       const message = e instanceof Error ? e.message : "無法連線後端 API";
       setApiError(message);
-      if (offset === 0) {
-        toast.error("搜尋失敗", message);
-      }
+      toast.error(offset === 0 ? "搜尋失敗" : "載入更多失敗", "請檢查網路連線後重試");
     } finally {
       if (abortControllerRef.current === controller) {
         setLoading(false);
@@ -243,6 +241,7 @@ function MapContent() {
   const handleLocate = useCallback(() => {
     if (!navigator.geolocation) {
       setGeoError("您的瀏覽器不支援定位功能");
+      toast.error("無法取得位置", "請輸入地址或直接點選地圖定位");
       return;
     }
     setLocationStatus("定位中...");
@@ -257,15 +256,17 @@ function MapContent() {
       (err) => {
         const msg = geoErrorMessage(err);
         setGeoError(msg);
+        toast.error("定位失敗", msg);
         setLocationStatus("定位失敗，請手動點擊地圖選擇位置");
       },
       { enableHighAccuracy: false, timeout: 5000 }
     );
-  }, [fetchNearby, radius, keyword, filterState.industryCode, filterState.city, filterState.hasWebsite]);
+  }, [fetchNearby, radius, keyword, filterState.industryCode, filterState.city, filterState.hasWebsite, toast]);
 
   const handleFilterRequestLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setLocationGeoError("您的瀏覽器不支援定位功能");
+      toast.error("無法取得位置", "請輸入地址或直接點選地圖定位");
       return;
     }
     setLocationLoading(true);
@@ -278,12 +279,14 @@ function MapContent() {
         setLocationLoading(false);
       },
       (err) => {
-        setLocationGeoError(geoErrorMessage(err));
+        const message = geoErrorMessage(err);
+        setLocationGeoError(message);
+        toast.error("定位失敗", message);
         setLocationLoading(false);
       },
       { enableHighAccuracy: false, timeout: 8000 }
     );
-  }, []);
+  }, [toast]);
 
   const handleFilterChange = useCallback(
     (newFilters: FilterState) => {

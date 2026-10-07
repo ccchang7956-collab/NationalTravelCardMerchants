@@ -63,6 +63,6 @@ describe("Phase4 Task4: API_URL 解凍（每次請求時取值）", () => {
   it("商家詳情 canonical 使用商家 ID，確保同統編分店網址唯一", () => {
     const s = readSrc("../app/merchant/[id]/page.tsx");
     expect(s).toContain("/merchant/${merchant.id}");
-    expect(s).toContain("redirect(`/merchant/${merchant.id}`)");
+    expect(s).toContain("permanentRedirect(`/merchant/${merchant.id}`)");
   });
 });

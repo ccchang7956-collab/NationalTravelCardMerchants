@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cityFromAddress, cityPageUrl } from "@/utils/cities";
 
 const POPULAR_CITIES = ["台北市", "新北市", "台中市", "高雄市"];
 
@@ -26,7 +27,7 @@ export default function NotFound() {
         {POPULAR_CITIES.map((city) => (
           <Link
             key={city}
-            href={`/?city=${city}`}
+            href={cityPageUrl(cityFromAddress(null, city)!.slug)}
             className="px-3 py-1.5 rounded-lg bg-card border border-border hover:border-accent/50 hover:text-accent transition-colors"
           >
             {city}特約商店

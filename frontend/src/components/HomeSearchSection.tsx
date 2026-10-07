@@ -6,6 +6,7 @@ import Form from "next/form";
 import { useFormStatus } from "react-dom";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import FilterSheet, { FilterState } from "@/components/FilterSheet";
+import { useToast } from "@/components/Toast";
 import { geoErrorMessage } from "@/utils/geolocation";
 import { mapSearchParams } from "@/utils/mapSearchParams";
 
@@ -41,6 +42,7 @@ export default function HomeSearchSection({
   cities,
 }: HomeSearchSectionProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [prevInitialFilters, setPrevInitialFilters] = useState<FilterState>(initialFilters);
 
@@ -67,6 +69,7 @@ export default function HomeSearchSection({
   const handleRequestLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setLocationError("您的瀏覽器不支援定位功能");
+      toast.error("無法取得位置", "請改用縣市或地址搜尋");
       return;
     }
     setLocationLoading(true);
@@ -76,15 +79,18 @@ export default function HomeSearchSection({
         const loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
 
         setUserLocation(loc);
+        toast.success("定位完成", "選擇搜尋距離後，套用篩選即可查看附近商店");
         setLocationLoading(false);
       },
       (err) => {
-        setLocationError(geoErrorMessage(err));
+        const message = geoErrorMessage(err);
+        setLocationError(message);
+        toast.error("定位失敗", message);
         setLocationLoading(false);
       },
       { enableHighAccuracy: false, timeout: 8000 }
     );
-  }, []);
+  }, [toast]);
 
   const handleFilterChange = useCallback(
     (newFilters: FilterState) => {
@@ -93,6 +99,7 @@ export default function HomeSearchSection({
         newFilters.radiusKm !== null && !userLocation
           ? { ...newFilters, radiusKm: null }
           : newFilters;
+      if (newFilters.radiusKm !== null && !userLocation) toast.info("距離篩選尚未套用", "請先允許定位；目前仍可使用其他篩選搜尋");
       setFilters(effective);
 
       // 用 ref 持有目前輸入框的 q，避免 URL 舊 q 凍結
@@ -116,7 +123,7 @@ export default function HomeSearchSection({
 
       router.push(`/?${params.toString()}`);
     },
-    [router, userLocation]
+    [router, userLocation, toast]
   );
 
   return (

@@ -1,3 +1,4 @@
+import { ToastProvider } from "@/components/Toast";
 /**
  * Phase2 Task 4: 前端安全與體驗
  * TDD red test — 實作前應 FAIL，實作後應 PASS
@@ -5,7 +6,7 @@
 import fs from "fs";
 import path from "path";
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render as baseRender, screen } from "@testing-library/react";
 import { getBackendUrl, getPublicApiUrl } from "@/utils/env";
 import HomeSearchSection from "@/components/HomeSearchSection";
 import type { FilterState } from "@/components/FilterSheet";
@@ -220,3 +221,7 @@ describe("Phase2 Task4: map/page 箝制 + a11y + useEffect", () => {
     );
   });
 });
+
+function render(...args: Parameters<typeof baseRender>) {
+  return baseRender(args[0], { wrapper: ToastProvider, ...args[1] });
+}

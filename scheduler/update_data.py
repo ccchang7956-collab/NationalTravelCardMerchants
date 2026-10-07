@@ -49,6 +49,7 @@ from shared.locking import database_lock
 DOWNLOAD_URL = "https://travel.nccc.com.tw/NASApp/NTC/html/RetailerFileDownload.jsp"
 DB_PATH      = os.environ.get("DB_PATH", "/data/merchants.db")
 DATA_DIR     = str(Path(DB_PATH).parent)
+PARSER_VERSION = "2026-10-07-address-columns-v2"
 HASH_FILE    = os.path.join(DATA_DIR, "pdf_hash.txt")
 META_FILE    = os.path.join(DATA_DIR, "update_meta.json")
 
@@ -110,7 +111,19 @@ def is_website(text: str) -> bool:
         return True
     return False
 
+ADDRESS_CITY_PATTERN = r"(?:[臺台]北市|新北市|[臺台]中市|[臺台]南市|高雄市|桃園市|基隆市|新竹[市縣]|嘉義[市縣]|苗栗縣|彰化縣|南投縣|雲林縣|屏東縣|宜蘭縣|花蓮縣|[臺台]東縣|澎湖縣|金門縣|連江縣)"
+MERGED_ADDRESS_PATTERN = re.compile(ADDRESS_CITY_PATTERN + r"[\u4e00-\u9fff]{1,4}[區鄉鎮市].*[0-9０-９]+.*號")
+
+
 def split_merged(text: str) -> tuple[str, str]:
+    # PDF sometimes emits the name and address without any column whitespace.
+    # Recover only a complete city + district + numbered address already in the text.
+    matches = list(re.finditer(r"(?=" + MERGED_ADDRESS_PATTERN.pattern + r")", text))
+    if len(matches) == 1 and matches[0].start() > 0:
+        boundary = matches[0].start()
+        name, address = text[:boundary].strip(), text[boundary:].strip()
+        if name and not is_website(name):
+            return name, address
     parts = re.split(r'\s{2,}|\u3000+', text)
     if len(parts) >= 2:
         return parts[0].strip(), "".join(parts[1:]).strip()
@@ -1036,7 +1049,12 @@ def main():
             with open(HASH_FILE) as f:
                 old_hash = f.read().strip()
 
-        if new_hash == old_hash:
+        try:
+            with open(META_FILE, "r", encoding="utf-8") as meta_source:
+                parser_current = json.load(meta_source).get("parser_version") == PARSER_VERSION
+        except (OSError, ValueError, AttributeError):
+            parser_current = False
+        if new_hash == old_hash and parser_current:
             try:
                 with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     migrate_database(conn)
@@ -1138,6 +1156,7 @@ def main():
     meta = {
         "last_updated": end_time.isoformat(),
         "pdf_hash": new_hash,
+        "parser_version": PARSER_VERSION,
         "total_merchants": final_total,
         "new_merchants": added_count,
         "removed_merchants": removed_count,
