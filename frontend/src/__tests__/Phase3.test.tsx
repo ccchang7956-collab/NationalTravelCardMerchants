@@ -50,7 +50,7 @@ describe("Phase3: CSP enforce", () => {
 });
 
 describe("Phase3: merchant card 語意（article + 內部 button，Link 為 sibling）", () => {
-  const src = () => readSrc("../app/map/page.tsx");
+  const src = () => readSrc("../components/VirtualMerchantList.tsx");
 
   it("外層用 article 作卡片容器", () => {
     expect(src()).toMatch(/<article/);
@@ -75,7 +75,7 @@ describe("Phase3: merchant card 語意（article + 內部 button，Link 為 sibl
   it("內部 button 保留 type/aria-label/onClick，Link 保留 target=_blank rel=noopener 且卡片 article 內無 stopPropagation", () => {
     const s = src();
     expect(s).toMatch(/<button[^>]*type="button"[^>]*aria-label/);
-    expect(s).toMatch(/onClick=\{\(\) => setSelectedMerchant\(m\)\}/);
+    expect(s).toMatch(/onClick=\{\(\) => onSelectMerchant\(m\)\}/);
     expect(s).toContain('target="_blank"');
     expect(s).toContain("noopener");
     // 僅斷言卡片 article 區塊：他處（如 dialog/popover）合法使用 stopPropagation 不應被此測試擋下
@@ -86,11 +86,10 @@ describe("Phase3: merchant card 語意（article + 內部 button，Link 為 sibl
     }
   });
 
-  it("merchantRefs 型別相容（HTMLElement 或 HTMLButtonElement）", () => {
-    const s = src();
-    expect(s).toMatch(
-      /merchantRefs\s*=\s*useRef<Record<number,\s*(HTMLElement|HTMLButtonElement)\s*\|\s*null>>/
-    );
-    expect(s).toContain("scrollIntoView");
+  it("地圖選取使用虛擬列表的捲動介面", () => {
+    const page = readSrc("../app/map/page.tsx");
+    expect(page).toContain("useRef<MerchantListHandle>(null)");
+    expect(page).toContain("scrollToMerchant(merchant.id)");
+    expect(src()).toContain("scrollToMerchant(id)");
   });
 });

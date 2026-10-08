@@ -84,6 +84,36 @@ def test_nearby_limit_returns_nearest():
     assert [m["name"] for m in r.json()] == ["台北A"]
 
 
+def test_dense_area_includes_nearest_beyond_old_candidate_cap(geo_db):
+    geo_db.execute("DELETE FROM merchants")
+    geo_db.executemany(
+        "INSERT INTO merchants(name, lat, lon) VALUES (?, ?, ?)",
+        [(f"遠處商家{i}", 25.04, 121.57) for i in range(6000)],
+    )
+    geo_db.execute("INSERT INTO merchants(name, lat, lon) VALUES ('真正最近', 25.0339, 121.5645)")
+    geo_db.commit()
+    client = TestClient(app)
+    params = {"lat": 25.0339, "lon": 121.5645, "radius_km": 5, "limit": 1}
+    first = client.get("/api/merchants/nearby", params=params)
+    last = client.get("/api/merchants/nearby", params={**params, "offset": 6000})
+    assert first.json()[0]["name"] == "真正最近"
+    assert first.headers["X-Total-Count"] == last.headers["X-Total-Count"] == "6001"
+    assert first.headers["X-Has-More"] == "true"
+    assert last.headers["X-Has-More"] == "false"
+    assert len(last.json()) == 1
+
+
+def test_nearby_orders_by_actual_distance_before_rounding(geo_db):
+    geo_db.execute("DELETE FROM merchants")
+    geo_db.executemany(
+        "INSERT INTO merchants(name, lat, lon) VALUES (?, ?, ?)",
+        [("較遠但ID小", 25.000002, 121), ("較近但ID大", 25.000001, 121)],
+    )
+    geo_db.commit()
+    result = TestClient(app).get("/api/merchants/nearby", params={"lat": 25, "lon": 121})
+    assert [item["name"] for item in result.json()] == ["較近但ID大", "較遠但ID小"]
+
+
 def test_nearby_pagination_returns_complete_stable_pages_and_counts():
     client = TestClient(app)
     params = {"lat": 25.0339, "lon": 121.5645, "radius_km": 5, "limit": 2}

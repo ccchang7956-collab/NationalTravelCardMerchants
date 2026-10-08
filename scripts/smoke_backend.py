@@ -23,7 +23,7 @@ async def control(request: Request):
 
 @app.middleware("http")
 async def simulate_failure(request: Request, call_next):
-    if _fail_merchants and request.url.path == "/api/merchants":
+    if _fail_merchants and (request.url.path == "/api/merchants" or request.url.path.startswith("/api/merchants/")):
         return JSONResponse({"detail":"Simulated unavailability"},status_code=503)
     return await call_next(request)
 

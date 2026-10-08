@@ -21,8 +21,9 @@ services:
       TZ: Asia/Taipei
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
       DATA_STALE_AFTER_HOURS: "${DATA_STALE_AFTER_HOURS:-48}"
-      # auth 已退役（純公開站，後端無任何 JWT 邏輯）：留空即可啟動，保留變數僅供未來啟用
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      ADDRESS_SEARCH_URL: "${ADDRESS_SEARCH_URL:-https://nominatim.openstreetmap.org/search}"
+      ADDRESS_SEARCH_USER_AGENT: "${ADDRESS_SEARCH_USER_AGENT:-NationalTravelCardMerchants/1.0 (+https://ntc.shibaalin.com)}"
+      ADDRESS_SEARCH_CACHE_PATH: /data/address_search.db
     healthcheck:
       # readiness 不受排程新鮮度影響；另以 /api/health 監控更新結果。
       test: ["CMD", "curl", "-fs", "http://localhost:8000/api/ready"]

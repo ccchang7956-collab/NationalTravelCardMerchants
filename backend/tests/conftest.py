@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret-key-do-not-use-in-prod")
 _test_directory = tempfile.TemporaryDirectory(prefix="ntc-pytest-")
 os.environ["DB_PATH"] = str(Path(_test_directory.name) / "merchants.db")
 

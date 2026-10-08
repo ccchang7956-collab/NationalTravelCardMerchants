@@ -10,19 +10,6 @@ import pytest
 from backend.database import init_db
 
 
-def test_expense_models_validation():
-    from backend.models import ExpenseCreate, ItineraryItemCreate
-    import pydantic
-    with pytest.raises(Exception):
-        ExpenseCreate(merchant_name="X", amount=100, category="觀光旅遊", expense_date="not-a-date")
-    with pytest.raises(Exception):
-        ItineraryItemCreate(custom_name="A", estimated_cost=-1)
-    with pytest.raises(Exception):
-        ItineraryItemCreate(custom_name="A", lat=100.0)
-    with pytest.raises(Exception):
-        ItineraryItemCreate(custom_name="A", quota_category="BAD")
-
-
 def test_fts_mismatch_warns(tmp_path, caplog):
     import logging
     db_file = str(tmp_path / "fts.db")

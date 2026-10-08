@@ -27,6 +27,8 @@ __pycache__/
 
 scripts/geocode_cache.json
 scripts/geocode_run.log
+deploy-logs/
+backend/address_search.db*
 
 # Docker
 .env
@@ -36,4 +38,3 @@ data/
 # Agent Execution Logs
 .agents/
 .superpowers/
-

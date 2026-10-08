@@ -1,4 +1,5 @@
 import type * as L from "leaflet";
+import type { MapMerchant } from "@/utils/mapMerchants";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { escapeHtml, sanitizeUrl } from "../utils/sanitize";
@@ -9,19 +10,7 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
-interface Merchant {
-  id: number;
-  name: string;
-  address: string | null;
-  zip_code: string | null;
-  tax_id: string | null;
-  website: string | null;
-  lat: number | null;
-  lon: number | null;
-  distance_km?: number;
-  coord_source?: string | null;
-  coord_accuracy?: string | null;
-}
+type Merchant = MapMerchant;
 
 interface MapViewProps {
   merchants: Merchant[];
@@ -33,6 +22,38 @@ interface MapViewProps {
   radius: number;
   tempRadius: number;
 }
+
+function merchantPopup(m: Merchant): string {
+  const distText =
+    m.distance_km !== undefined
+      ? `<span style="color:#C25E40;font-weight:500">${escapeHtml(distanceLabel(m))}</span>`
+      : "";
+
+  const websiteLink = m.website
+    ? `<a href="${escapeHtml(sanitizeUrl(m.website))}" target="_blank" rel="noopener" style="font-size:11px;color:#C25E40;display:block;margin-top:4px">🔗 官方網站</a>`
+    : "";
+
+  const safeName = escapeHtml(m.name);
+  const safeAddress = escapeHtml(m.address || "");
+  const safeTaxId = escapeHtml(m.tax_id || "");
+  // href 上下文要 URL encode（escapeHtml 不夠）：統編含 / ? # 即斷鏈
+  const detailHref = `/merchant/${encodeURIComponent(String(m.id))}`;
+
+  return (
+    `<div style="min-width:200px;font-family:system-ui;padding:4px 0">
+      <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:4px">${safeName}</div>
+      <div style="font-size:12px;color:#666;margin-bottom:4px">${safeAddress}</div>
+      ${locationLabel(m) ? `<div style="font-size:11px;color:#888">${escapeHtml(locationLabel(m)!)}</div>` : ""}
+      <div style="font-size:11px;color:#888">統編：${safeTaxId}</div>
+      ${websiteLink}
+      ${distText ? `<div style="margin-top:4px;font-size:11px">${distText} 外</div>` : ""}
+      <a href="${detailHref}" class="merchant-detail-link" data-href="${detailHref}" style="display:block;margin-top:8px;text-align:center;background:#C25E40;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer">查看詳情</a>
+    </div>`
+  );
+
+}
+
+interface MarkerEntry { marker: L.Marker; merchant: Merchant; }
 
 export default function MapView({
   merchants,
@@ -48,7 +69,9 @@ export default function MapView({
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersLayerRef = useRef<L.MarkerClusterGroup | null>(null);
-  const markersRef = useRef<Record<number, L.Marker>>({});
+  const markersRef = useRef<Record<number, MarkerEntry>>({});
+  const selectionRef = useRef(selectedMerchant);
+  const selectCallbackRef = useRef(onSelectMerchant);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const centerMarkerRef = useRef<L.Marker | null>(null);
   const circleRef = useRef<L.Circle | null>(null);
@@ -59,6 +82,8 @@ export default function MapView({
 
   // 保持 onMapClickRef 永遠指向最新的 callback，避免地圖 click 的 stale closure
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
+  useEffect(() => { selectCallbackRef.current = onSelectMerchant; }, [onSelectMerchant]);
+  useEffect(() => { selectionRef.current = selectedMerchant; }, [selectedMerchant]);
 
   // Initialize map once on mount
   useEffect(() => {
@@ -120,6 +145,11 @@ export default function MapView({
         mapRef.current.removeLayer(circleRef.current);
         circleRef.current = null;
       }
+      markersRef.current = {};
+      markersLayerRef.current = null;
+      userMarkerRef.current = null;
+      centerMarkerRef.current = null;
+      isFirstRenderRef.current = true;
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -134,8 +164,17 @@ export default function MapView({
     const L = LRef.current;
     const markersLayer = markersLayerRef.current;
 
-    markersLayer.clearLayers();
-    markersRef.current = {};
+    let cancelled = false;
+    let frame: number | undefined;
+    const wanted = new Set(merchants.filter(hasCoordinates).map((merchant) => merchant.id));
+    const removed: L.Marker[] = [];
+    for (const [id, entry] of Object.entries(markersRef.current)) {
+      if (!wanted.has(Number(id))) {
+        removed.push(entry.marker);
+        delete markersRef.current[Number(id)];
+      }
+    }
+    if (removed.length) markersLayer.removeLayers(removed);
 
     const merchantIcon = L.divIcon({
       className: "",
@@ -152,71 +191,81 @@ export default function MapView({
       popupAnchor: [0, -28],
     });
 
-    merchants.forEach((m) => {
-      if (!hasCoordinates(m)) return;
-      const marker = L.marker([m.lat!, m.lon!], { icon: merchantIcon });
-
-      const distText =
-        m.distance_km !== undefined
-          ? `<span style="color:#C25E40;font-weight:500">${escapeHtml(distanceLabel(m))}</span>`
-          : "";
-
-      const websiteLink = m.website
-        ? `<a href="${escapeHtml(sanitizeUrl(m.website))}" target="_blank" rel="noopener" style="font-size:11px;color:#C25E40;display:block;margin-top:4px">🔗 官方網站</a>`
-        : "";
-
-      const safeName = escapeHtml(m.name);
-      const safeAddress = escapeHtml(m.address || "");
-      const safeTaxId = escapeHtml(m.tax_id || "");
-      // href 上下文要 URL encode（escapeHtml 不夠）：統編含 / ? # 即斷鏈
-      const detailHref = `/merchant/${encodeURIComponent(String(m.id))}`;
-
-      marker.bindPopup(
-        `<div style="min-width:200px;font-family:system-ui;padding:4px 0">
-          <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:4px">${safeName}</div>
-          <div style="font-size:12px;color:#666;margin-bottom:4px">${safeAddress}</div>
-          ${locationLabel(m) ? `<div style="font-size:11px;color:#888">${escapeHtml(locationLabel(m)!)}</div>` : ""}
-          <div style="font-size:11px;color:#888">統編：${safeTaxId}</div>
-          ${websiteLink}
-          ${distText ? `<div style="margin-top:4px;font-size:11px">${distText} 外</div>` : ""}
-          <a href="${detailHref}" class="merchant-detail-link" data-href="${detailHref}" style="display:block;margin-top:8px;text-align:center;background:#C25E40;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer">查看詳情</a>
-        </div>`,
-        { maxWidth: 260 }
-      );
-
-      // 攔截原生 <a> 點擊，改用 Next.js router 進行無刷新切換
-      marker.on("popupopen", (e: L.PopupEvent) => {
-        const linkElement = e.popup.getElement()?.querySelector<HTMLElement>(".merchant-detail-link");
-        if (linkElement) {
-          linkElement.onclick = (ev: Event) => {
+    const updates = merchants.filter((merchant) => hasCoordinates(merchant) && markersRef.current[merchant.id]?.merchant !== merchant);
+    let index = 0;
+    const updateBatch = () => {
+      if (cancelled) return;
+      const added: L.Marker[] = [];
+      const moved: L.Marker[] = [];
+      const batch = updates.slice(index, index + 100);
+      index += batch.length;
+      for (const m of batch) {
+        if (!hasCoordinates(m)) continue;
+        const existing = markersRef.current[m.id];
+        if (existing) {
+          const old = existing.merchant;
+          if (old.lat !== m.lat || old.lon !== m.lon) {
+            markersLayer.removeLayer(existing.marker);
+            existing.marker.setLatLng([m.lat!, m.lon!]);
+            moved.push(existing.marker);
+          }
+          if (old.name !== m.name || old.address !== m.address || old.tax_id !== m.tax_id ||
+              old.website !== m.website || old.distance_km !== m.distance_km ||
+              old.coord_accuracy !== m.coord_accuracy || old.coord_source !== m.coord_source) {
+            existing.marker.setPopupContent(merchantPopup(m));
+          }
+          existing.merchant = m;
+          continue;
+        }
+        const marker = L.marker([m.lat!, m.lon!], { icon: merchantIcon });
+        marker.bindPopup(merchantPopup(m), { maxWidth: 260 });
+        marker.on("popupopen", (event: L.PopupEvent) => {
+          const link = event.popup.getElement()?.querySelector<HTMLElement>(".merchant-detail-link");
+          if (link) link.onclick = (ev: Event) => {
             ev.preventDefault();
             const href = (ev.currentTarget as HTMLElement).getAttribute("data-href");
-            if (href) {
-              router.push(href);
-            }
+            if (href) router.push(href);
           };
-        }
-      });
-
-      marker.on("click", () => onSelectMerchant(m));
-      markersLayer.addLayer(marker);
-      markersRef.current[m.id] = marker;
-    });
-  }, [merchants, onSelectMerchant, mapReady, router]);
+        });
+        marker.on("click", () => {
+          const current = markersRef.current[m.id]?.merchant;
+          if (current) selectCallbackRef.current(current);
+        });
+        markersRef.current[m.id] = { marker, merchant: m };
+        added.push(marker);
+      }
+      if (added.length || moved.length) markersLayer.addLayers([...added, ...moved]);
+      const selected = selectionRef.current;
+      const selectedMarker = selected ? markersRef.current[selected.id]?.marker : undefined;
+      if (selectedMarker && added.includes(selectedMarker)) {
+        markersLayer.zoomToShowLayer(selectedMarker, () => {
+          if (!cancelled && selectionRef.current?.id === selected?.id) selectedMarker.openPopup();
+        });
+      }
+      if (index < updates.length) frame = requestAnimationFrame(updateBatch);
+    };
+    updateBatch();
+    return () => {
+      cancelled = true;
+      if (frame !== undefined) cancelAnimationFrame(frame);
+    };
+  }, [merchants, mapReady, router]);
 
   // 側欄選店連動：地圖 flyTo + 開對應 marker popup
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !selectedMerchant?.lat || !selectedMerchant?.lon) return;
+    if (!mapReady || !mapRef.current || !selectedMerchant || !hasCoordinates(selectedMerchant)) return;
     const map = mapRef.current;
-    map.flyTo([selectedMerchant.lat, selectedMerchant.lon], Math.max(map.getZoom(), 15), { duration: 0.6 });
-    const marker = markersRef.current[selectedMerchant.id];
+    map.flyTo([selectedMerchant.lat!, selectedMerchant.lon!], Math.max(map.getZoom(), 15), { duration: 0.6 });
+    const marker = markersRef.current[selectedMerchant.id]?.marker;
     if (marker) {
       // marker 可能被 cluster 收合，先展開再開 popup
       const cluster = markersLayerRef.current as unknown as {
         zoomToShowLayer?: (layer: L.Marker, cb: () => void) => void;
       } | null;
       if (cluster && typeof cluster.zoomToShowLayer === "function") {
-        cluster.zoomToShowLayer(marker, () => marker.openPopup());
+        cluster.zoomToShowLayer(marker, () => {
+          if (selectionRef.current?.id === selectedMerchant.id && markersRef.current[selectedMerchant.id]?.marker === marker) marker.openPopup();
+        });
       } else {
         marker.openPopup();
       }

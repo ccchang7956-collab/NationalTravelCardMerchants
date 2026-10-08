@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import json
+import heapq
 from fastapi import APIRouter, Depends, Query, HTTPException, Response
 from typing import Optional, List, Tuple
 from backend.database import get_db, DB_PATH
@@ -10,6 +11,7 @@ from backend.models import MerchantListItem, MerchantDetail, PaginatedMerchants,
 
 from backend.services.search_service import space_segment, parse_search_query
 from shared.tax_industry import industry_group_for, industry_group_prefixes
+from shared.search import normalize_text
 
 log = logging.getLogger(__name__)
 
@@ -58,8 +60,7 @@ def append_industry_filter(clauses, params, industry_code):
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance in km between two lat/lon points. Missing/invalid -> inf (excluded).
 
-    注意：與 services/route_optimizer.haversine_distance 語意相反（該死碼回 0.0，為相容保留）。
-    nearby 必須用本函式（inf 才會被 dist<=radius 排除）；route_optimizer 未被 router 使用，勿混用。
+    Invalid points must never appear as zero-distance nearby results.
     """
     if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
         return float("inf")
@@ -139,9 +140,21 @@ def get_merchants(
         total_pages = math.ceil(total / per_page) if total > 0 else 1
         offset = (page - 1) * per_page
 
-        query += " ORDER BY m.id ASC LIMIT ? OFFSET ?"
         # 為了不影響 params 陣列，另外拷貝分頁參數
         query_params = list(params)
+        if joins:
+            # Apply relevance before pagination; literals never become LIKE patterns.
+            normalized_query = normalize_text(q)[:100].casefold()
+            db.create_function("search_name", 1, lambda name: normalize_text(name).casefold(), deterministic=True)
+            query += """ ORDER BY
+                CASE WHEN search_name(m.name) = ? THEN 0
+                     WHEN substr(search_name(m.name), 1, length(?)) = ? THEN 1
+                     ELSE 2 END,
+                bm25(merchants_fts, 10.0, 1.0), m.id ASC
+                LIMIT ? OFFSET ?"""
+            query_params.extend([normalized_query, normalized_query, normalized_query])
+        else:
+            query += " ORDER BY m.id ASC LIMIT ? OFFSET ?"
         query_params.extend([per_page, offset])
         
         cursor.execute(query, query_params)
@@ -162,7 +175,7 @@ def get_merchants(
 
 
 @router.get("/merchants/nearby", response_model=List[MerchantListItem],
-             description="附近搜尋：bbox 候選上限 5000 筆（近似語意，密集區 X-Total-Count 可能低估），精算 haversine 後排序切片。")
+             description="附近搜尋：完整 bbox 候選精算 haversine，依距離與 ID 穩定排序、分頁，X-Total-Count 為符合半徑的完整筆數。")
 def get_nearby_merchants(
     lat: float = Query(..., description="Latitude of center point"),
     lon: float = Query(..., description="Longitude of center point"),
@@ -239,30 +252,37 @@ def get_nearby_merchants(
         query += " " + " ".join(joins)
     if where_clauses:
         query += " WHERE " + " AND ".join(where_clauses)
-    # 候選上限：bbox 內可能數萬筆，全量 haversine 會爆記憶體；5000 為近似語意，文件化
-    query += " LIMIT 5000"
-
+    # Stream the complete candidate set; keep only the nearest offset+limit
+    # rows in a heap instead of loading every merchant into Python memory.
+    nearest = []
+    total = 0
+    keep = offset + limit
     cursor = db.cursor()
     try:
         cursor.execute(query, params)
-        rows = cursor.fetchall()
+        for row in cursor:
+            dist = haversine(lat, lon, row["lat"], row["lon"])
+            if dist > radius_km:
+                continue
+            total += 1
+            entry = (-dist, -row["id"], dict(row))
+            if len(nearest) < keep:
+                heapq.heappush(nearest, entry)
+            elif entry[:2] > nearest[0][:2]:
+                heapq.heapreplace(nearest, entry)
     except sqlite3.OperationalError as e:
         log.error(f"get_nearby_merchants OperationalError: {e}")
         raise HTTPException(status_code=503, detail="Database temporarily unavailable")
     
+    nearest.sort(key=lambda entry: (-entry[0], -entry[1]))
     results = []
-    for row in rows:
-        m = dict(row)
-        dist = haversine(lat, lon, m["lat"], m["lon"])
-        if dist <= radius_km:
-            m["distance_km"] = round(dist, 3)
-            results.append(m)
-
-    results.sort(key=lambda x: (x["distance_km"], x["id"]))
+    for negative_distance, _, merchant in nearest[offset:offset + limit]:
+        merchant["distance_km"] = round(-negative_distance, 3)
+        results.append(merchant)
     if response is not None:
-        response.headers["X-Total-Count"] = str(len(results))
-        response.headers["X-Has-More"] = "true" if offset + limit < len(results) else "false"
-    return results[offset:offset + limit]
+        response.headers["X-Total-Count"] = str(total)
+        response.headers["X-Has-More"] = "true" if offset + limit < total else "false"
+    return results
 
 
 @router.get("/merchants/{merchant_id_or_tax_id}", response_model=MerchantDetail)

@@ -1,6 +1,5 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import date
 
 class MerchantIndustry(BaseModel):
     industry_code: str
@@ -31,7 +30,7 @@ class MerchantListItem(MerchantBase):
     geocoded_address: Optional[str] = None
 
 class MerchantDetail(MerchantListItem):
-    industries: List[MerchantIndustry] = []
+    industries: List[MerchantIndustry] = Field(default_factory=list)
 
 class PaginatedMerchants(BaseModel):
     total: int
@@ -52,93 +51,3 @@ class Stats(BaseModel):
     last_checked: Optional[str] = None
     last_check_result: Optional[str] = None
     last_successful_check: Optional[str] = None
-
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str = Field(..., min_length=6)
-    name: str = Field(..., min_length=1)
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class UserResponse(BaseModel):
-    id: int
-    email: str
-    name: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserResponse
-
-class ExpenseCreate(BaseModel):
-    merchant_id: Optional[int] = None
-    merchant_name: str
-    amount: int = Field(..., gt=0)
-    category: str = Field(..., pattern="^(觀光旅遊|自行運用)$")
-    expense_date: date
-    note: Optional[str] = None
-
-class ExpenseResponse(BaseModel):
-    id: int
-    user_id: int
-    merchant_id: Optional[int] = None
-    merchant_name: str
-    amount: int
-    category: str
-    expense_date: str
-    note: Optional[str] = None
-    created_at: str
-
-class QuotaDetail(BaseModel):
-    target: int = 8000
-    spent: int
-    remaining: int
-    percentage: float
-
-class AssistantSummary(BaseModel):
-    tourist_quota: QuotaDetail
-    general_quota: QuotaDetail
-    total_spent: int
-    favorites_count: int
-
-
-class ItineraryItemCreate(BaseModel):
-    merchant_id: Optional[int] = None
-    custom_name: str
-    address: Optional[str] = None
-    lat: Optional[float] = Field(default=None, ge=-90, le=90)
-    lon: Optional[float] = Field(default=None, ge=-180, le=180)
-    order_index: int = 0
-    estimated_cost: float = Field(default=0.0, ge=0)
-    quota_category: str = Field(default="一般消費", pattern="^(觀光旅遊|自行運用|一般消費)$")
-    stay_minutes: int = Field(default=60, ge=0)
-
-class ItineraryItemResponse(ItineraryItemCreate):
-    id: int
-    itinerary_id: int
-
-class ItineraryCreate(BaseModel):
-    title: str
-    start_date: Optional[str] = None
-    notes: Optional[str] = None
-    items: List[ItineraryItemCreate] = []
-
-class ItineraryUpdate(BaseModel):
-    title: Optional[str] = None
-    start_date: Optional[str] = None
-    notes: Optional[str] = None
-    items: Optional[List[ItineraryItemCreate]] = None
-
-class ItineraryResponse(BaseModel):
-    id: int
-    user_id: int
-    title: str
-    start_date: Optional[str] = None
-    notes: Optional[str] = None
-    created_at: str
-    updated_at: str
-    items: List[ItineraryItemResponse] = []
-    total_tourist_quota: float = 0.0
-    total_general_quota: float = 0.0

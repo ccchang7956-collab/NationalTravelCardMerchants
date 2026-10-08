@@ -26,20 +26,5 @@ for i in $(seq 1 60); do
 done
 
 echo "==> 驗收"
-curl -sf 127.0.0.1:8088/api/ready
-if ! curl -fsS 127.0.0.1:8088/api/health; then
-  echo "資料健康檢查未通過，請檢查排程 logs；目前服務已可提供既有資料。"
-fi
-curl -sf 127.0.0.1:8088/api/data-info | head -c 300; echo
-for p in "/" "/sitemap.xml" "/sitemap-index.xml" "/robots.txt" "/llms.txt"; do
-  printf "%s " "$p"
-  curl -s -o /dev/null -w "%{http_code}\n" "127.0.0.1:8088$p"
-done
-manifest_file=$(mktemp)
-trap 'rm -f "$manifest_file"' EXIT
-curl -fsS 127.0.0.1:8088/api/sitemaps/manifest > "$manifest_file"
-for i in $(python3 -c 'import json,sys; print(" ".join(str(s["id"]) for s in json.load(open(sys.argv[1]))["shards"]))' "$manifest_file"); do
-  printf "/sitemap-merchants-%s.xml " "$i"
-  curl -fsS -o /dev/null -w "%{http_code}\n" "127.0.0.1:8088/sitemap-merchants-$i.xml"
-done
+bash scripts/verify_deployment.sh
 echo "deploy.sh 完成"

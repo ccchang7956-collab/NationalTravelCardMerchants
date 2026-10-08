@@ -10,8 +10,8 @@ test("home filters survive the form, map navigation, reload and a 20 km search",
   await page.goto("/");
   await page.getByPlaceholder("搜尋店名 or 地址...").fill("咖啡");
   await page.getByRole("button", { name: /^篩選/ }).click();
-  await page.getByLabel("行業別").selectOption("561");
-  await page.getByLabel("縣市").selectOption("台北市");
+  await page.getByLabel("行業別").selectOption("56");
+  await page.getByLabel("縣市", { exact: true }).selectOption("台北市");
   await page.getByRole("button", { name: "有", exact: true }).click();
   expect(new URL(page.url()).pathname).toBe("/");
   expect(new URL(page.url()).search).toBe("");
@@ -30,7 +30,7 @@ test("home filters survive the form, map navigation, reload and a 20 km search",
   expect(query.get("radius")).toBe("20");
   expect(query.get("city")).toBe("台北市");
   expect(query.get("has_website")).toBe("true");
-  expect(query.get("industry_code")).toBe("561");
+  expect(query.get("industry_code")).toBe("56");
   expect(query.get("q")).toBe("咖啡");
   await page.reload();
   await expect(page.getByRole("slider", { name: "搜尋半徑" })).toHaveValue("20");
@@ -65,6 +65,32 @@ test("production service worker activates and serves the offline fallback", asyn
   await expect(page.getByRole("heading", { name: "國民旅遊卡特約商店查詢", exact: true })).toBeVisible();
 });
 
+test("online backend failures show cached data with its timestamp and a fresh search clears the notice", async ({ page, request }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => !!navigator.serviceWorker?.controller);
+  await page.goto("/map?lat=25.0339&lon=121.5645&radius=2");
+  await expect(page.getByRole("article", { name: "台北咖啡商店", exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(async () => {
+    const cache = await caches.open("apis-v2");
+    return (await cache.keys()).some(key => new URL(key.url).pathname === "/api/merchants/nearby");
+  })).toBe(true);
+  await request.post(`${apiUrl}/__smoke/fail`, { data: { merchants: true } });
+  const cachedReply = page.waitForResponse(response => response.url().includes("/api/merchants/nearby?") && response.headers()["x-data-source"] === "cache");
+  await page.getByRole("button", { name: "搜尋", exact: true }).click();
+  const response = await cachedReply;
+  expect(response.ok()).toBe(true);
+  expect(response.headers()["x-data-fetched-at"]).toBeTruthy();
+  expect(response.headers()["x-total-count"]).toBe("3");
+  expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+  await expect(page.getByText(/目前顯示先前查詢資料/)).toBeVisible();
+  await expect(page.getByRole("article", { name: "台北咖啡商店", exact: true })).toBeVisible();
+  await request.post(`${apiUrl}/__smoke/fail`, { data: { merchants: false } });
+  const liveReply = page.waitForResponse(response => response.url().includes("/api/merchants/nearby?") && !response.headers()["x-data-source"]);
+  await page.getByRole("button", { name: "搜尋", exact: true }).click();
+  expect((await liveReply).ok()).toBe(true);
+  await expect(page.getByText(/目前顯示先前查詢資料/)).toHaveCount(0);
+});
+
 test("production robots and sitemap routes use the live shard manifest", async ({ request }) => {
   const manifestResponse = await request.get(`${apiUrl}/api/sitemaps/manifest`);
   expect(manifestResponse.ok()).toBe(true);
@@ -72,8 +98,12 @@ test("production robots and sitemap routes use the live shard manifest", async (
   const robots = await request.get("/robots.txt");
   expect(robots.ok()).toBe(true);
   const robotsText = await robots.text();
+  expect(robotsText).toContain("/sitemap-index.xml");
+  const index = await request.get("/sitemap-index.xml");
+  expect(index.ok()).toBe(true);
+  const indexXml = await index.text();
   for (const shard of manifest.shards) {
-    expect(robotsText).toContain(`/merchants/sitemap/${shard.id}.xml`);
+    expect(indexXml).toContain(`/sitemap-merchants-${shard.id}.xml`);
     const response = await request.get(`/merchants/sitemap/${shard.id}.xml`);
     expect(response.ok()).toBe(true);
     expect(response.headers()["content-type"]).toContain("xml");

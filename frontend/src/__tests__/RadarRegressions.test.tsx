@@ -36,6 +36,25 @@ test("late GPS callbacks are ignored after manual search and closing", async () 
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 
+test("online cache fallback shows acquisition time and a fresh retry clears the notice", async () => {
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+  Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: jest.fn() } });
+  const headers = { get: (name: string) => name === "X-Data-Source" ? "cache"
+    : name === "X-Data-Fetched-At" ? "2026-10-08T01:00:00.000Z" : null };
+  global.fetch = jest.fn()
+    .mockResolvedValueOnce({ ok: true, headers, json: async () => ({ items: [{ id: 1, name: "先前結果" }] }) })
+    .mockResolvedValueOnce({ ok: true, headers: { get: () => null }, json: async () => ({ items: [{ id: 2, name: "最新結果" }] }) });
+  render(<RadarSheet isOpen onClose={jest.fn()} />);
+  await waitFor(() => expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalled());
+  fireEvent.change(screen.getByPlaceholderText(/搜尋地址/), { target: { value: "咖啡" } });
+  fireEvent.click(screen.getByRole("button", { name: "搜尋" }));
+  expect(await screen.findByText(/目前顯示先前查詢資料/)).toBeInTheDocument();
+  expect(document.querySelector('time')?.dateTime).toBe("2026-10-08T01:00:00.000Z");
+  fireEvent.click(screen.getByRole("button", { name: "搜尋" }));
+  expect(await screen.findByText("最新結果")).toBeInTheDocument();
+  expect(screen.queryByText(/目前顯示先前查詢資料/)).not.toBeInTheDocument();
+});
+
 function render(...args: Parameters<typeof baseRender>) {
   return baseRender(args[0], { wrapper: ToastProvider, ...args[1] });
 }

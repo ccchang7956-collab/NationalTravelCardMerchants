@@ -9,7 +9,7 @@ from scheduler.update_data import transactional_sync_db
 
 
 def _init_target(target_db):
-    from backend.database import init_db
+    from backend.tests.legacy_schema import init_legacy_db as init_db
     conn = sqlite3.connect(target_db)
     conn.execute("PRAGMA foreign_keys = ON;")
     init_db(conn)

@@ -2,7 +2,7 @@ import sqlite3
 from backend.database import init_db
 from shared.schema import migrate_database
 
-def test_init_db_creates_user_tables():
+def test_init_db_creates_only_public_merchant_tables():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     init_db(conn)
@@ -14,11 +14,7 @@ def test_init_db_creates_user_tables():
     assert "merchants" in tables
     assert "merchant_industries" in tables
     assert "merchants_fts" in tables
-    assert "users" in tables
-    assert "user_expenses" in tables
-    assert "user_favorites" in tables
-    assert "user_itineraries" in tables
-    assert "itinerary_items" in tables
+    assert {"users", "user_expenses", "user_favorites", "user_itineraries", "itinerary_items"}.isdisjoint(tables)
 
 def test_init_db_creates_indexes():
     conn = sqlite3.connect(":memory:")
@@ -35,9 +31,7 @@ def test_init_db_creates_indexes():
     assert "idx_merchants_address" in indexes
     assert "idx_merchant_industries_tax_id" in indexes
     assert "idx_merchant_industries_code" in indexes
-    assert "idx_user_expenses_user" in indexes
-    assert "idx_user_favorites_user" in indexes
-    assert "idx_user_itineraries_user" in indexes
+    assert not any(name.startswith(("idx_user_", "idx_itinerary_")) for name in indexes)
 
 def test_init_db_allows_multiple_branches_per_tax_id_and_shares_industry():
     conn = sqlite3.connect(":memory:")

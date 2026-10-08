@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from backend.database import init_db
+from backend.tests.legacy_schema import init_legacy_db as init_db
 from scheduler import update_data
 
 

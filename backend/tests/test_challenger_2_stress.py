@@ -2,51 +2,9 @@ import math
 import pytest
 from fastapi.testclient import TestClient
 from backend.main import app
-from backend.services.route_optimizer import optimize_route, haversine_distance, _extract_coord
 from backend.routers.merchants import parse_search_query
 
 client = TestClient(app)
-
-# ── 1. Advanced Route Optimizer Stress & Edge Cases ────────────────────────────
-
-def test_extract_coord_malformed_structures():
-    """Verify _extract_coord handles nested/malformed structures without crashing."""
-    assert _extract_coord({"lat": [1, 2]}, "lat") == 0.0
-    assert _extract_coord({"lat": {"a": 1}}, "lat") == 0.0
-    assert _extract_coord({"lat": "not_a_number"}, "lat") == 0.0
-    assert _extract_coord({"lat": float("nan")}, "lat") is not None  # returns float nan or handles
-    assert _extract_coord({"lat": float("inf")}, "lat") == float("inf")
-    assert _extract_coord({"lat": None}, "lat") == 0.0
-    assert _extract_coord(123, "lat") == 0.0
-
-def test_optimize_route_non_dict_elements():
-    """Verify optimize_route handles list containing non-dict elements gracefully."""
-    points = [
-        None,
-        "invalid_string",
-        12345,
-        {"lat": 25.0, "lon": 121.5},
-        {"lat": 25.1, "lon": 121.6}
-    ]
-    res = optimize_route(points)
-    assert isinstance(res, dict)
-    assert "points" in res
-    assert "total_distance_km" in res
-    assert len(res["points"]) == 5
-
-def test_optimize_route_identical_and_large_dataset():
-    """Verify performance and accuracy with 100 identical points and 100 random points."""
-    identical_pts = [{"lat": 25.0413, "lon": 121.5226} for _ in range(100)]
-    res = optimize_route(identical_pts)
-    assert len(res["points"]) == 100
-    assert res["total_distance_km"] == 0.0
-
-    # 50 points along equator
-    equator_pts = [{"lat": 0.0, "lon": float(i)} for i in range(50)]
-    res_eq = optimize_route(equator_pts)
-    assert len(res_eq["points"]) == 50
-    assert res_eq["total_distance_km"] > 0.0
-
 
 # ── 2. City & Industry Code Wildcard Escape Stress ─────────────────────────────
 
@@ -85,8 +43,7 @@ def test_api_merchants_pagination_limits():
     assert resp100.status_code == 200
 
     resp_huge = client.get("/api/merchants?page=999999&per_page=20")
-    assert resp_huge.status_code == 200
-    assert resp_huge.json()["items"] == []
+    assert resp_huge.status_code == 422
 
 
 # ── 3. Detail Endpoint SQL Injection & Invalid ID Stress ─────────────────────

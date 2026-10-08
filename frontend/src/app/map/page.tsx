@@ -8,11 +8,8 @@ import {
   MapPinIcon,
   PaperAirplaneIcon,
   ArrowLeftIcon,
-  ChevronRightIcon,
-  GlobeAltIcon,
   AdjustmentsHorizontalIcon,
   MagnifyingGlassIcon,
-  MapIcon,
   ExclamationTriangleIcon,
   ArrowPathIcon
 } from "@heroicons/react/24/outline";
@@ -22,8 +19,11 @@ import { useToast } from "@/components/Toast";
 import { getPublicApiUrl } from "@/utils/env";
 import { geoErrorMessage } from "@/utils/geolocation";
 import { DEFAULT_CENTER, clampLat, clampLon, clampRadiusKm, mapSearchParams, mapSearchKey, parseHasWebsite } from "@/utils/mapSearchParams";
-import { distanceLabel, locationLabel, navigationUrl } from "@/utils/coordinates";
+import type { MapMerchant } from "@/utils/mapMerchants";
+import VirtualMerchantList, { type MerchantListHandle } from "@/components/VirtualMerchantList";
 import { normalizeIndustryCode } from "@/utils/industryTaxonomy";
+import { cachedResponseTime } from "@/utils/apiCachePlugin";
+import CachedDataNotice from "@/components/CachedDataNotice";
 
 // Dynamically import the map to avoid SSR issues (Leaflet needs window)
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -40,26 +40,14 @@ const MapView = dynamic(() => import("@/components/MapView"), {
 
 const NEARBY_PAGE_SIZE = 200;
 
-interface Merchant {
-  id: number;
-  name: string;
-  address: string | null;
-  zip_code: string | null;
-  tax_id: string | null;
-  website: string | null;
-  lat: number | null;
-  lon: number | null;
-  distance_km?: number;
-  coord_source?: string | null;
-  coord_accuracy?: string | null;
-}
+type Merchant = MapMerchant;
 
 function MapContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastFetchedRef = useRef<string>("");
-  const merchantRefs = useRef<Record<number, HTMLElement | null>>({});
+  const merchantListRef = useRef<MerchantListHandle>(null);
 
   useEffect(() => {
     return () => {
@@ -72,6 +60,7 @@ function MapContent() {
   const [center, setCenter] = useState<[number, number]>(DEFAULT_CENTER);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [hasMoreMerchants, setHasMoreMerchants] = useState(false);
   const [totalNearbyMerchants, setTotalNearbyMerchants] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -107,7 +96,9 @@ function MapContent() {
     setLoading(true);
     setApiError(null);
     if (offset === 0) {
+      setSelectedMerchant(null);
       setMerchants([]);
+      setCachedAt(null);
       setHasMoreMerchants(false);
       setTotalNearbyMerchants(0);
     }
@@ -127,6 +118,10 @@ function MapContent() {
       const data: Merchant[] = await res.json();
       if (controller.signal.aborted || abortControllerRef.current !== controller) return;
       if (!Array.isArray(data)) throw new Error("後端 API 回應格式錯誤");
+      const responseCachedAt = cachedResponseTime(res);
+      setCachedAt((current) => offset === 0 ? responseCachedAt
+        : current && responseCachedAt ? (current < responseCachedAt ? current : responseCachedAt)
+        : current || responseCachedAt);
       const totalHeader = res.headers.get("X-Total-Count");
       const parsedTotal = totalHeader === null ? NaN : Number(totalHeader);
       const total = Number.isSafeInteger(parsedTotal) && parsedTotal >= 0 ? parsedTotal : offset + data.length;
@@ -225,18 +220,10 @@ function MapContent() {
     return () => clearTimeout(timer);
   }, [tempRadius, radius, center, keyword, filterState.industryCode, filterState.city, filterState.hasWebsite, updateURL]);
 
-  // Scroll active merchant item into view in sidebar
-  useEffect(() => {
-    if (selectedMerchant && merchantRefs.current[selectedMerchant.id]) {
-      const reduced =
-        typeof window !== "undefined" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      merchantRefs.current[selectedMerchant.id]?.scrollIntoView({
-        behavior: reduced ? "auto" : "smooth",
-        block: "nearest",
-      });
-    }
-  }, [selectedMerchant]);
+  const handleSelectMerchant = useCallback((merchant: Merchant) => {
+    setSelectedMerchant(merchant);
+    merchantListRef.current?.scrollToMerchant(merchant.id);
+  }, []);
 
   const handleLocate = useCallback(() => {
     if (!navigator.geolocation) {
@@ -451,14 +438,15 @@ function MapContent() {
             userLocation={userLocation}
             onMapClick={handleMapClick}
             selectedMerchant={selectedMerchant}
-            onSelectMerchant={setSelectedMerchant}
+            onSelectMerchant={handleSelectMerchant}
             radius={radius}
             tempRadius={tempRadius}
           />
         </div>
 
         {/* Sidebar merchant list */}
-        <div className="lg:w-80 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "520px" }}>
+        <div className="lg:w-80 flex flex-col gap-2 min-w-0">
+          <CachedDataNotice fetchedAt={cachedAt} />
           {loading && merchants.length === 0 ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="bg-card rounded-xl border border-border/50 p-4 animate-pulse space-y-2.5">
@@ -486,61 +474,13 @@ function MapContent() {
             </div>
           ) : (
             <>
-            {merchants.map((m) => (
-              <article
-                key={m.id}
-                aria-label={m.name}
-                ref={(el) => { merchantRefs.current[m.id] = el; }}
-                className={`bg-card rounded-xl border p-4 transition-all duration-150 hover:shadow-md w-full ${
-                  selectedMerchant?.id === m.id
-                    ? "border-accent/80 ring-2 ring-accent/20 bg-accent/5 shadow-md"
-                    : "border-border/50"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <button
-                    type="button"
-                    aria-label={`查看 ${m.name}`}
-                    onClick={() => setSelectedMerchant(m)}
-                    className="flex-1 min-w-0 cursor-pointer text-left rounded-md focus-visible:outline-2 focus-visible:outline-accent"
-                  >
-                    <p className="font-medium text-sm text-foreground truncate">{m.name}</p>
-                    <p className="text-xs text-muted mt-1 truncate">{m.address}</p>
-                    {locationLabel(m) && <p className="text-xs text-muted mt-1">{locationLabel(m)}</p>}
-                    <div className="flex items-center gap-3 mt-2">
-                      {m.distance_km !== undefined && (
-                        <span className="text-xs text-accent font-medium">{distanceLabel(m)}</span>
-                      )}
-                      {m.website && <GlobeAltIcon className="w-3 h-3 text-muted opacity-70" title="有專屬網站" />}
-                    </div>
-                  </button>
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <Link
-                      href={`/merchant/${m.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="查看商店詳情"
-                      aria-label={`查看 ${m.name} 詳情`}
-                      className="p-1.5 bg-muted-bg rounded-lg hover:bg-accent/10 hover:text-accent transition-colors text-muted flex items-center justify-center"
-                    >
-                      <ChevronRightIcon className="w-4 h-4" />
-                    </Link>
-                    {(m.address || m.lat != null) && (
-                      <Link
-                        href={navigationUrl(m)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Google 地圖導航"
-                        aria-label={`導航至 ${m.name}`}
-                        className="p-1.5 bg-muted-bg rounded-lg hover:bg-blue-500/10 hover:text-blue-500 transition-colors text-muted flex items-center justify-center"
-                      >
-                        <MapIcon className="w-4 h-4" />
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              </article>
-            ))}
+            <VirtualMerchantList
+              ref={merchantListRef}
+              key={merchants[0]?.id}
+              merchants={merchants}
+              selectedId={selectedMerchant?.id}
+              onSelectMerchant={handleSelectMerchant}
+            />
             {hasMoreMerchants && (
               <button
                 type="button"

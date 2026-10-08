@@ -3,6 +3,7 @@
 測試使用獨立的 DB_PATH 與 `/tmp` 目錄；不需要下載政府清冊或呼叫外部定位服務。Node 22、Python 3.12 與 Dockerfile 一致。
 
 ```bash
+pip install -r backend/requirements-dev.txt
 python -m pytest backend/tests -q
 npm --prefix frontend ci
 npm --prefix frontend test -- --ci --watchAll=false --runInBand
@@ -16,7 +17,7 @@ CI 使用 `scripts/seed_smoke_data.py`、`scripts/smoke_backend.py` 建立暫存
 
 本次最終驗收結果：pytest 179 passed；Jest 94 passed（17 suites）；ESLint 零錯誤、零警告；TypeScript 檢查通過；production 瀏覽器 smoke 5 passed；Docker Compose 設定有效，後端、排程及前端映像均成功建置。`npm audit` 完整相依樹為 0 vulnerabilities。`scripts/check_infra.sh` 為 9/9。pytest 顯示 6 個第三方相依套件的 deprecation warnings。
 
-PWA 的 `reloadOnOnline` 設為 false：自動重新載入會打斷正在進行的導頁，讓離線備援被上一頁的快取取代。恢復連線後，使用者可沿用目前頁面重新搜尋或重試。API 為 NetworkOnly，保留外掛的預設靜態資源與頁面快取。
+PWA 的 `reloadOnOnline` 設為 false：自動重新載入會打斷正在進行的導頁，讓離線備援被上一頁的快取取代。恢復連線後，使用者可沿用目前頁面重新搜尋或重試。商家、統計及資料資訊 API 使用 NetworkFirst，快取只收 HTTP 200，最多 50 筆、24 小時；網路失敗、8 秒逾時或後端 5xx 時可回退快取。其他 API 使用 NetworkOnly。快取回應帶有 X-Data-Source 與 X-Data-Fetched-At，地圖及雷達會顯示資料取得時間與可能過期的提示；多頁載入保留最早的快取時間。未知取得時間或超過 24 小時的回應不再使用。
 
 SQLite 更新與升級會先使用 Connection.backup 建立包含 WAL 的完整快照，驗證後才發布 `.bak`。FTS 與座標 schema 升級在交易內執行，使用與排程相同的 `.update.lock`。版本記錄在 app_metadata；FTS 的 `ordered-phrase-v2` 與查詢 parser 必須成組部署。官方 PDF 無變更時仍會檢查本地版本。手動 PDF 匯入也改走暫存解析、資料驗證與 UPSERT，不再刪掉原商家表重建 ID。
 

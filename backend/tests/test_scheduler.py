@@ -216,7 +216,7 @@ def test_atomic_swap_db_removed():
 
 def test_transactional_sync_db_preserves_user_data():
     from scheduler.update_data import transactional_sync_db
-    from backend.database import init_db
+    from backend.tests.legacy_schema import init_legacy_db as init_db
 
     with tempfile.TemporaryDirectory() as tmpdir:
         target_db = os.path.join(tmpdir, "target.db")
@@ -348,7 +348,7 @@ def test_pdf_parser_keeps_distinct_branches_with_same_tax_id():
 
 
 def test_transactional_sync_preserves_duplicate_tax_id_branches_and_classifies_them():
-    from backend.database import init_db
+    from backend.tests.legacy_schema import init_legacy_db as init_db
     from scheduler.update_data import transactional_sync_db
 
     with tempfile.TemporaryDirectory() as tmpdir:

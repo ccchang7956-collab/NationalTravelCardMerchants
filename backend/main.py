@@ -10,7 +10,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from shared.config import env_number
 
-from backend.routers import merchants, sitemaps
+from backend.routers import merchants, sitemaps, geocoding
 from backend.database import DB_PATH, get_db_connection, init_db
 
 
@@ -51,6 +51,7 @@ app.add_middleware(
 
 app.include_router(merchants.router, prefix="/api", tags=["merchants"])
 app.include_router(sitemaps.router, prefix="/api", tags=["sitemaps"])
+app.include_router(geocoding.router, prefix="/api", tags=["geocoding"])
 
 @app.get("/")
 def root():

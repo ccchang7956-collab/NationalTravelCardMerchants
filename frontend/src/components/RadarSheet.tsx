@@ -14,6 +14,8 @@ import {
 import { useToast } from '@/components/Toast';
 import { getPublicApiUrl } from '@/utils/env';
 import { distanceLabel, locationLabel, navigationUrl } from '@/utils/coordinates';
+import { cachedResponseTime } from '@/utils/apiCachePlugin';
+import CachedDataNotice from '@/components/CachedDataNotice';
 
 interface RadarSheetProps {
   isOpen: boolean;
@@ -46,6 +48,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
   const [radius, setRadius] = useState<number>(1.0);
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState<boolean>(false);
@@ -109,6 +112,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
       const data: Merchant[] = await res.json();
       if (!current()) return;
       if (!Array.isArray(data)) throw new Error('店家回應格式錯誤');
+      setCachedAt(cachedResponseTime(res));
       setMerchants(data);
       if (data.length) toast.success('已找到附近商店', `顯示 ${data.length} 間商店，搜尋範圍 ${radiusKm} km`);
       else toast.info('附近沒有符合的商店', '試試擴大範圍，或使用店名、地址搜尋');
@@ -122,6 +126,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
         toast.error('附近商店載入失敗', '請檢查網路連線後重試');
       }
       setMerchants([]);
+      setCachedAt(null);
     } finally {
       if (current()) setLoading(false);
     }
@@ -229,12 +234,14 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
       const data = await res.json();
       if (!current()) return;
       if (!Array.isArray(data.items)) throw new Error('店家回應格式錯誤');
+      setCachedAt(cachedResponseTime(res));
       setMerchants(data.items);
       if (data.items.length) toast.success('搜尋完成', `顯示 ${data.items.length} 間符合的商店`);
       else toast.info('沒有符合的商店', '試試簡化店名、地址，或改用統一編號搜尋');
     } catch {
       if (!current()) return;
       setMerchants([]);
+      setCachedAt(null);
       setGeoError('目前無法取得搜尋結果，請稍後重試');
       toast.error('搜尋失敗', '請檢查網路連線後重試');
     } finally {
@@ -362,6 +369,7 @@ export default function RadarSheet({ isOpen, onClose }: RadarSheetProps) {
 
         {/* 店家清單列表 */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[240px]">
+          <CachedDataNotice fetchedAt={cachedAt} />
           {loading ? (
             <div className="py-12 flex flex-col items-center justify-center text-muted gap-3">
               <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />

@@ -35,7 +35,7 @@ def test_reload_defaults_off():
 
 def test_requirements_pinned():
     txt = REQ.read_text()
-    assert "pyjwt>=" not in txt and "passlib[bcrypt]>=" not in txt and "bcrypt>=" not in txt
-    assert "email-validator>=" not in txt
-    for pin in ("pyjwt==", "passlib[bcrypt]==", "bcrypt==", "email-validator=="):
+    for pin in ("fastapi==", "uvicorn[standard]==", "pydantic==", "requests=="):
         assert pin in txt, f"missing pin: {pin}"
+    for retired in ("pyjwt", "passlib", "bcrypt", "email-validator", "pytest", "httpx", "PyMuPDF"):
+        assert retired not in txt

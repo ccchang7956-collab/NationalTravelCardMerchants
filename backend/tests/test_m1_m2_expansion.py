@@ -1,11 +1,11 @@
+from backend.routers.merchants import haversine
 import sqlite3
 import pytest
 import math
 from fastapi.testclient import TestClient
 from backend.main import app
 from scheduler.update_data import normalize_tax_id, transactional_sync_db
-from backend.database import init_db
-from backend.services.route_optimizer import optimize_route, haversine_distance, _extract_coord
+from backend.tests.legacy_schema import init_legacy_db as init_db
 from backend.routers.merchants import parse_search_query
 
 client = TestClient(app)
@@ -91,25 +91,14 @@ def test_transactional_sync_preserves_user_tables_and_filters_orphan_fk(tmp_path
 
 # ── M2 Expansion Tests ─────────────────────────────────────────────────────────
 
-def test_route_optimizer_lat_zero_validity():
-    """Verify lat=0.0 coordinate is treated as valid number, not falsy/missing."""
-    pt0 = {"id": 1, "lat": 0.0, "lon": 0.0}
-    pt1 = {"id": 2, "lat": 0.0, "lon": 1.0}
-    
-    assert _extract_coord(pt0, "lat") == 0.0
-    assert _extract_coord(pt0, "lon") == 0.0
-    
-    route_res = optimize_route([pt0, pt1])
-    assert len(route_res["points"]) == 2
-    assert route_res["total_distance_km"] > 100.0
 
 def test_haversine_clamped_acos_extreme_precision():
     """Verify haversine distance clamping for exact opposite or identical points."""
     # Identical points
-    assert haversine_distance(25.0413, 121.5226, 25.0413, 121.5226) == 0.0
+    assert haversine(25.0413, 121.5226, 25.0413, 121.5226) == 0.0
     
     # Antipodal points
-    d_anti = haversine_distance(90.0, 0.0, -90.0, 0.0)
+    d_anti = haversine(90.0, 0.0, -90.0, 0.0)
     assert math.isclose(d_anti, 20015.08, abs_tol=10.0)
 
 def test_fts_query_fullwidth_and_special_punctuation():

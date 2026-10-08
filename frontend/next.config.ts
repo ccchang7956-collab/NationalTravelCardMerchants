@@ -1,5 +1,9 @@
 import type { NextConfig } from "next";
 import withPWAInit from "@ducanh2912/next-pwa";
+import { apiCachePlugin } from "./src/utils/apiCachePlugin";
+
+// Match the explicitly configured browser API origin, including local HTTP dev.
+const apiConnectOrigin = new URL(process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").origin;
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -12,16 +16,20 @@ const withPWA = withPWAInit({
   workboxOptions: {
     runtimeCaching: [
       {
-        urlPattern: /\/api\/(merchants|stats|data-info)/,
+        urlPattern: ({ url }) => /^\/api\/(merchants(?:\/[^/]+)?|stats|data-info)$/.test(url.pathname),
         handler: "NetworkFirst",
         method: "GET",
         options: {
-          cacheName: "apis",
+          cacheName: "apis-v2",
+          plugins: [apiCachePlugin],
+          cacheableResponse: { statuses: [200] },
           expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
           networkTimeoutSeconds: 8,
         },
       },
-      { urlPattern: /\/api\//, handler: "NetworkOnly", method: "POST" },
+      // Never let the default GET caching rules serve old errors or geocoding.
+      { urlPattern: ({ url }) => url.pathname.startsWith("/api/"), handler: "NetworkOnly", method: "GET" },
+      { urlPattern: ({ url }) => url.pathname.startsWith("/api/"), handler: "NetworkOnly", method: "POST" },
     ],
   },
   extendDefaultRuntimeCaching: true,
@@ -50,7 +58,7 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; connect-src 'self' https://nominatim.openstreetmap.org https://tile.openstreetmap.org https: ws: wss:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
+              `default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; connect-src 'self' ${apiConnectOrigin} https://tile.openstreetmap.org https: ws: wss:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'`,
           },
         ],
       },

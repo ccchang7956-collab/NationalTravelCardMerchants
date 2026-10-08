@@ -2,7 +2,6 @@ import math
 import pytest
 from fastapi.testclient import TestClient
 from backend.main import app
-from backend.services.route_optimizer import optimize_route, haversine_distance, _extract_coord
 from backend.routers.merchants import haversine, parse_search_query
 
 client = TestClient(app)
@@ -11,40 +10,17 @@ client = TestClient(app)
 
 def test_lat_zero_haversine_direct():
     """Verify haversine distance calculations at lat=0.0 and lon=0.0."""
-    dist_zero = haversine_distance(0.0, 0.0, 0.0, 0.0)
+    dist_zero = haversine(0.0, 0.0, 0.0, 0.0)
     assert dist_zero == 0.0
 
-    dist_1deg_lon = haversine_distance(0.0, 0.0, 0.0, 1.0)
+    dist_1deg_lon = haversine(0.0, 0.0, 0.0, 1.0)
     assert math.isclose(dist_1deg_lon, 111.19, abs_tol=1.0)
 
-    dist_1deg_lat = haversine_distance(0.0, 0.0, 1.0, 0.0)
+    dist_1deg_lat = haversine(0.0, 0.0, 1.0, 0.0)
     assert math.isclose(dist_1deg_lat, 111.19, abs_tol=1.0)
 
     dist_merchants_func = haversine(0.0, 0.0, 0.0, 1.0)
     assert math.isclose(dist_merchants_func, 111.19, abs_tol=1.0)
-
-
-def test_extract_coord_zero_and_falsy():
-    """Verify _extract_coord properly handles 0.0 as float vs None / empty / invalid."""
-    assert _extract_coord({"lat": 0.0}, "lat") == 0.0
-    assert _extract_coord({"lat": 0}, "lat") == 0.0
-    assert _extract_coord({"lat": "0.0"}, "lat") == 0.0
-    assert _extract_coord({"lat": None}, "lat") == 0.0
-    assert _extract_coord({"lat": "invalid"}, "lat") == 0.0
-    assert _extract_coord({}, "lat") == 0.0
-    assert _extract_coord(None, "lat") == 0.0
-
-
-def test_route_optimizer_equator_points():
-    """Verify route optimization with points at lat=0.0."""
-    pts = [
-        {"id": "A", "lat": 0.0, "lon": 0.0},
-        {"id": "B", "lat": 0.0, "lon": 2.0},
-        {"id": "C", "lat": 0.0, "lon": 1.0},
-    ]
-    res = optimize_route(pts)
-    assert len(res["points"]) == 3
-    assert math.isclose(res["total_distance_km"], 222.38, abs_tol=5.0)
 
 
 def test_api_nearby_lat_zero():
@@ -59,18 +35,18 @@ def test_api_nearby_lat_zero():
 def test_haversine_extreme_precision():
     """Verify clamping handles floating point precision issues near identical or antipodal coordinates."""
     # Identical points
-    assert haversine_distance(25.041300000000001, 121.5226, 25.041300000000001, 121.5226) == 0.0
+    assert haversine(25.041300000000001, 121.5226, 25.041300000000001, 121.5226) == 0.0
     assert haversine(25.041300000000001, 121.5226, 25.041300000000001, 121.5226) == 0.0
 
     # Antipodal points (exact opposite sides of Earth)
-    dist_anti = haversine_distance(90.0, 0.0, -90.0, 0.0)
+    dist_anti = haversine(90.0, 0.0, -90.0, 0.0)
     assert math.isclose(dist_anti, 20015.08, abs_tol=10.0)
 
     dist_anti2 = haversine(0.0, 0.0, 0.0, 180.0)
     assert math.isclose(dist_anti2, 20015.08, abs_tol=10.0)
 
     # Near antipodal points causing potential float precision > 1.0 in `a`
-    dist_near_anti = haversine_distance(89.999999999999, 179.999999999999, -89.999999999999, -0.000000000001)
+    dist_near_anti = haversine(89.999999999999, 179.999999999999, -89.999999999999, -0.000000000001)
     assert isinstance(dist_near_anti, float)
     assert not math.isnan(dist_near_anti)
 
@@ -80,9 +56,6 @@ def test_haversine_nan_and_inf_inputs():
     # merchants.haversine: invalid -> inf (excluded from nearby, never 0-cost)
     assert math.isinf(haversine(float("nan"), 121.5, 25.0, 121.5))
     assert math.isinf(haversine(25.0, float("inf"), 25.0, 121.5))
-    # route_optimizer (dead code, kept 0.0 for compat)
-    assert haversine_distance(float("nan"), 121.5, 25.0, 121.5) == 0.0
-    assert haversine_distance(25.0, float("-inf"), 25.0, 121.5) == 0.0
 
 
 # ── 3. FTS Search Edge Cases & Special Punctuation ───────────────────────────

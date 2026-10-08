@@ -5,7 +5,7 @@ import threading
 import time
 import pytest
 from scheduler.update_data import transactional_sync_db
-from backend.database import init_db
+from backend.tests.legacy_schema import init_legacy_db as init_db
 
 def create_mock_target_db(db_path):
     conn = sqlite3.connect(db_path)

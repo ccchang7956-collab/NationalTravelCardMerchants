@@ -4,7 +4,8 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.database import get_db, init_db
+from backend.database import get_db
+from backend.tests.legacy_schema import init_legacy_db as init_db
 from backend.main import app
 from scheduler.update_data import space_segment as scheduler_segment
 from scheduler import update_data
@@ -98,6 +99,7 @@ def test_unchanged_pdf_still_migrates_local_index(tmp_path, monkeypatch):
         conn.execute("INSERT INTO merchants(id,name,address,tax_id) VALUES(42,'咖啡','台北市','12345678')")
         schema.set_metadata(conn, "fts_version", "old")
     (tmp_path / "hash.txt").write_text("same-hash")
+    (tmp_path / "update_meta.json").write_text(json.dumps({"parser_version": update_data.PARSER_VERSION}))
     monkeypatch.setattr(update_data, "DATA_DIR", str(tmp_path))
     monkeypatch.setattr(update_data, "DB_PATH", str(path))
     monkeypatch.setattr(update_data, "HASH_FILE", str(tmp_path / "hash.txt"))
